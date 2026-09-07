@@ -173,6 +173,16 @@ src/
   utils/               storage.js (localStorage), export.js (TXT/CSV/DOC/PDF)
 ```
 
+Documentación técnica más detallada, por capa:
+
+- [`docs/html.md`](docs/html.md) — estructura de `index.html`, la app como
+  SPA de una sola página, y el DOM que renderiza React.
+- [`docs/css.md`](docs/css.md) — sistema de variables/tema (oscuro/claro),
+  clases utilitarias, convención de CSS por componente y animaciones.
+- [`docs/javascript.md`](docs/javascript.md) — arquitectura del frontend
+  (contexts, hooks, servicios, utils) y del backend (`api/`, `server/`),
+  con el flujo completo de un mensaje de chat.
+
 ## Limitaciones conocidas y alternativas
 
 Algunas funciones "extra" del listado original no están implementadas en
