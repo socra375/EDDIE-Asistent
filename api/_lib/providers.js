@@ -13,6 +13,22 @@ export function defaultModelFor(provider) {
   return provider === 'claude' ? CLAUDE_DEFAULT_MODEL : GEMINI_DEFAULT_MODEL;
 }
 
+// Both providers occasionally return a transient "model overloaded /
+// high demand, try again later" response (Gemini: 503, Claude: 529) even
+// though the request itself was fine. Retrying a couple of times with a
+// short backoff clears most of these without the user ever seeing them.
+const RETRYABLE_STATUS_CODES = [429, 503, 529];
+
+async function fetchWithRetry(url, options, retries = 2) {
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetch(url, options);
+    if (res.ok || attempt >= retries || !RETRYABLE_STATUS_CODES.includes(res.status)) {
+      return res;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+  }
+}
+
 export async function callGemini({ apiKey, model, system, messages }) {
   if (!apiKey) {
     const err = new Error('El proveedor Gemini no está configurado (falta GEMINI_API_KEY).');
@@ -33,7 +49,7 @@ export async function callGemini({ apiKey, model, system, messages }) {
     },
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -73,7 +89,7 @@ export async function callClaude({ apiKey, model, system, messages }) {
     messages: messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
