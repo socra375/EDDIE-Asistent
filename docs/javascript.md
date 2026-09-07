@@ -173,3 +173,77 @@ llama a la IA, es un CRUD puro sobre `localStorage` vía `utils/storage.js`.
    `speakWithSettings` de `VoiceContext`.
 7. El historial se guarda en `localStorage` automáticamente (efecto en
    `ChatContext`), así que sobrevive a un refresco de página.
+
+## Cuenta de Google, sincronización y Calendar/Drive
+
+Esta capa es opcional (ver `README.md`) y se añadió sin tocar el
+funcionamiento local-only existente: si no hay sesión, todo sigue igual
+que antes.
+
+### Backend
+
+Los mismos principios que el resto de la API: cada endpoint es un archivo
+delgado en `api/**.js` que delega en una función de `api/_lib/*Handlers.js`
+platform-agnóstica (recibe `cookies`/`body` planos, devuelve
+`{ status, json, redirect, setCookie }`), aplicada al `res` real por
+`api/_lib/respond.js`. Esto es lo que permite que `server/dev-server.js`
+(Express) y las funciones de Vercel compartan exactamente la misma lógica
+sin duplicarla — el mismo patrón que ya usaba `/api/chat`.
+
+- **`api/_lib/db.js`** — cliente Postgres vía `@neondatabase/serverless`
+  (HTTP, sin pool de conexiones persistente — encaja bien con funciones
+  serverless). `DATABASE_URL` nunca sale de aquí.
+- **`api/_lib/google.js`** — construye la URL de autorización de Google,
+  intercambia el `code` por tokens y los refresca. REST puro con `fetch`,
+  sin SDK de Google.
+- **`api/_lib/session.js`** — sesiones opacas: la cookie solo lleva un id
+  aleatorio, que se resuelve contra la tabla `sessions`. `requireUser(cookies)`
+  lanza un error `UNAUTHORIZED` (→ 401) si no hay sesión válida; lo usan
+  todos los endpoints que requieren estar logueado.
+- **`api/_lib/googleCredentials.js`** — guarda los tokens de Calendar/Drive
+  por usuario y los renueva automáticamente con el `refresh_token` cuando
+  están por expirar (`getValidAccessToken`).
+- **`api/_lib/authHandlers.js`** — el flujo OAuth completo: `startGoogleLogin`
+  (genera `state`, redirige a Google), `handleGoogleCallback` (valida
+  `state`, intercambia tokens, upsert de `users`, crea sesión), `logout`,
+  `me`, `deleteAccount`.
+- **`api/_lib/calendarHandlers.js`** / **`driveHandlers.js`** — llaman a la
+  REST API de Google Calendar/Drive con el token válido del usuario.
+- **`api/_lib/tasksHandlers.js`** / **`settingsHandlers.js`** /
+  **`memoryHandlers.js`** — CRUD sobre las tablas `tasks`, `settings`,
+  `memory`, siempre filtrando por el `user_id` de la sesión (nunca por un
+  id que mande el cliente).
+
+El esquema vive en `db/migrations/0001_eddie_accounts.sql` (usuarios,
+sesiones, credenciales de Google, tareas, settings, memory). El frontend
+nunca se conecta a la base de datos directamente: todo pasa por estos
+endpoints.
+
+### Frontend
+
+- **`context/AuthContext.jsx`** — no hace el baile OAuth (eso es una
+  navegación de página completa, no algo que se pueda hacer con `fetch`);
+  solo sabe quién está logueado (`GET /api/auth/me` al montar) y expone
+  `login()` (redirige a `/api/auth/google/start`), `logout()`,
+  `deleteAccount()`.
+- **`services/remote.js`** — wrapper de `fetch` para
+  `/api/tasks`, `/api/settings`, `/api/memory`, `/api/calendar/events`,
+  `/api/drive/save`, todas con `credentials: 'include'` para mandar la
+  cookie de sesión. Si el backend responde 401 (no logueado), devuelve
+  `null` en vez de lanzar, para que el que llama pueda caer de vuelta a
+  `localStorage` sin manejar un caso de error especial.
+- **`components/Tasks/TasksPanel.jsx`** — sigue leyendo/escribiendo
+  `localStorage` como caché instantánea. Si hay sesión, además: al iniciar
+  sesión adopta las tareas del servidor (o, si el servidor no tiene
+  ninguna todavía, sube las locales una sola vez como migración inicial);
+  cada alta/edición/baja se refleja también en el backend.
+- **`components/Shared/SettingsSyncBridge.jsx`** — el mismo patrón que
+  `TasksPanel`, pero para `settings` y `memory` de `SettingsContext`: sin
+  salida visual, solo efectos que reconcilian con `/api/settings` y
+  `/api/memory` cuando hay sesión.
+- **Botón "A Calendar" en Tareas** — llama a `remoteCalendar.createEventFromTask`,
+  guarda el `googleEventId` devuelto en la tarea (local y remoto) para no
+  volver a crear el evento dos veces.
+- **Botón "Guardar en Drive" en Documentos** — llama a `remoteDrive.save`
+  con el contenido generado por Eddie y muestra el enlace del archivo
+  creado.

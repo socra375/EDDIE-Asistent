@@ -51,6 +51,17 @@ export function SettingsProvider({ children }) {
     setMemory({});
   }
 
+  // Used by the auth sync bridge to adopt settings/memory pulled from the
+  // server on login, without going through the per-field helpers above.
+  function replaceSettings(next) {
+    setSettings((prev) => ({ ...prev, ...next }));
+  }
+
+  function replaceMemory(next) {
+    saveMemory(next);
+    setMemory(next);
+  }
+
   const value = useMemo(
     () => ({
       settings,
@@ -60,6 +71,8 @@ export function SettingsProvider({ children }) {
       rememberFact,
       forgetFact,
       forgetEverything,
+      replaceSettings,
+      replaceMemory,
       resetSettings: () => setSettings({ ...DEFAULT_SETTINGS }),
     }),
     [settings, memory],

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import './Settings.css';
@@ -25,11 +27,61 @@ const LANGUAGES = [
 
 export default function SettingsPanel() {
   const { settings, updateSettings, memory, forgetFact, forgetEverything } = useSettings();
+  const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation } = useChat();
   const health = useProviderHealth();
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteAccount() {
+    if (!window.confirm('Esto elimina tu cuenta de Google en Eddie y todas tus tareas, ajustes y memoria guardados en el servidor. ¿Continuar?')) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <section className="settings-panel">
+      <div className="glass-panel settings-card">
+        <h2>Cuenta de Google</h2>
+        {user ? (
+          <>
+            <p className="settings-placeholder">
+              Sesión iniciada como <strong>{user.name || user.email}</strong>. Tus tareas, ajustes y memoria se sincronizan
+              entre dispositivos, y puedes agregar tareas a Google Calendar o guardar documentos en Drive.
+            </p>
+            <div className="settings-row settings-row--actions">
+              <button type="button" className="btn" onClick={logout}>
+                Cerrar sesión
+              </button>
+              <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} disabled={deleting}>
+                {deleting ? 'Eliminando…' : 'Eliminar mi cuenta y datos'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="settings-placeholder">
+              Inicia sesión con Google para sincronizar tus tareas entre dispositivos y usar Calendar/Drive. Sin iniciar
+              sesión, Eddie sigue funcionando por completo, guardando todo solo en este navegador.
+            </p>
+            <button type="button" className="btn btn-primary" onClick={login} disabled={health && (!health.database || !health.google)}>
+              🔐 Iniciar sesión con Google
+            </button>
+            {health && (!health.database || !health.google) && (
+              <p className="settings-warning">
+                El inicio de sesión con Google no está disponible: faltan variables de entorno en el servidor
+                ({!health.database && 'DATABASE_URL'}
+                {!health.database && !health.google && ', '}
+                {!health.google && 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET'}). Ver README.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="glass-panel settings-card">
         <h2>Proveedor de IA</h2>
         <div className="settings-row">

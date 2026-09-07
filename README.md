@@ -42,9 +42,9 @@ Chat / Voz (TTS) / Historial (localStorage)
 | Voz | Control de micrófono (STT), lectura en voz alta (TTS), selección de voz/idioma/velocidad/tono/volumen |
 | Estudio | Tutor: explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso |
 | Programación | Explicar, depurar, refactorizar código y generar ejemplos |
-| Tareas | Lista de tareas con prioridad, fecha de entrega y recordatorio de la más próxima |
-| Documentos | Genera resúmenes/informes/guías/cuestionarios y los exporta a TXT, CSV, DOCX o PDF |
-| Configuración | Proveedor y modelo de IA, idioma, tema, memoria (ver/eliminar) |
+| Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar |
+| Documentos | Genera resúmenes/informes/guías/cuestionarios, los exporta a TXT, CSV, DOCX o PDF y, con sesión iniciada, permite guardarlos directamente en Google Drive |
+| Configuración | Proveedor y modelo de IA, idioma, tema, memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 ## Requisitos
 
@@ -86,6 +86,84 @@ Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en
 silencio, y la petición devuelve un error 503 explicando qué falta.
 
+## Cuenta de Google (login, Calendar, Drive)
+
+Esta parte es **opcional**: sin configurarla, Eddie funciona exactamente
+igual que antes (todo se guarda en `localStorage` del navegador, sin
+cuentas). Configurándola, los usuarios pueden iniciar sesión con Google
+para:
+
+- Sincronizar tareas, configuración y memoria entre dispositivos.
+- Agregar tareas con fecha de entrega a Google Calendar (permiso limitado
+  a `calendar.events`, no a todo el calendario).
+- Guardar los documentos que genera Eddie directamente en Google Drive
+  (permiso limitado a `drive.file`: solo archivos que la propia app crea,
+  nunca el Drive completo del usuario).
+
+### 1. Base de datos (Postgres)
+
+Se necesita una base de datos Postgres para guardar cuentas, tareas,
+configuración y memoria de los usuarios que inician sesión. Recomendado:
+[Neon](https://neon.tech) (plan gratuito, sin tarjeta):
+
+1. Crea un proyecto en Neon y copia su cadena de conexión.
+2. Ejecuta el script `db/migrations/0001_eddie_accounts.sql` contra esa
+   base de datos (desde el editor SQL de Neon, o con `psql "$DATABASE_URL" -f db/migrations/0001_eddie_accounts.sql`).
+3. Guarda esa cadena de conexión como `DATABASE_URL`.
+
+Cualquier Postgres sirve (Neon, Supabase, Railway, RDS...); el esquema es
+SQL estándar sin dependencias específicas de un proveedor.
+
+### 2. Credenciales de Google Cloud
+
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/) y crea
+   (o reutiliza) un proyecto.
+2. **APIs y servicios → Pantalla de consentimiento de OAuth**: configúrala
+   en modo "Externo" (o "Interno" si usas Google Workspace), con el nombre
+   de la app y tu correo de soporte.
+3. **APIs y servicios → Biblioteca**: habilita **Google Calendar API** y
+   **Google Drive API**.
+4. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente
+   de OAuth**, tipo "Aplicación web". En "URI de redireccionamiento
+   autorizados" añade exactamente:
+   - Local: `http://localhost:8787/api/auth/google/callback`
+   - Producción: `https://TU-DOMINIO.vercel.app/api/auth/google/callback`
+5. Copia el **Client ID** y el **Client Secret** que genera.
+
+### 3. Variables de entorno
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8787/api/auth/google/callback   # o tu dominio en producción
+APP_URL=http://localhost:5173                                        # o tu dominio en producción
+DATABASE_URL=postgres://...
+```
+
+`GOOGLE_CLIENT_SECRET` y `DATABASE_URL` son secretos de servidor: van en
+`.env` local y en las variables de entorno de Vercel, **nunca** en el
+frontend ni en el repositorio. Configuración → Cuenta de Google muestra un
+aviso si falta alguna de `DATABASE_URL` o `GOOGLE_CLIENT_ID`/`SECRET`, en
+vez de fallar en silencio.
+
+### Cómo funciona el login (para quien quiera entender/tocar el código)
+
+Es un flujo OAuth 2.0 "Authorization Code" implementado a mano (sin SDK de
+Google) con protección CSRF por `state` y sesiones propias:
+
+1. `GET /api/auth/google/start` genera un `state` aleatorio, lo guarda en
+   una cookie de corta duración y redirige a Google.
+2. Google redirige de vuelta a `GET /api/auth/google/callback` con un
+   `code`. El backend valida el `state`, intercambia el `code` por tokens,
+   obtiene el perfil del usuario, crea/actualiza su fila en `users` y una
+   sesión opaca en `sessions` (el navegador solo recibe el id de sesión en
+   una cookie `HttpOnly; Secure`).
+3. Cada request autenticado (`/api/tasks`, `/api/settings`, `/api/memory`,
+   `/api/calendar/*`, `/api/drive/*`) resuelve el usuario a partir de esa
+   cookie — el frontend nunca ve ni maneja tokens de Google directamente.
+4. Los tokens de Calendar/Drive se guardan en `google_credentials` y se
+   renuevan automáticamente con el `refresh_token` cuando expiran.
+
 ## Voz (Speech-to-Text / Text-to-Speech)
 
 Eddie usa la **Web Speech API** del navegador (sin dependencias externas):
@@ -115,14 +193,25 @@ parcial o distinto del estándar; si el navegador no implementa
 
 ## Seguridad y privacidad
 
-- Las claves de API solo existen en variables de entorno del servidor.
+- Las claves de API y el Client Secret de Google solo existen en variables
+  de entorno del servidor; nunca se envían al navegador.
 - Toda solicitud a `/api/chat` se valida (proveedor permitido, longitud de
   mensajes, tamaño del historial) antes de reenviarse al proveedor.
-- El historial de conversación, las tareas y la memoria se guardan en
-  `localStorage` del navegador — no se envían a ningún servidor propio ni de
-  terceros salvo el contenido de los mensajes que decides enviar a Eddie.
-- Puedes borrar el historial de conversación y la memoria en cualquier
-  momento desde Configuración.
+- Sin iniciar sesión: el historial de conversación, las tareas y la
+  memoria se guardan solo en `localStorage` del navegador — no se envían a
+  ningún servidor propio ni de terceros salvo el contenido de los mensajes
+  que decides enviar a Eddie.
+- Con sesión de Google iniciada: tareas, configuración y memoria también
+  se guardan en la base de datos, asociadas a tu cuenta, para poder
+  sincronizarlas entre dispositivos. La sesión es un id aleatorio opaco en
+  una cookie `HttpOnly; Secure; SameSite=Lax` (no un token manipulable) que
+  el backend resuelve contra la tabla `sessions`; cerrar sesión la borra
+  del servidor de inmediato. El acceso a Calendar/Drive se pide con el
+  permiso mínimo necesario (`calendar.events`, `drive.file`, no el
+  calendario ni el Drive completos).
+- Puedes borrar el historial de conversación y la memoria, cerrar sesión, o
+  eliminar tu cuenta y todos tus datos del servidor en cualquier momento
+  desde Configuración.
 - CORS restringido a los métodos necesarios; sin ejecución de código
   arbitrario en el navegador.
 
@@ -132,11 +221,17 @@ parcial o distinto del estándar; si el navegador no implementa
 
 1. Sube el repositorio a GitHub.
 2. Importa el repo en Vercel.
-3. En "Environment Variables" añade `GEMINI_API_KEY` y/o `ANTHROPIC_API_KEY`.
-4. Vercel detecta `vercel.json`: construye el frontend con Vite (`dist/`) y
-   despliega `api/chat.js` y `api/health.js` como funciones serverless.
+3. En "Environment Variables" añade `GEMINI_API_KEY` y/o `ANTHROPIC_API_KEY`
+   y, si vas a habilitar el login con Google, también `DATABASE_URL`,
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (con tu
+   dominio de Vercel) y `APP_URL` (el mismo dominio).
+4. Si usas Google Sign-In, actualiza también el "URI de redireccionamiento
+   autorizado" en Google Cloud Console con ese mismo dominio.
+5. Vercel detecta `vercel.json`: construye el frontend con Vite (`dist/`) y
+   despliega cada archivo bajo `api/` como una función serverless.
 
-No se requiere configuración adicional: mismo dominio para frontend y API.
+Mismo dominio para frontend y API — no se requiere configuración de CORS
+adicional, y las cookies de sesión funcionan de forma nativa.
 
 ### Alternativa: GitHub Pages (solo frontend) + backend aparte
 
@@ -156,20 +251,40 @@ Pages para el frontend:
 En ningún caso coloques las claves de API en el repositorio público ni en el
 bundle del frontend.
 
+**Nota sobre el login con Google en este esquema**: las sesiones usan una
+cookie, que requiere que frontend y backend compartan dominio (o al menos
+sean del mismo "site" para `SameSite=Lax`). Con frontend y backend en
+dominios distintos (como en este esquema de GitHub Pages), el login con
+Google no funcionará correctamente — esa función requiere el despliegue
+conjunto en Vercel.
+
 ## Estructura del proyecto
 
 ```
 api/                  Funciones serverless (Vercel) + lógica compartida
-  _lib/handler.js      Validación de solicitudes
+  _lib/handler.js       Validación de solicitudes de chat
   _lib/providers.js     Adaptadores Gemini / Claude
+  _lib/db.js            Cliente Postgres (Neon) — solo backend
+  _lib/google.js        OAuth de Google (autorizar/intercambiar/refrescar tokens)
+  _lib/googleCredentials.js  Guardar/renovar tokens de Google por usuario
+  _lib/session.js        Sesiones opaco por cookie
+  _lib/cookies.js, respond.js, httpErrors.js  Utilidades HTTP compartidas
+  _lib/authHandlers.js, calendarHandlers.js, driveHandlers.js,
+       tasksHandlers.js, settingsHandlers.js, memoryHandlers.js
+                         Lógica de cada grupo de endpoints (independiente de la plataforma)
   chat.js, health.js
+  auth/google/start.js, auth/google/callback.js, auth/logout.js, auth/me.js, auth/account.js
+  calendar/events.js, drive/save.js
+  tasks/index.js, tasks/[id].js, settings/index.js, memory/index.js
+db/
+  migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
 server/
-  dev-server.js        Servidor Express para desarrollo local
+  dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
-  components/          Chat, Voice, Study, Code, Tasks, Documents, Settings, Core, Layout
-  context/             SettingsContext, VoiceContext, ChatContext
+  components/          Chat, Voice, Study, Code, Tasks, Documents, Settings, Core, Layout, Shared
+  context/             SettingsContext, AuthContext, VoiceContext, ChatContext
   hooks/               useSpeechRecognition, useSpeechSynthesis, useProviderHealth
-  services/            api.js (fetch al backend), personality.js (prompt de Eddie)
+  services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js
   utils/               storage.js (localStorage), export.js (TXT/CSV/DOC/PDF)
 ```
 

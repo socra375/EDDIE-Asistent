@@ -16,6 +16,30 @@
   margin: 0;
 }
 
+.tasks-summary__hint {
+  margin-top: 0.4rem !important;
+  color: var(--text-faint);
+  font-size: 0.82rem;
+}
+
+.tasks-sync-error {
+  margin-top: 0.4rem !important;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+
+.tasks-calendar {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  white-space: nowrap;
+}
+
+.tasks-calendar-done {
+  font-size: 0.75rem;
+  color: var(--success);
+  white-space: nowrap;
+}
+
 .tasks-form {
   display: flex;
   flex-wrap: wrap;
