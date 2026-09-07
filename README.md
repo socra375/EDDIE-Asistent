@@ -233,6 +233,14 @@ parcial o distinto del estándar; si el navegador no implementa
 Mismo dominio para frontend y API — no se requiere configuración de CORS
 adicional, y las cookies de sesión funcionan de forma nativa.
 
+**Nota sobre el plan gratuito (Hobby) de Vercel**: tiene un límite de 12
+funciones serverless por despliegue. El proyecto usa 10 (agrupando
+endpoints relacionados de bajo tráfico en un mismo archivo, p. ej.
+`api/auth/session.js` maneja GET/POST/DELETE para me/logout/eliminar
+cuenta, y `api/tasks/[[...id]].js` maneja tanto `/api/tasks` como
+`/api/tasks/<id>`). Si agregas nuevos endpoints, ten en cuenta ese límite
+o pasa a un plan de pago.
+
 ### Alternativa: GitHub Pages (solo frontend) + backend aparte
 
 GitHub Pages solo sirve archivos estáticos, así que **no puede** alojar las
@@ -273,9 +281,11 @@ api/                  Funciones serverless (Vercel) + lógica compartida
        tasksHandlers.js, settingsHandlers.js, memoryHandlers.js
                          Lógica de cada grupo de endpoints (independiente de la plataforma)
   chat.js, health.js
-  auth/google/start.js, auth/google/callback.js, auth/logout.js, auth/me.js, auth/account.js
+  auth/google/start.js, auth/google/callback.js
+  auth/session.js        GET/POST/DELETE = me / logout / eliminar cuenta (un solo archivo)
   calendar/events.js, drive/save.js
-  tasks/index.js, tasks/[id].js, settings/index.js, memory/index.js
+  tasks/[[...id]].js     GET/POST sin id, PATCH/DELETE con id (un solo archivo)
+  settings/index.js, memory/index.js
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
 server/

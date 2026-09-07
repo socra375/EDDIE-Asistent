@@ -4,16 +4,19 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 const AuthContext = createContext(null);
 
 // Google sign-in is a full-page redirect (OAuth can't happen inside a
-// fetch), so this context's job is just: know who's logged in (via the
-// session cookie + /api/auth/me), and expose login()/logout() as simple
-// actions. The rest of the app stays fully usable when logged out.
+// fetch), so this context's job is just: know who's logged in, and expose
+// login()/logout() as simple actions. The rest of the app stays fully
+// usable when logged out.
+//
+// me/logout/delete-account all live behind one endpoint (GET/POST/DELETE
+// on /api/auth/session) — see api/auth/session.js for why they're merged.
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/api/auth/session`, { credentials: 'include' });
       const data = await res.json();
       setUser(data.user || null);
     } catch {
@@ -33,7 +36,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      await fetch(`${API_BASE}/api/auth/session`, { method: 'POST', credentials: 'include' });
     } finally {
       setUser(null);
     }
@@ -41,7 +44,7 @@ export function AuthProvider({ children }) {
 
   const deleteAccount = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/auth/account`, { method: 'DELETE', credentials: 'include' });
+      await fetch(`${API_BASE}/api/auth/session`, { method: 'DELETE', credentials: 'include' });
     } finally {
       setUser(null);
     }
