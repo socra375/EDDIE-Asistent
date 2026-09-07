@@ -5,12 +5,13 @@ import { useChat } from '../../context/ChatContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import './Settings.css';
 
-// "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro
-// recomendado del momento, para no depender de un id con fecha que Google
-// termine retirando.
+// "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
+// Flash-Lite recomendado del momento, para no depender de un id con fecha
+// que Google termine retirando.
 const PROVIDER_MODELS = {
   gemini: [
-    { value: '', label: 'gemini-flash-latest (predeterminado, gratis)' },
+    { value: '', label: 'gemini-flash-lite-latest (predeterminado, gratis, ~1500 prompts/día)' },
+    { value: 'gemini-flash-latest', label: 'gemini-flash-latest (más capaz, límite más bajo por minuto)' },
     { value: 'gemini-pro-latest', label: 'gemini-pro-latest (requiere plan de pago)' },
   ],
   claude: [
@@ -125,7 +126,7 @@ export default function SettingsPanel() {
           <p className="settings-warning">
             Con una clave de API gratuita de Google, este modelo (Pro) devuelve un error de cuota excedida (límite 0
             en el nivel gratuito) — Google solo habilita el modelo Pro en cuentas con facturación activa. Usa
-            "gemini-flash-latest" a menos que tengas facturación configurada en tu proyecto de Google Cloud.
+            "gemini-flash-lite-latest" a menos que tengas facturación configurada en tu proyecto de Google Cloud.
           </p>
         )}
       </div>
