@@ -2,8 +2,12 @@
 // Both functions take a normalized shape and return a normalized shape,
 // so the route handler never has to know provider-specific details.
 
-const GEMINI_DEFAULT_MODEL = 'gemini-1.5-flash';
-const CLAUDE_DEFAULT_MODEL = 'claude-3-5-sonnet-20241022';
+// "-latest" is Google's own rolling alias: it always resolves to Google's
+// current recommended Flash/Pro model, so this never goes stale the way a
+// dated snapshot id (e.g. "gemini-1.5-flash") eventually does as Google
+// retires older models.
+const GEMINI_DEFAULT_MODEL = 'gemini-flash-latest';
+const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-5';
 
 export function defaultModelFor(provider) {
   return provider === 'claude' ? CLAUDE_DEFAULT_MODEL : GEMINI_DEFAULT_MODEL;

@@ -5,14 +5,17 @@ import { useChat } from '../../context/ChatContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import './Settings.css';
 
+// "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro
+// recomendado del momento, para no depender de un id con fecha que Google
+// termine retirando.
 const PROVIDER_MODELS = {
   gemini: [
-    { value: '', label: 'gemini-1.5-flash (predeterminado)' },
-    { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro' },
+    { value: '', label: 'gemini-flash-latest (predeterminado, rápido)' },
+    { value: 'gemini-pro-latest', label: 'gemini-pro-latest (más capaz, más lento)' },
   ],
   claude: [
-    { value: '', label: 'claude-3-5-sonnet-20241022 (predeterminado)' },
-    { value: 'claude-3-5-haiku-20241022', label: 'claude-3-5-haiku-20241022' },
+    { value: '', label: 'claude-sonnet-5 (predeterminado)' },
+    { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5 (más rápido)' },
   ],
 };
 
