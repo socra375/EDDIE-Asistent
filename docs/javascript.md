@@ -124,6 +124,18 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `useChat()` para "preguntarle algo a Eddie" con un modo distinto, sin
   duplicar lógica de llamada a la API.
 
+  También gestiona el **historial de conversaciones**: cada conversación
+  vive en `conversations` (`{ id, title, messages, createdAt, updatedAt }`,
+  persistido en `localStorage` vía `utils/storage.js`), identificada por
+  `conversationId`. En cuanto una conversación tiene al menos un mensaje,
+  un efecto la guarda/actualiza dentro de `conversations` — así nunca se
+  pierde al cambiar de conversación. `resetConversation()` empieza una
+  nueva (vacía) sin borrar la anterior; `loadConversation(id)` la vuelve
+  activa; `deleteConversation(id)`/`clearAllConversations()` la(s)
+  eliminan. `SettingsPanel.jsx` usa estas cuatro funciones para la sección
+  "Historial de conversaciones", incluyendo migración automática de la
+  única conversación que la app guardaba antes de esta función.
+
 ### Hooks (`src/hooks/`)
 
 - **`useSpeechRecognition.js`** — envuelve la Web Speech API

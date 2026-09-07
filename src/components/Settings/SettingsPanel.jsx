@@ -29,10 +29,10 @@ const LANGUAGES = [
   { code: 'pt', label: 'Português' },
 ];
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, memory, forgetFact, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
-  const { resetConversation } = useChat();
+  const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
 
@@ -45,6 +45,14 @@ export default function SettingsPanel() {
       setDeleting(false);
     }
   }
+
+  function handleOpenConversation(id) {
+    loadConversation(id);
+    onOpenConversation?.();
+  }
+
+  const sortedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
+  const dateFormatter = new Intl.DateTimeFormat(settings.language, { dateStyle: 'medium', timeStyle: 'short' });
 
   return (
     <section className="settings-panel">
@@ -155,6 +163,44 @@ export default function SettingsPanel() {
       </div>
 
       <div className="glass-panel settings-card">
+        <h2>Historial de conversaciones</h2>
+        {sortedConversations.length === 0 ? (
+          <p className="settings-placeholder">No hay conversaciones guardadas todavía.</p>
+        ) : (
+          <ul className="memory-list">
+            {sortedConversations.map((c) => (
+              <li key={c.id} className="history-item">
+                <span className="history-item__info">
+                  <strong>{c.title}</strong>
+                  <span className="history-item__meta">
+                    {dateFormatter.format(new Date(c.updatedAt))} · {c.messages.length} mensaje{c.messages.length === 1 ? '' : 's'}
+                    {c.id === conversationId && ' · actual'}
+                  </span>
+                </span>
+                <span className="history-item__actions">
+                  <button type="button" className="btn" onClick={() => handleOpenConversation(c.id)} disabled={c.id === conversationId}>
+                    Abrir
+                  </button>
+                  <button type="button" className="btn tasks-delete" onClick={() => deleteConversation(c.id)} aria-label="Eliminar conversación">
+                    ✕
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="settings-row settings-row--actions">
+          <button type="button" className="btn" onClick={resetConversation}>
+            Nueva conversación
+          </button>
+          <button type="button" className="btn btn-danger" onClick={clearAllConversations} disabled={conversations.length === 0}>
+            Borrar todo el historial
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-panel settings-card">
         <h2>Memoria</h2>
         <label className="settings-toggle">
           <input type="checkbox" checked={settings.memoryEnabled} onChange={(e) => updateSettings({ memoryEnabled: e.target.checked })} />
@@ -181,9 +227,6 @@ export default function SettingsPanel() {
         <div className="settings-row settings-row--actions">
           <button type="button" className="btn btn-danger" onClick={forgetEverything} disabled={Object.keys(memory).length === 0}>
             Borrar toda la memoria
-          </button>
-          <button type="button" className="btn btn-danger" onClick={resetConversation}>
-            Borrar historial de conversación
           </button>
         </div>
       </div>
