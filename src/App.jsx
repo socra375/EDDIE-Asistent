@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider } from './context/AuthContext';
+import { LocationProvider } from './context/LocationContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ChatProvider, useChat } from './context/ChatContext';
 import Sidebar, { MODULES } from './components/Layout/Sidebar';
@@ -66,11 +67,13 @@ export default function App() {
   return (
     <SettingsProvider>
       <AuthProvider>
-        <VoiceProvider>
-          <ChatProvider>
-            <AppShell />
-          </ChatProvider>
-        </VoiceProvider>
+        <LocationProvider>
+          <VoiceProvider>
+            <ChatProvider>
+              <AppShell />
+            </ChatProvider>
+          </VoiceProvider>
+        </LocationProvider>
       </AuthProvider>
     </SettingsProvider>
   );

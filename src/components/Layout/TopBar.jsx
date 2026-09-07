@@ -1,4 +1,5 @@
 import { useAuth } from '../../context/AuthContext';
+import LiveClock from './LiveClock';
 import './Layout.css';
 
 const STATUS_LABEL = {
@@ -17,6 +18,7 @@ export default function TopBar({ title, status = 'idle', onToggleTheme, theme })
         <h1 className="topbar__title">{title}</h1>
       </div>
       <div className="topbar__right">
+        <LiveClock />
         <span className={`status-pill status-pill--${status}`}>
           <span className="status-pill__dot" />
           {STATUS_LABEL[status] || status}

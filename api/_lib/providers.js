@@ -1,6 +1,7 @@
 // Thin adapters around each AI provider's REST API.
 // Both functions take a normalized shape and return a normalized shape,
 // so the route handler never has to know provider-specific details.
+import { TOOL_DECLARATIONS, executeTool } from './tools.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
 // current recommended Flash/Pro model, so this never goes stale the way a
@@ -29,7 +30,13 @@ async function fetchWithRetry(url, options, retries = 2) {
   }
 }
 
-export async function callGemini({ apiKey, model, system, messages }) {
+// Gemini can ask to call one of TOOL_DECLARATIONS (real current time/weather)
+// instead of answering directly. When it does, we run the tool ourselves,
+// hand the result back as a "function" turn, and let it try again — up to
+// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever.
+const MAX_TOOL_ROUNDS = 3;
+
+export async function callGemini({ apiKey, model, system, messages, context = {} }) {
   if (!apiKey) {
     const err = new Error('El proveedor Gemini no está configurado (falta GEMINI_API_KEY).');
     err.code = 'PROVIDER_UNAVAILABLE';
@@ -37,41 +44,58 @@ export async function callGemini({ apiKey, model, system, messages }) {
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const body = {
+  let contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const baseBody = {
     systemInstruction: { role: 'system', parts: [{ text: system }] },
-    contents: messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    })),
+    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 2048,
     },
   };
 
-  const res = await fetchWithRetry(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  for (let round = 0; ; round += 1) {
+    const res = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseBody, contents }),
+    });
 
-  const data = await res.json().catch(() => null);
+    const data = await res.json().catch(() => null);
 
-  if (!res.ok) {
-    const err = new Error(data?.error?.message || `Gemini respondió con estado ${res.status}.`);
-    err.code = 'PROVIDER_ERROR';
-    err.status = res.status;
-    throw err;
+    if (!res.ok) {
+      const err = new Error(data?.error?.message || `Gemini respondió con estado ${res.status}.`);
+      err.code = 'PROVIDER_ERROR';
+      err.status = res.status;
+      throw err;
+    }
+
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const functionCallPart = parts.find((p) => p.functionCall);
+
+    if (!functionCallPart || round >= MAX_TOOL_ROUNDS) {
+      const text = parts.map((p) => p.text || '').join('');
+      if (!text) {
+        const err = new Error('Gemini no devolvió contenido utilizable.');
+        err.code = 'PROVIDER_EMPTY';
+        throw err;
+      }
+      return { content: text.trim(), provider: 'gemini', model };
+    }
+
+    const { name, args } = functionCallPart.functionCall;
+    const toolResult = await executeTool(name, args, context);
+
+    contents = [
+      ...contents,
+      { role: 'model', parts: [{ functionCall: functionCallPart.functionCall }] },
+      { role: 'function', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
+    ];
   }
-
-  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
-  if (!text) {
-    const err = new Error('Gemini no devolvió contenido utilizable.');
-    err.code = 'PROVIDER_EMPTY';
-    throw err;
-  }
-
-  return { content: text.trim(), provider: 'gemini', model };
 }
 
 export async function callClaude({ apiKey, model, system, messages }) {
@@ -118,14 +142,15 @@ export async function callClaude({ apiKey, model, system, messages }) {
   return { content: text.trim(), provider: 'claude', model };
 }
 
-export async function callProvider({ provider, model, system, messages }) {
+export async function callProvider({ provider, model, system, messages, context }) {
   const resolvedModel = model || defaultModelFor(provider);
 
   if (provider === 'claude') {
+    // Claude doesn't get the real-time tools yet (Gemini-only for now) — see docs/javascript.md.
     return callClaude({ apiKey: process.env.ANTHROPIC_API_KEY, model: resolvedModel, system, messages });
   }
   if (provider === 'gemini') {
-    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages });
+    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, context });
   }
 
   const err = new Error(`Proveedor desconocido: ${provider}`);
