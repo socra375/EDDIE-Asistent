@@ -190,6 +190,15 @@ platform-agnóstica (recibe `cookies`/`body` planos, devuelve
 (Express) y las funciones de Vercel compartan exactamente la misma lógica
 sin duplicarla — el mismo patrón que ya usaba `/api/chat`.
 
+El plan gratuito de Vercel limita a 12 funciones serverless por
+despliegue, así que endpoints relacionados de bajo tráfico comparten
+archivo en `api/`: `auth/session.js` sirve `GET`/`POST`/`DELETE` para
+me/logout/eliminar cuenta, y `tasks/[[...id]].js` (ruta "catch-all"
+opcional de Vercel) sirve tanto `/api/tasks` como `/api/tasks/<id>` según
+haya o no un id y el método HTTP. En Express (`server/dev-server.js`) esto
+no hace falta —no tiene ese límite—, así que ahí cada ruta sigue siendo
+explícita.
+
 - **`api/_lib/db.js`** — cliente Postgres vía `@neondatabase/serverless`
   (HTTP, sin pool de conexiones persistente — encaja bien con funciones
   serverless). `DATABASE_URL` nunca sale de aquí.
@@ -223,9 +232,9 @@ endpoints.
 
 - **`context/AuthContext.jsx`** — no hace el baile OAuth (eso es una
   navegación de página completa, no algo que se pueda hacer con `fetch`);
-  solo sabe quién está logueado (`GET /api/auth/me` al montar) y expone
-  `login()` (redirige a `/api/auth/google/start`), `logout()`,
-  `deleteAccount()`.
+  solo sabe quién está logueado (`GET /api/auth/session` al montar) y
+  expone `login()` (redirige a `/api/auth/google/start`), `logout()`
+  (`POST /api/auth/session`), `deleteAccount()` (`DELETE /api/auth/session`).
 - **`services/remote.js`** — wrapper de `fetch` para
   `/api/tasks`, `/api/settings`, `/api/memory`, `/api/calendar/events`,
   `/api/drive/save`, todas con `credentials: 'include'` para mandar la

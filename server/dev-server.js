@@ -64,15 +64,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', async (req, res) => {
-  try {
-    applyResult(res, await logout(cookiesOf(req)));
-  } catch (err) {
-    respondError(res, err);
-  }
-});
-
-app.get('/api/auth/me', async (req, res) => {
+// GET/POST/DELETE all served from one path — mirrors api/auth/session.js.
+app.get('/api/auth/session', async (req, res) => {
   try {
     applyResult(res, await me(cookiesOf(req)));
   } catch (err) {
@@ -80,7 +73,15 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
-app.delete('/api/auth/account', async (req, res) => {
+app.post('/api/auth/session', async (req, res) => {
+  try {
+    applyResult(res, await logout(cookiesOf(req)));
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+app.delete('/api/auth/session', async (req, res) => {
   try {
     applyResult(res, await deleteAccount(cookiesOf(req)));
   } catch (err) {
