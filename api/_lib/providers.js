@@ -92,7 +92,11 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
 
     contents = [
       ...contents,
-      { role: 'model', parts: [{ functionCall: functionCallPart.functionCall }] },
+      // Echo the whole part back verbatim (not just { functionCall }) —
+      // newer Gemini models attach a sibling `thoughtSignature` field the
+      // API requires to see again on the next turn, or it errors with
+      // "missing a thought_signature in functionCall parts".
+      { role: 'model', parts: [functionCallPart] },
       // Google's own docs show role: 'function' here, but the live API
       // currently rejects it ("Role 'function' is not supported"), so we use
       // 'user' instead — a role it accepts unconditionally.
