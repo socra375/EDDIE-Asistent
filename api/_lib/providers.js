@@ -4,10 +4,15 @@
 import { TOOL_DECLARATIONS, executeTool } from './tools.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
-// current recommended Flash/Pro model, so this never goes stale the way a
-// dated snapshot id (e.g. "gemini-1.5-flash") eventually does as Google
-// retires older models.
-const GEMINI_DEFAULT_MODEL = 'gemini-flash-latest';
+// current recommended Flash/Pro/Flash-Lite model, so this never goes stale
+// the way a dated snapshot id (e.g. "gemini-1.5-flash") eventually does as
+// Google retires older models.
+//
+// Flash-Lite is the default rather than plain Flash because its free-tier
+// quota is far more generous (1,500 requests/day vs. the ~20/minute cap
+// that plain Flash hit in practice) — see PROVIDER_MODELS in
+// SettingsPanel.jsx for the other options a user can pick instead.
+const GEMINI_DEFAULT_MODEL = 'gemini-flash-lite-latest';
 const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-5';
 
 export function defaultModelFor(provider) {
