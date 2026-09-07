@@ -144,6 +144,30 @@
   padding: 0.4rem 0.6rem;
 }
 
+.topbar__account {
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.topbar__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.topbar__account-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .topbar__account-name {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;

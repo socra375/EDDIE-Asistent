@@ -51,6 +51,12 @@
   font-size: 0.85rem;
 }
 
+.documents-drive-link {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
 @media (max-width: 860px) {
   .documents-panel {
     grid-template-columns: 1fr;

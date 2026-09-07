@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
+import { AuthProvider } from './context/AuthContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ChatProvider, useChat } from './context/ChatContext';
 import Sidebar, { MODULES } from './components/Layout/Sidebar';
@@ -11,6 +12,7 @@ import CodePanel from './components/Code/CodePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
 import DocumentsPanel from './components/Documents/DocumentsPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
+import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './App.css';
 
 function AutoReadBridge() {
@@ -55,6 +57,7 @@ function AppShell() {
         </div>
       </div>
       <AutoReadBridge />
+      <SettingsSyncBridge />
     </div>
   );
 }
@@ -62,11 +65,13 @@ function AppShell() {
 export default function App() {
   return (
     <SettingsProvider>
-      <VoiceProvider>
-        <ChatProvider>
-          <AppShell />
-        </ChatProvider>
-      </VoiceProvider>
+      <AuthProvider>
+        <VoiceProvider>
+          <ChatProvider>
+            <AppShell />
+          </ChatProvider>
+        </VoiceProvider>
+      </AuthProvider>
     </SettingsProvider>
   );
 }

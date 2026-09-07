@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getTasks, saveTasks } from '../../utils/storage';
+import { useAuth } from '../../context/AuthContext';
+import { remoteTasks, remoteCalendar } from '../../services/remote';
 import './Tasks.css';
 
 const PRIORITIES = { alta: 3, media: 2, baja: 1 };
@@ -17,31 +19,102 @@ function daysUntil(dateStr) {
 }
 
 export default function TasksPanel() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState(() => getTasks());
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('media');
   const [filter, setFilter] = useState('pendientes');
+  const [syncError, setSyncError] = useState('');
+  const [syncingId, setSyncingId] = useState(null);
 
+  // localStorage stays as the always-on offline cache, whether logged in or not.
   useEffect(() => {
     saveTasks(tasks);
   }, [tasks]);
 
-  function addTask(e) {
+  // On login, adopt the server's tasks as the source of truth — unless the
+  // server has none yet and there's local work, in which case migrate it up
+  // once so a first-time sign-in doesn't lose anything.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await remoteTasks.list();
+        if (cancelled || !remote) return;
+        if (remote.tasks.length === 0 && tasks.length > 0) {
+          const migrated = [];
+          for (const t of tasks) {
+            const created = await remoteTasks.create({ title: t.title, dueDate: t.dueDate, priority: t.priority });
+            if (created) migrated.push(created.task);
+          }
+          if (!cancelled) setTasks(migrated);
+        } else {
+          setTasks(remote.tasks);
+        }
+      } catch (err) {
+        if (!cancelled) setSyncError(err.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Only re-run on login/logout transitions, not on every local task edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  async function addTask(e) {
     e.preventDefault();
     if (!title.trim()) return;
-    setTasks((prev) => [...prev, { id: nextId(), title: title.trim(), dueDate: dueDate || null, priority, done: false }]);
+    const draft = { title: title.trim(), dueDate: dueDate || null, priority };
     setTitle('');
     setDueDate('');
     setPriority('media');
+
+    if (user) {
+      try {
+        const result = await remoteTasks.create(draft);
+        if (result) {
+          setTasks((prev) => [...prev, result.task]);
+          return;
+        }
+      } catch (err) {
+        setSyncError(err.message);
+      }
+    }
+    setTasks((prev) => [...prev, { id: nextId(), ...draft, done: false }]);
   }
 
   function toggleDone(id) {
+    const target = tasks.find((t) => t.id === id);
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+    if (user && target) {
+      remoteTasks.update(id, { done: !target.done }).catch((err) => setSyncError(err.message));
+    }
   }
 
   function removeTask(id) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    if (user) {
+      remoteTasks.remove(id).catch((err) => setSyncError(err.message));
+    }
+  }
+
+  async function syncToCalendar(task) {
+    setSyncError('');
+    setSyncingId(task.id);
+    try {
+      const result = await remoteCalendar.createEventFromTask(task);
+      if (result) {
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, googleEventId: result.eventId, googleEventLink: result.htmlLink } : t)));
+        await remoteTasks.update(task.id, { googleEventId: result.eventId });
+      }
+    } catch (err) {
+      setSyncError(err.message);
+    } finally {
+      setSyncingId(null);
+    }
   }
 
   const visibleTasks = useMemo(() => {
@@ -74,6 +147,8 @@ export default function TasksPanel() {
             </>
           )}
         </p>
+        {!user && <p className="tasks-summary__hint">Inicia sesión con Google para sincronizar tus tareas entre dispositivos y añadirlas a Calendar.</p>}
+        {syncError && <p className="tasks-sync-error">{syncError}</p>}
       </div>
 
       <form className="glass-panel tasks-form" onSubmit={addTask}>
@@ -114,6 +189,21 @@ export default function TasksPanel() {
                   </span>
                 )}
                 <span className={`task-item__priority-tag priority-tag-${t.priority}`}>{t.priority}</span>
+                {user &&
+                  t.dueDate &&
+                  (t.googleEventId ? (
+                    t.googleEventLink ? (
+                      <a className="btn tasks-calendar" href={t.googleEventLink} target="_blank" rel="noreferrer">
+                        📅 Ver evento
+                      </a>
+                    ) : (
+                      <span className="tasks-calendar-done">✓ En Calendar</span>
+                    )
+                  ) : (
+                    <button type="button" className="btn tasks-calendar" onClick={() => syncToCalendar(t)} disabled={syncingId === t.id}>
+                      {syncingId === t.id ? 'Sincronizando…' : '📅 A Calendar'}
+                    </button>
+                  ))}
                 <button type="button" className="btn tasks-delete" onClick={() => removeTask(t.id)} aria-label="Eliminar tarea">
                   ✕
                 </button>

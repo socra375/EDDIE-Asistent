@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useChat } from '../../context/ChatContext';
+import { useAuth } from '../../context/AuthContext';
 import { exportTxt, exportCsv, exportDoc, exportPdf } from '../../utils/export';
+import { remoteDrive } from '../../services/remote';
 import RichText from '../Shared/RichText';
 import './Documents.css';
 
@@ -14,11 +16,14 @@ const TYPES = [
 
 export default function DocumentsPanel() {
   const { sendMessage } = useChat();
+  const { user } = useAuth();
   const [topic, setTopic] = useState('');
   const [type, setType] = useState('resumen');
   const [loading, setLoading] = useState(false);
   const [doc, setDoc] = useState(null);
   const [exportError, setExportError] = useState('');
+  const [savingToDrive, setSavingToDrive] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
 
   async function handleGenerate(e) {
     e.preventDefault();
@@ -28,7 +33,23 @@ export default function DocumentsPanel() {
     setDoc(null);
     const reply = await sendMessage(config.build(topic.trim()), { mode: 'explicativo' });
     setLoading(false);
+    setDriveLink('');
     if (reply) setDoc({ title: `${config.label}: ${topic.trim()}`, content: reply.content });
+  }
+
+  async function handleSaveToDrive() {
+    if (!doc) return;
+    setExportError('');
+    setSavingToDrive(true);
+    try {
+      const filename = `${doc.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.txt`;
+      const result = await remoteDrive.save(filename, doc.content, 'text/plain');
+      if (result) setDriveLink(result.webViewLink);
+    } catch (err) {
+      setExportError(err.message);
+    } finally {
+      setSavingToDrive(false);
+    }
   }
 
   function handleExport(format) {
@@ -85,10 +106,23 @@ export default function DocumentsPanel() {
               <button type="button" className="btn" onClick={() => handleExport('pdf')}>
                 PDF
               </button>
+              {user && (
+                <button type="button" className="btn" onClick={handleSaveToDrive} disabled={savingToDrive}>
+                  {savingToDrive ? 'Guardando…' : '📁 Guardar en Drive'}
+                </button>
+              )}
             </div>
           )}
         </div>
         {exportError && <p className="documents-error">{exportError}</p>}
+        {driveLink && (
+          <p className="documents-drive-link">
+            Guardado en Drive:{' '}
+            <a href={driveLink} target="_blank" rel="noreferrer">
+              abrir archivo
+            </a>
+          </p>
+        )}
         {!doc && !loading && <p className="documents-placeholder">El documento generado por Eddie aparecerá aquí, listo para exportar.</p>}
         {loading && <p className="documents-placeholder">Analizando tu solicitud…</p>}
         {doc && <RichText text={doc.content} />}
