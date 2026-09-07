@@ -10,8 +10,8 @@ import './Settings.css';
 // termine retirando.
 const PROVIDER_MODELS = {
   gemini: [
-    { value: '', label: 'gemini-flash-latest (predeterminado, rápido)' },
-    { value: 'gemini-pro-latest', label: 'gemini-pro-latest (más capaz, más lento)' },
+    { value: '', label: 'gemini-flash-latest (predeterminado, gratis)' },
+    { value: 'gemini-pro-latest', label: 'gemini-pro-latest (requiere plan de pago)' },
   ],
   claude: [
     { value: '', label: 'claude-sonnet-5 (predeterminado)' },
@@ -119,6 +119,13 @@ export default function SettingsPanel() {
         {health && !health[settings.provider] && (
           <p className="settings-warning">
             El proveedor seleccionado no tiene una clave configurada en el servidor. Añade la variable de entorno correspondiente (ver README) o elige otro proveedor.
+          </p>
+        )}
+        {settings.provider === 'gemini' && settings.model === 'gemini-pro-latest' && (
+          <p className="settings-warning">
+            Con una clave de API gratuita de Google, este modelo (Pro) devuelve un error de cuota excedida (límite 0
+            en el nivel gratuito) — Google solo habilita el modelo Pro en cuentas con facturación activa. Usa
+            "gemini-flash-latest" a menos que tengas facturación configurada en tu proyecto de Google Cloud.
           </p>
         )}
       </div>
