@@ -35,8 +35,11 @@ src/services/api.js  ──fetch──▶  api/chat.js (Vercel) o
   `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
   bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
   `functionCall` en vez de texto, ejecuta la herramienta localmente y le
-  devuelve el resultado como un turno `role: 'function'` antes de volver a
-  preguntarle. Claude no recibe `tools` todavía (ver más abajo).
+  devuelve el resultado como un turno `role: 'user'` antes de volver a
+  preguntarle (la documentación de Google muestra `role: 'function'` para
+  este turno, pero la API en producción lo rechaza con "Role 'function' is
+  not supported"; `'user'` sí es válido). Claude no recibe `tools` todavía
+  (ver más abajo).
 - **`api/_lib/tools.js`** — las "herramientas" en tiempo real que Gemini
   puede invocar: `get_current_datetime` (hora/fecha real según el
   `timezone` del navegador) y `get_current_weather` (clima real vía
