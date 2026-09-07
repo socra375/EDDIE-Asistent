@@ -93,7 +93,10 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
     contents = [
       ...contents,
       { role: 'model', parts: [{ functionCall: functionCallPart.functionCall }] },
-      { role: 'function', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
+      // Google's own docs show role: 'function' here, but the live API
+      // currently rejects it ("Role 'function' is not supported"), so we use
+      // 'user' instead — a role it accepts unconditionally.
+      { role: 'user', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
     ];
   }
 }
