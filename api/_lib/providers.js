@@ -18,7 +18,10 @@ export function defaultModelFor(provider) {
 // high demand, try again later" response (Gemini: 503, Claude: 529) even
 // though the request itself was fine. Retrying a couple of times with a
 // short backoff clears most of these without the user ever seeing them.
-const RETRYABLE_STATUS_CODES = [429, 503, 529];
+// 429 is deliberately NOT in this list: Gemini's free tier uses it for
+// per-minute quota exhaustion, which needs tens of seconds to clear — a
+// ~1s retry can't fix that, and only burns more of an already-scarce quota.
+const RETRYABLE_STATUS_CODES = [503, 529];
 
 async function fetchWithRetry(url, options, retries = 2) {
   for (let attempt = 0; ; attempt += 1) {
@@ -35,6 +38,16 @@ async function fetchWithRetry(url, options, retries = 2) {
 // hand the result back as a "function" turn, and let it try again — up to
 // MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever.
 const MAX_TOOL_ROUNDS = 3;
+
+// Google's own quota-exceeded message is accurate but in English and full
+// of jargon (RESOURCE_EXHAUSTED, links to rate-limit docs) — translate the
+// one case a free-tier user will actually hit into something actionable.
+function translateGeminiError(status, error, rawMessage) {
+  if (status === 429 && error?.status === 'RESOURCE_EXHAUSTED') {
+    return 'Se alcanzó el límite de solicitudes gratuitas de Gemini (el plan gratuito de Google permite pocas solicitudes por minuto). No es un error de Eddie: espera un minuto y vuelve a intentarlo, o activa facturación en tu proyecto de Google Cloud para un límite más alto.';
+  }
+  return rawMessage;
+}
 
 export async function callGemini({ apiKey, model, system, messages, context = {} }) {
   if (!apiKey) {
@@ -68,7 +81,8 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      const err = new Error(data?.error?.message || `Gemini respondió con estado ${res.status}.`);
+      const rawMessage = data?.error?.message || `Gemini respondió con estado ${res.status}.`;
+      const err = new Error(translateGeminiError(res.status, data?.error, rawMessage));
       err.code = 'PROVIDER_ERROR';
       err.status = res.status;
       throw err;
