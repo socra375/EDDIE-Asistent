@@ -32,9 +32,24 @@ src/services/api.js  ──fetch──▶  api/chat.js (Vercel) o
   normaliza la respuesta a `{ content, provider, model }`. `callProvider`
   elige cuál llamar según `provider`. Aquí, y solo aquí, se leen
   `process.env.GEMINI_API_KEY` / `process.env.ANTHROPIC_API_KEY`.
+  `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
+  bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
+  `functionCall` en vez de texto, ejecuta la herramienta localmente y le
+  devuelve el resultado como un turno `role: 'function'` antes de volver a
+  preguntarle. Claude no recibe `tools` todavía (ver más abajo).
+- **`api/_lib/tools.js`** — las "herramientas" en tiempo real que Gemini
+  puede invocar: `get_current_datetime` (hora/fecha real según el
+  `timezone` del navegador) y `get_current_weather` (clima real vía
+  Open-Meteo, gratuito y sin API key; geocodifica el nombre de ciudad si
+  se da uno, o usa las coordenadas de `context.location` si no). Existen
+  para que Eddie nunca tenga que inventar la hora o el clima a partir de
+  su entrenamiento.
 - **`api/_lib/handler.js`** — valida la petición entrante antes de
   reenviarla: proveedor permitido, número y tamaño de mensajes, longitud
-  del system prompt. Si algo no cuadra, lanza un error que
+  del system prompt, y sanea el `context` opcional (`timezone` como
+  string corta, `location` como `{ latitude, longitude }` numéricos y en
+  rango) que llega desde el navegador — nunca se confía en él tal cual,
+  ya que lo controla el cliente. Si algo no cuadra, lanza un error que
   `errorToResponse` traduce a un código HTTP (400 validación, 503
   proveedor sin clave, 502 error del proveedor).
 - **`api/chat.js`** / **`api/health.js`** — funciones serverless de
@@ -76,6 +91,11 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   sesiones). Persiste todo en `localStorage` a través de `utils/storage.js`
   cada vez que cambia. Expone `updateSettings`, `updateVoiceSettings`,
   `rememberFact`, `forgetFact`, `forgetEverything`.
+- **`LocationContext.jsx`** — pide el permiso de geolocalización del
+  navegador (`navigator.geolocation`) una vez al montar la app y expone
+  `{ location, status, requestLocation }`. Si el usuario lo deniega o el
+  navegador no lo soporta, `location` queda en `null` y Eddie simplemente
+  le pregunta la ciudad en vez de asumir una (ver `personality.js`).
 - **`VoiceContext.jsx`** — envuelve los hooks `useSpeechRecognition` y
   `useSpeechSynthesis` en una sola instancia compartida (el micrófono del
   navegador solo admite un reconocedor activo a la vez), y añade
@@ -90,7 +110,10 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
      `services/personality.js`), inyectando el modo elegido, el idioma y
      la memoria si está activada;
   3. llama a `sendChatMessage` (`services/api.js`) con los últimos
-     `MAX_HISTORY_SENT` mensajes como contexto;
+     `MAX_HISTORY_SENT` mensajes y un `context` con el `timezone` del
+     navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`) y la
+     `location` de `useLocation()`, si existe — es lo que el backend pasa
+     a las herramientas de Gemini;
   4. añade la respuesta (o un mensaje de error legible) al historial y
      actualiza `status`.
 
@@ -116,9 +139,11 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
 ### Servicios (`src/services/`)
 
 - **`api.js`** — único punto de contacto con el backend
-  (`sendChatMessage`). Lanza `EddieApiError` con un mensaje ya en español
-  y listo para mostrar en la interfaz si algo falla (red caída, backend
-  con error, proveedor sin configurar).
+  (`sendChatMessage`), que además del `system` y los `messages` envía el
+  `context` (timezone/ubicación) para las herramientas en tiempo real.
+  Lanza `EddieApiError` con un mensaje ya en español y listo para mostrar
+  en la interfaz si algo falla (red caída, backend con error, proveedor
+  sin configurar).
 - **`personality.js`** — define la personalidad fija de Eddie
   (`CORE_PERSONALITY`) y los seis modos de respuesta (`MODES`: rápido,
   explicativo, tutor, técnico, investigación, creativo).
@@ -144,7 +169,10 @@ Organizados por módulo (`Chat/`, `Voice/`, `Study/`, `Code/`, `Tasks/`,
 - **`Core/EddieCore.jsx`** — el núcleo visual animado; solo recibe
   `state` y `compact`, no sabe nada de chat ni de voz.
 - **`Layout/`** — `Sidebar.jsx` (lista de módulos) y `TopBar.jsx` (título +
-  estado + botón de tema), usados una sola vez desde `App.jsx`.
+  reloj en vivo + estado + botón de tema), usados una sola vez desde
+  `App.jsx`. `LiveClock.jsx` actualiza la hora cada segundo con
+  `setInterval` y la formatea con `Intl.DateTimeFormat` según el idioma
+  elegido en Configuración.
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en
   párrafos y bloques ` ```código``` `, renderizando estos últimos en
   `<pre><code>` con estilo monoespaciado. Lo usan `ChatPanel`,

@@ -41,8 +41,32 @@ function sanitizeRequest(body) {
 
   const system = typeof body.system === 'string' ? body.system.slice(0, MAX_SYSTEM_LENGTH) : '';
   const model = typeof body.model === 'string' && body.model.length < 100 ? body.model : undefined;
+  const context = sanitizeContext(body.context);
 
-  return { provider, model, system, messages };
+  return { provider, model, system, messages, context };
+}
+
+// Optional real-time context (the user's timezone/coordinates) used by
+// Gemini's tools (current time, weather) — never trusted blindly, since
+// it comes straight from the browser.
+function sanitizeContext(context) {
+  if (!context || typeof context !== 'object') return {};
+
+  const result = {};
+  if (typeof context.timezone === 'string' && context.timezone.length < 100) {
+    result.timezone = context.timezone;
+  }
+  const { location } = context;
+  if (
+    location &&
+    typeof location.latitude === 'number' &&
+    typeof location.longitude === 'number' &&
+    Math.abs(location.latitude) <= 90 &&
+    Math.abs(location.longitude) <= 180
+  ) {
+    result.location = { latitude: location.latitude, longitude: location.longitude };
+  }
+  return result;
 }
 
 export async function handleChatRequest(body) {

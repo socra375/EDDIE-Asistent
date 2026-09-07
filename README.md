@@ -46,6 +46,12 @@ Chat / Voz (TTS) / Historial (localStorage)
 | Documentos | Genera resúmenes/informes/guías/cuestionarios, los exporta a TXT, CSV, DOCX o PDF y, con sesión iniciada, permite guardarlos directamente en Google Drive |
 | Configuración | Proveedor y modelo de IA, idioma, tema, memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
+Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
+un reloj en vivo en la barra superior, y herramientas que Gemini puede
+invocar para consultar la hora/fecha exacta y el clima actual (usando la
+ubicación del navegador, si el usuario la comparte, o una ciudad que
+mencione).
+
 ## Requisitos
 
 - Node.js 18 o superior.

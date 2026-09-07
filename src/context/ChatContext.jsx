@@ -3,6 +3,7 @@ import { sendChatMessage, EddieApiError } from '../services/api';
 import { buildSystemPrompt } from '../services/personality';
 import { getConversation, saveConversation, clearConversation } from '../utils/storage';
 import { useSettings } from './SettingsContext';
+import { useLocation } from './LocationContext';
 
 const ChatContext = createContext(null);
 
@@ -15,6 +16,7 @@ function nextId() {
 
 export function ChatProvider({ children }) {
   const { settings, memory } = useSettings();
+  const { location } = useLocation();
   const [messages, setMessages] = useState(() => getConversation());
   const [status, setStatus] = useState('idle'); // idle | processing | responding | error
   const [errorMessage, setErrorMessage] = useState('');
@@ -43,6 +45,10 @@ export function ChatProvider({ children }) {
           model: settings.model || undefined,
           system,
           messages: history.map(({ role, content }) => ({ role, content })),
+          context: {
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            location: location || undefined,
+          },
         });
 
         setStatus('responding');
@@ -69,7 +75,7 @@ export function ChatProvider({ children }) {
         return null;
       }
     },
-    [messages, settings, memory],
+    [messages, settings, memory, location],
   );
 
   const resetConversation = useCallback(() => {
