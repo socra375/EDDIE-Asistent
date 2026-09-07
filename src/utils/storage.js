@@ -4,9 +4,14 @@
 const KEYS = {
   settings: 'eddie.settings',
   memory: 'eddie.memory',
-  conversation: 'eddie.conversation',
+  conversations: 'eddie.conversations',
+  activeConversationId: 'eddie.activeConversationId',
   tasks: 'eddie.tasks',
 };
+
+// Read from before multi-conversation history existed, so an upgrading
+// user's in-progress chat isn't silently lost.
+const LEGACY_CONVERSATION_KEY = 'eddie.conversation';
 
 function read(key, fallback) {
   try {
@@ -77,16 +82,45 @@ export function clearMemory() {
   write(KEYS.memory, {});
 }
 
-export function getConversation() {
-  return read(KEYS.conversation, []);
+// A short, human-readable label for a conversation: the first thing the
+// user actually said, so the history list reads like a list of topics
+// instead of a list of timestamps.
+export function conversationTitle(messages) {
+  const firstUserMessage = messages.find((m) => m.role === 'user');
+  const text = firstUserMessage?.content?.trim() || 'Conversación';
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
 
-export function saveConversation(messages) {
-  write(KEYS.conversation, messages);
+export function getConversations() {
+  const stored = read(KEYS.conversations, null);
+  if (stored) return stored;
+
+  const legacy = read(LEGACY_CONVERSATION_KEY, []);
+  if (legacy.length === 0) return [];
+
+  const migrated = [
+    {
+      id: 'legacy',
+      title: conversationTitle(legacy),
+      messages: legacy,
+      createdAt: legacy[0]?.timestamp || Date.now(),
+      updatedAt: legacy[legacy.length - 1]?.timestamp || Date.now(),
+    },
+  ];
+  write(KEYS.conversations, migrated);
+  return migrated;
 }
 
-export function clearConversation() {
-  write(KEYS.conversation, []);
+export function saveConversations(conversations) {
+  write(KEYS.conversations, conversations);
+}
+
+export function getActiveConversationId() {
+  return read(KEYS.activeConversationId, null);
+}
+
+export function setActiveConversationId(id) {
+  write(KEYS.activeConversationId, id);
 }
 
 export function getTasks() {

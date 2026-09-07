@@ -44,7 +44,7 @@ Chat / Voz (TTS) / Historial (localStorage)
 | Programación | Explicar, depurar, refactorizar código y generar ejemplos |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar |
 | Documentos | Genera resúmenes/informes/guías/cuestionarios, los exporta a TXT, CSV, DOCX o PDF y, con sesión iniciada, permite guardarlos directamente en Google Drive |
-| Configuración | Proveedor y modelo de IA, idioma, tema, memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
+| Configuración | Proveedor y modelo de IA, idioma, tema, historial de conversaciones (ver/abrir/eliminar), memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
 un reloj en vivo en la barra superior, y herramientas que Gemini puede

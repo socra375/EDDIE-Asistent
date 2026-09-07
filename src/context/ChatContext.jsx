@@ -1,7 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { sendChatMessage, EddieApiError } from '../services/api';
 import { buildSystemPrompt } from '../services/personality';
-import { getConversation, saveConversation, clearConversation } from '../utils/storage';
+import {
+  getConversations,
+  saveConversations,
+  getActiveConversationId,
+  setActiveConversationId,
+  conversationTitle,
+} from '../utils/storage';
 import { useSettings } from './SettingsContext';
 import { useLocation } from './LocationContext';
 
@@ -17,14 +23,42 @@ function nextId() {
 export function ChatProvider({ children }) {
   const { settings, memory } = useSettings();
   const { location } = useLocation();
-  const [messages, setMessages] = useState(() => getConversation());
+  const [conversations, setConversations] = useState(() => getConversations());
+  const [conversationId, setConversationId] = useState(() => {
+    const activeId = getActiveConversationId();
+    return activeId || nextId();
+  });
+  const [messages, setMessages] = useState(() => {
+    const activeId = getActiveConversationId();
+    const found = activeId && getConversations().find((c) => c.id === activeId);
+    return found ? found.messages : [];
+  });
   const [status, setStatus] = useState('idle'); // idle | processing | responding | error
   const [errorMessage, setErrorMessage] = useState('');
   const [lastReply, setLastReply] = useState(null);
 
   useEffect(() => {
-    saveConversation(messages);
-  }, [messages]);
+    setActiveConversationId(conversationId);
+  }, [conversationId]);
+
+  // Persists the active conversation into the saved list as it grows. A
+  // conversation with no messages yet is never written, so starting a new
+  // one (or just opening the app) doesn't clutter the history with empties.
+  useEffect(() => {
+    if (messages.length === 0) return;
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === conversationId);
+      const updatedAt = messages[messages.length - 1]?.timestamp || Date.now();
+      const next = [...prev];
+      if (idx === -1) {
+        next.push({ id: conversationId, title: conversationTitle(messages), messages, createdAt: messages[0]?.timestamp || Date.now(), updatedAt });
+      } else {
+        next[idx] = { ...next[idx], title: conversationTitle(messages), messages, updatedAt };
+      }
+      saveConversations(next);
+      return next;
+    });
+  }, [messages, conversationId]);
 
   const sendMessage = useCallback(
     async (text, { mode = 'explicativo', silent = false } = {}) => {
@@ -78,16 +112,67 @@ export function ChatProvider({ children }) {
     [messages, settings, memory, location],
   );
 
+  // Starts a fresh, empty conversation. The one being left behind is
+  // already saved (see the effect above), so it stays in the history.
   const resetConversation = useCallback(() => {
-    clearConversation();
+    setConversationId(nextId());
+    setMessages([]);
+    setStatus('idle');
+    setErrorMessage('');
+  }, []);
+
+  const loadConversation = useCallback(
+    (id) => {
+      const target = conversations.find((c) => c.id === id);
+      if (!target) return;
+      setConversationId(id);
+      setMessages(target.messages);
+      setStatus('idle');
+      setErrorMessage('');
+    },
+    [conversations],
+  );
+
+  const deleteConversation = useCallback(
+    (id) => {
+      setConversations((prev) => {
+        const next = prev.filter((c) => c.id !== id);
+        saveConversations(next);
+        return next;
+      });
+      if (id === conversationId) {
+        setConversationId(nextId());
+        setMessages([]);
+      }
+    },
+    [conversationId],
+  );
+
+  const clearAllConversations = useCallback(() => {
+    saveConversations([]);
+    setConversations([]);
+    setConversationId(nextId());
     setMessages([]);
     setStatus('idle');
     setErrorMessage('');
   }, []);
 
   const value = useMemo(
-    () => ({ messages, status, errorMessage, sendMessage, resetConversation, lastReply, setStatus }),
-    [messages, status, errorMessage, sendMessage, resetConversation, lastReply],
+    () => ({
+      messages,
+      status,
+      errorMessage,
+      sendMessage,
+      resetConversation,
+      lastReply,
+      setStatus,
+      conversations,
+      conversationId,
+      loadConversation,
+      deleteConversation,
+      clearAllConversations,
+    }),
+    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

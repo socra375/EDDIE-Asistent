@@ -96,6 +96,31 @@
   font-size: 0.88rem;
 }
 
+.history-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.history-item__info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__meta {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+.history-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
 @media (max-width: 640px) {
   .settings-row {
     grid-template-columns: 1fr;

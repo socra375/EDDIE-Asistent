@@ -54,7 +54,7 @@ function AppShell() {
           {activeModule === 'code' && <CodePanel />}
           {activeModule === 'tasks' && <TasksPanel />}
           {activeModule === 'documents' && <DocumentsPanel />}
-          {activeModule === 'settings' && <SettingsPanel />}
+          {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </div>
       </div>
       <AutoReadBridge />
