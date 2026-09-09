@@ -1,0 +1,43 @@
+.eddie-logo {
+  overflow: visible;
+  filter: drop-shadow(0 0 6px var(--accent-soft));
+}
+
+.eddie-logo__ring {
+  transform-origin: 50px 50px;
+}
+
+.eddie-logo__ring--outer {
+  animation: eddie-logo-spin 12s linear infinite;
+}
+
+.eddie-logo__ring--inner {
+  animation: eddie-logo-spin 9s linear infinite reverse;
+  opacity: 0.75;
+}
+
+.eddie-logo__glyph {
+  animation: eddie-logo-glow 3s ease-in-out infinite;
+}
+
+@keyframes eddie-logo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes eddie-logo-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eddie-logo * {
+    animation: none !important;
+  }
+}

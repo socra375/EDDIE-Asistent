@@ -1,3 +1,4 @@
+import EddieLogo from './EddieLogo';
 import './Layout.css';
 
 const MODULES = [
@@ -14,7 +15,7 @@ export default function Sidebar({ active, onSelect }) {
   return (
     <nav className="sidebar glass-panel">
       <div className="sidebar__brand">
-        <span className="sidebar__brand-mark">E</span>
+        <EddieLogo size={34} />
         <span className="sidebar__brand-name">EDDIE</span>
       </div>
       <ul className="sidebar__list">

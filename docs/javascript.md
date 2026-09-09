@@ -182,12 +182,20 @@ Organizados por módulo (`Chat/`, `Voice/`, `Study/`, `Code/`, `Tasks/`,
 `Documents/`, `Settings/`), más dos carpetas transversales:
 
 - **`Core/EddieCore.jsx`** — el núcleo visual animado; solo recibe
-  `state` y `compact`, no sabe nada de chat ni de voz.
-- **`Layout/`** — `Sidebar.jsx` (lista de módulos) y `TopBar.jsx` (título +
-  reloj en vivo + estado + botón de tema), usados una sola vez desde
-  `App.jsx`. `LiveClock.jsx` actualiza la hora cada segundo con
-  `setInterval` y la formatea con `Intl.DateTimeFormat` según el idioma
-  elegido en Configuración.
+  `state` y `compact`, no sabe nada de chat ni de voz. Para `listening` y
+  `processing` renderiza además `eddie-core__waves`: 16 barras dispuestas
+  en círculo (una por `<span className="wave-spoke">`, rotada por
+  `transform: rotate(...)` vía JS) que pulsan como un ecualizador de
+  audio alrededor del núcleo — con micrófono 🎙️ en el centro para
+  `listening`. El resto de estados conservan sus animaciones propias
+  (respiración, giro, flash, etc.), todas puramente en CSS.
+- **`Layout/`** — `Sidebar.jsx` (lista de módulos, con `EddieLogo.jsx` como
+  marca) y `TopBar.jsx` (título + reloj en vivo + estado + botón de tema),
+  usados una sola vez desde `App.jsx`. `LiveClock.jsx` actualiza la hora
+  cada segundo con `setInterval` y la formatea con `Intl.DateTimeFormat`
+  según el idioma elegido en Configuración. `EddieLogo.jsx` es un SVG puro
+  (sin imagen que empaquetar) — un glifo "E" con dos anillos orbitando a
+  distinta velocidad alrededor, animado con CSS.
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en
   párrafos y bloques ` ```código``` `, renderizando estos últimos en
   `<pre><code>` con estilo monoespaciado. Lo usan `ChatPanel`,

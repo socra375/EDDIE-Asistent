@@ -54,6 +54,43 @@
   opacity: 0.85;
 }
 
+.eddie-core__icon {
+  font-size: clamp(1rem, 6vw, 1.6rem);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
+}
+
+.eddie-core--compact .eddie-core__icon {
+  font-size: 0.85rem;
+}
+
+/* Radial audio-waveform bars, shown only for listening/processing (see JSX) */
+.eddie-core__waves {
+  position: absolute;
+  inset: 0;
+}
+
+.wave-spoke {
+  position: absolute;
+  inset: 0;
+}
+
+.wave-bar {
+  position: absolute;
+  top: 1%;
+  left: 50%;
+  width: 2.5px;
+  height: 13%;
+  margin-left: -1.25px;
+  border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent-2));
+  transform-origin: top center;
+  animation: wavePulse 0.9s ease-in-out infinite;
+}
+
+.eddie-core[data-state='listening'] .wave-bar {
+  background: linear-gradient(var(--success), var(--accent));
+}
+
 .eddie-core__status {
   color: var(--text-dim);
   font-size: 0.85rem;
@@ -176,6 +213,18 @@
   100% {
     transform: scale(1.25);
     opacity: 0;
+  }
+}
+
+@keyframes wavePulse {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
   }
 }
 
