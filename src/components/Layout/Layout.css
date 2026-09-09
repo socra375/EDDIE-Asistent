@@ -35,18 +35,6 @@
   padding: 0 0.4rem;
 }
 
-.sidebar__brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #05131f;
-  font-weight: 700;
-}
-
 .sidebar__brand-name {
   font-weight: 700;
   letter-spacing: 0.18em;
