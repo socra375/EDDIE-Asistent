@@ -28,9 +28,28 @@ export function defaultModelFor(provider) {
 // ~1s retry can't fix that, and only burns more of an already-scarce quota.
 const RETRYABLE_STATUS_CODES = [503, 529];
 
-async function fetchWithRetry(url, options, retries = 2) {
+// A hung upstream connection previously had no ceiling — it could sit there
+// until Vercel's own function timeout killed the whole request, surfacing
+// as an opaque "server responded with error (504)" instead of a clean,
+// actionable message. Capping every individual attempt means a stall fails
+// fast enough to retry or report properly within the function's budget.
+const REQUEST_TIMEOUT_MS = 9000;
+
+async function fetchWithRetry(url, options, retries = 1) {
   for (let attempt = 0; ; attempt += 1) {
-    const res = await fetch(url, options);
+    let res;
+    try {
+      res = await fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    } catch (err) {
+      if (attempt >= retries) {
+        const timeoutErr = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
+        timeoutErr.code = 'PROVIDER_UNAVAILABLE';
+        timeoutErr.cause = err;
+        throw timeoutErr;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+      continue;
+    }
     if (res.ok || attempt >= retries || !RETRYABLE_STATUS_CODES.includes(res.status)) {
       return res;
     }
@@ -41,8 +60,10 @@ async function fetchWithRetry(url, options, retries = 2) {
 // Gemini can ask to call one of TOOL_DECLARATIONS (real current time/weather)
 // instead of answering directly. When it does, we run the tool ourselves,
 // hand the result back as a "function" turn, and let it try again — up to
-// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever.
-const MAX_TOOL_ROUNDS = 3;
+// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Kept
+// low (our two tools never legitimately need a 3rd round) since each round
+// is a full extra network round-trip against the function's time budget.
+const MAX_TOOL_ROUNDS = 2;
 
 // Google's own quota-exceeded message is accurate but in English and full
 // of jargon (RESOURCE_EXHAUSTED, links to rate-limit docs) — translate the

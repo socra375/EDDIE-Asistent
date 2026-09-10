@@ -1,6 +1,7 @@
 .app-shell {
+  position: relative;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 64px 1fr;
   gap: 1rem;
   height: 100vh;
   padding: 1rem;
@@ -21,11 +22,28 @@
 }
 
 /* ---- Sidebar ---- */
+/* Collapsed to just the logo by default; hovering the logo expands it into
+   a flyout over the content (see .sidebar--expanded) instead of pushing the
+   layout, so the rest of the app doesn't jump around as it opens/closes. */
 .sidebar {
   display: flex;
   flex-direction: column;
+  width: 64px;
   padding: 1.2rem 0.8rem;
   gap: 1.5rem;
+  overflow: hidden;
+  transition: width 0.18s ease;
+}
+
+.sidebar--expanded {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  bottom: 1rem;
+  width: 220px;
+  z-index: 20;
+  overflow: visible;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
 }
 
 .sidebar__brand {
@@ -35,10 +53,21 @@
   padding: 0 0.4rem;
 }
 
+.sidebar:not(.sidebar--expanded) .sidebar__brand,
+.sidebar:not(.sidebar--expanded) .sidebar__item {
+  justify-content: center;
+}
+
 .sidebar__brand-name {
   font-weight: 700;
   letter-spacing: 0.18em;
   font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.sidebar:not(.sidebar--expanded) .sidebar__brand-name,
+.sidebar:not(.sidebar--expanded) .sidebar__label {
+  display: none;
 }
 
 .sidebar__list {
@@ -173,10 +202,17 @@
 
   .sidebar {
     order: 3;
+    width: 100%;
     flex-direction: row;
     align-items: center;
     padding: 0.6rem;
     overflow-x: auto;
+  }
+
+  .sidebar--expanded {
+    position: static;
+    width: 100%;
+    box-shadow: none;
   }
 
   .sidebar__brand {
