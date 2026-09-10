@@ -60,9 +60,20 @@ const WEATHER_CONDITIONS = {
   99: 'tormenta con granizo intenso',
 };
 
+// Every tool call sits inside the chat request's own time budget, so a
+// hung Open-Meteo request must fail fast rather than stall the whole
+// response — an unbounded fetch here previously risked the caller (Vercel)
+// timing the entire function out with an opaque 504.
+const TOOL_FETCH_TIMEOUT_MS = 6000;
+
 async function geocodeCity(city) {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=es`;
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(TOOL_FETCH_TIMEOUT_MS) });
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
   const data = await res.json().catch(() => null);
   const match = data?.results?.[0];
@@ -99,7 +110,12 @@ async function getCurrentWeather(args, context) {
   }
 
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`;
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(TOOL_FETCH_TIMEOUT_MS) });
+  } catch {
+    return { error: 'No se pudo obtener el clima en este momento (el servicio no respondió a tiempo).' };
+  }
   if (!res.ok) return { error: 'No se pudo obtener el clima en este momento.' };
   const data = await res.json().catch(() => null);
   const current = data?.current;

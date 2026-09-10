@@ -39,7 +39,11 @@ src/services/api.js  ──fetch──▶  api/chat.js (Vercel) o
   preguntarle (la documentación de Google muestra `role: 'function'` para
   este turno, pero la API en producción lo rechaza con "Role 'function' is
   not supported"; `'user'` sí es válido). Claude no recibe `tools` todavía
-  (ver más abajo).
+  (ver más abajo). Cada llamada HTTP (a Gemini, a Claude, y a Open-Meteo
+  dentro de `tools.js`) lleva un `AbortSignal.timeout` — sin eso, una
+  conexión colgada no tenía techo y podía consumir todo el tiempo de la
+  función serverless, apareciendo en el navegador como un opaco "error
+  (504)" en vez de un mensaje claro.
 - **`api/_lib/tools.js`** — las "herramientas" en tiempo real que Gemini
   puede invocar: `get_current_datetime` (hora/fecha real según el
   `timezone` del navegador) y `get_current_weather` (clima real vía
