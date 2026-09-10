@@ -167,7 +167,11 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   (`CORE_PERSONALITY`) y los seis modos de respuesta (`MODES`: rápido,
   explicativo, tutor, técnico, investigación, creativo).
   `buildSystemPrompt({ mode, language, memory })` combina todo eso en el
-  texto que se envía como `system` a la API.
+  texto que se envía como `system` a la API. `CORE_PERSONALITY` incluye
+  una instrucción de formato explícita: nada de asteriscos, guiones de
+  viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se
+  verían como caracteres sueltos), y separar ideas en párrafos con línea
+  en blanco entre ellos — ver `RichText.jsx` para cómo se renderiza eso.
 
 ### Utilidades (`src/utils/`)
 
@@ -199,12 +203,21 @@ Organizados por módulo (`Chat/`, `Voice/`, `Study/`, `Code/`, `Tasks/`,
   cada segundo con `setInterval` y la formatea con `Intl.DateTimeFormat`
   según el idioma elegido en Configuración. `EddieLogo.jsx` es un SVG puro
   (sin imagen que empaquetar) — un glifo "E" con dos anillos orbitando a
-  distinta velocidad alrededor, animado con CSS.
+  distinta velocidad alrededor, animado con CSS. `Sidebar.jsx` está
+  colapsada por defecto (solo el logo, vía `sidebar` con `width: 64px` en
+  `Layout.css`); un `onMouseEnter` en `.sidebar__brand` agrega la clase
+  `sidebar--expanded`, que la convierte en un flyout (`position: absolute`,
+  ancho 220px, por encima del contenido) hasta que el mouse sale del
+  `<nav>` (`onMouseLeave`).
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en
-  párrafos y bloques ` ```código``` `, renderizando estos últimos en
-  `<pre><code>` con estilo monoespaciado. Lo usan `ChatPanel`,
-  `StudyPanel`, `CodePanel` y `DocumentsPanel` para no reimplementar el
-  mismo parseo cuatro veces.
+  bloques ` ```código``` ` y, dentro de cada bloque de texto, además en
+  párrafos separados por línea en blanco (`splitParagraphs`) — cada uno
+  como su propio `<p className="rich-text__paragraph">`, para que el
+  `margin-bottom` de esa clase (`index.css`) separe visualmente cada
+  párrafo en vez de que todo el texto quede en un solo bloque pegado. Los
+  bloques de código se renderizan en `<pre><code>` con estilo
+  monoespaciado. Lo usan `ChatPanel`, `StudyPanel`, `CodePanel` y
+  `DocumentsPanel` para no reimplementar el mismo parseo cuatro veces.
 
 Cada panel de módulo sigue el mismo patrón: estado local con `useState`
 para el formulario, `useChat().sendMessage(...)` para preguntarle a Eddie,

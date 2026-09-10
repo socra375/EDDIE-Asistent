@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import EddieLogo from './EddieLogo';
 import './Layout.css';
 
@@ -12,9 +13,13 @@ const MODULES = [
 ];
 
 export default function Sidebar({ active, onSelect }) {
+  // Collapsed by default — hovering the logo opens it; leaving the sidebar
+  // (anywhere in it, not just the logo) closes it again.
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <nav className="sidebar glass-panel">
-      <div className="sidebar__brand">
+    <nav className={`sidebar glass-panel ${expanded ? 'sidebar--expanded' : ''}`} onMouseLeave={() => setExpanded(false)}>
+      <div className="sidebar__brand" onMouseEnter={() => setExpanded(true)}>
         <EddieLogo size={34} />
         <span className="sidebar__brand-name">EDDIE</span>
       </div>

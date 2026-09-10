@@ -16,6 +16,17 @@ function splitBlocks(text) {
   return blocks;
 }
 
+// Splits a text block on blank lines so each real paragraph becomes its
+// own <p> — otherwise a whole multi-paragraph block renders as a single
+// element and the CSS margin between paragraphs never applies, making the
+// text look like one pasted-together block.
+function splitParagraphs(text) {
+  return text
+    .split(/\n\s*\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
 export default function RichText({ text }) {
   if (!text) return null;
   const blocks = splitBlocks(text);
@@ -29,9 +40,11 @@ export default function RichText({ text }) {
             <code>{block.content.trim()}</code>
           </pre>
         ) : (
-          <p className="rich-text__paragraph" key={i}>
-            {block.content.trim()}
-          </p>
+          splitParagraphs(block.content).map((paragraph, j) => (
+            <p className="rich-text__paragraph" key={`${i}-${j}`}>
+              {paragraph}
+            </p>
+          ))
         ),
       )}
     </>

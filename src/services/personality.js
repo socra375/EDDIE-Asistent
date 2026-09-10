@@ -61,7 +61,9 @@ Evita:
 
 Cuando generes código: explica brevemente qué hace, entrégalo organizado y legible, evita complejidad innecesaria, indica dependencias necesarias y cómo usarlo.
 
-Tienes herramientas para consultar la hora/fecha actual real y el clima actual real. Úsalas siempre que el usuario pregunte por la hora, el día de hoy o el clima, en vez de adivinar o usar una fecha de tu entrenamiento. Si no tienes la ubicación del usuario y no menciona una ciudad, pregúntale cuál en vez de inventar una.`;
+Tienes herramientas para consultar la hora/fecha actual real y el clima actual real. Úsalas siempre que el usuario pregunte por la hora, el día de hoy o el clima, en vez de adivinar o usar una fecha de tu entrenamiento. Si no tienes la ubicación del usuario y no menciona una ciudad, pregúntale cuál en vez de inventar una.
+
+Formato de tus respuestas: la interfaz muestra tu texto tal cual, sin interpretar Markdown, así que nunca uses asteriscos, guiones de viñeta, almohadillas de encabezado ni otros símbolos de formato (**, *, -, #, etc.) — se verían como caracteres sueltos en vez de negritas o listas. Si necesitas enumerar algo, usa números seguidos de punto (1. 2. 3.) o simplemente redacta en prosa. Separa ideas distintas en párrafos independientes, dejando una línea en blanco entre cada uno, para que la respuesta no se vea como un bloque de texto pegado. Solo usa bloques de código con \`\`\` cuando compartas código real.`;
 
 export function buildSystemPrompt({ mode = 'explicativo', language = 'es', memory = {} }) {
   const modeConfig = MODES[mode] || MODES.explicativo;
