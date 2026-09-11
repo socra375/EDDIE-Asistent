@@ -15,17 +15,31 @@ export function VoiceProvider({ children }) {
   const synthesis = useSpeechSynthesis();
 
   const speakWithSettings = (text, onEnd) => {
-    synthesis.speak(text, { ...settings.voice, lang: sttLang, onEnd });
+    synthesis.speak(text, { lang: sttLang, onEnd });
   };
 
+  // Named explicitly rather than spread — both hooks return a `supported`
+  // key (and synthesis also returns `stop`), so a flat spread silently let
+  // synthesis's values shadow recognition's: useVoice().stop ended up
+  // cancelling speech instead of stopping the microphone.
   const value = useMemo(
     () => ({
-      ...recognition,
-      ...synthesis,
+      sttSupported: recognition.supported,
+      listening: recognition.listening,
+      transcript: recognition.transcript,
+      interimTranscript: recognition.interimTranscript,
+      sttError: recognition.error,
+      start: recognition.start,
+      stop: recognition.stop,
+      reset: recognition.reset,
+      ttsSupported: synthesis.supported,
+      speaking: synthesis.speaking,
+      speak: synthesis.speak,
+      stopSpeaking: synthesis.stop,
       speakWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [recognition, synthesis, settings.voice, sttLang],
+    [recognition, synthesis, sttLang],
   );
 
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;

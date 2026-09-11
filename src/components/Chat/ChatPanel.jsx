@@ -15,7 +15,7 @@ const QUICK_PROMPTS = [
 
 export default function ChatPanel() {
   const { messages, status, sendMessage, resetConversation } = useChat();
-  const { supported: sttSupported, listening, transcript, interimTranscript, start, stop, error: sttError, reset } = useVoice();
+  const { sttSupported, listening, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('explicativo');
   const listRef = useRef(null);

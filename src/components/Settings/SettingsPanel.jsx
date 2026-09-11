@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useVoice } from '../../context/VoiceContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import './Settings.css';
 
@@ -30,9 +31,10 @@ const LANGUAGES = [
 ];
 
 export default function SettingsPanel({ onOpenConversation }) {
-  const { settings, updateSettings, memory, forgetFact, forgetEverything } = useSettings();
+  const { settings, updateSettings, updateVoiceSettings, memory, forgetFact, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
+  const { ttsSupported } = useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
 
@@ -160,6 +162,20 @@ export default function SettingsPanel({ onOpenConversation }) {
             </select>
           </label>
         </div>
+      </div>
+
+      <div className="glass-panel settings-card">
+        <h2>Voz</h2>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={settings.voice.autoRead}
+            onChange={(e) => updateVoiceSettings({ autoRead: e.target.checked })}
+            disabled={!ttsSupported}
+          />
+          <span>Eddie lee sus respuestas en voz alta</span>
+        </label>
+        {!ttsSupported && <p className="settings-warning">Este navegador no admite síntesis de voz.</p>}
       </div>
 
       <div className="glass-panel settings-card">

@@ -87,7 +87,7 @@ src/components/Chat/
 └── Chat.css          ← import './Chat.css' dentro de ChatPanel.jsx
 ```
 
-Esto se repite para `Core/`, `Layout/`, `Voice/`, `Study/`, `Code/`,
+Esto se repite para `Core/`, `Layout/`, `Study/`, `Code/`,
 `Tasks/`, `Documents/`, `Settings/`. Como Vite no hace scope automático de
 CSS (no son CSS Modules), la convención para evitar colisiones es prefijar
 las clases con el nombre del bloque, estilo BEM ligero:

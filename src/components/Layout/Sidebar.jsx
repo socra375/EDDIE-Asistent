@@ -4,7 +4,6 @@ import './Layout.css';
 
 const MODULES = [
   { id: 'chat', label: 'Chat', icon: '💬' },
-  { id: 'voice', label: 'Voz', icon: '🎙️' },
   { id: 'study', label: 'Estudio', icon: '📚' },
   { id: 'code', label: 'Programación', icon: '💻' },
   { id: 'tasks', label: 'Tareas', icon: '📅' },

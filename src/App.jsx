@@ -7,7 +7,6 @@ import { ChatProvider, useChat } from './context/ChatContext';
 import Sidebar, { MODULES } from './components/Layout/Sidebar';
 import TopBar from './components/Layout/TopBar';
 import ChatPanel from './components/Chat/ChatPanel';
-import VoicePanel from './components/Voice/VoicePanel';
 import StudyPanel from './components/Study/StudyPanel';
 import CodePanel from './components/Code/CodePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
@@ -49,7 +48,6 @@ function AppShell() {
         <TopBar title={activeMeta?.label || 'Eddie'} status={status} theme={settings.theme} onToggleTheme={toggleTheme} />
         <div className="app-content">
           {activeModule === 'chat' && <ChatPanel />}
-          {activeModule === 'voice' && <VoicePanel />}
           {activeModule === 'study' && <StudyPanel />}
           {activeModule === 'code' && <CodePanel />}
           {activeModule === 'tasks' && <TasksPanel />}
