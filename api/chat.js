@@ -1,6 +1,7 @@
 // Vercel serverless function: POST /api/chat
 // Keeps provider API keys server-side; the frontend never sees them.
-import { handleChatRequest, errorToResponse } from './_lib/handler.js';
+// Streams the answer as it's generated — see api/_lib/chatStream.js.
+import { runChatStream } from './_lib/chatStream.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,11 +18,5 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    const result = await handleChatRequest(req.body);
-    res.status(200).json(result);
-  } catch (err) {
-    const { status, body } = errorToResponse(err);
-    res.status(status).json(body);
-  }
+  await runChatStream(req, res);
 }

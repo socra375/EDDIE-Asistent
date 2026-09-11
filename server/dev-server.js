@@ -4,7 +4,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { handleChatRequest, errorToResponse } from '../api/_lib/handler.js';
+import { runChatStream } from '../api/_lib/chatStream.js';
 import { parseCookies } from '../api/_lib/cookies.js';
 import { applyResult, respondError } from '../api/_lib/respond.js';
 import { startGoogleLogin, handleGoogleCallback, logout, me, deleteAccount } from '../api/_lib/authHandlers.js';
@@ -26,15 +26,7 @@ function cookiesOf(req) {
 
 // ---- Chat (Gemini/Claude) ----
 
-app.post('/api/chat', async (req, res) => {
-  try {
-    const result = await handleChatRequest(req.body);
-    res.status(200).json(result);
-  } catch (err) {
-    const { status, body } = errorToResponse(err);
-    res.status(status).json(body);
-  }
-});
+app.post('/api/chat', (req, res) => runChatStream(req, res));
 
 app.get('/api/health', (_req, res) => {
   res.json({

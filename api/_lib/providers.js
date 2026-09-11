@@ -1,7 +1,9 @@
 // Thin adapters around each AI provider's REST API.
-// Both functions take a normalized shape and return a normalized shape,
-// so the route handler never has to know provider-specific details.
+// Both functions take a normalized shape and stream their answer out via
+// an onChunk(text) callback as it's generated, instead of buffering the
+// whole thing — see docs/javascript.md for why (perceived latency).
 import { TOOL_DECLARATIONS, executeTool } from './tools.js';
+import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
 // current recommended Flash/Pro/Flash-Lite model, so this never goes stale
@@ -28,32 +30,82 @@ export function defaultModelFor(provider) {
 // ~1s retry can't fix that, and only burns more of an already-scarce quota.
 const RETRYABLE_STATUS_CODES = [503, 529];
 
+async function fetchWithRetry(url, options, retries = 1) {
+  try {
+    return await sharedFetchWithRetry(url, options, { retries, retryableStatusCodes: RETRYABLE_STATUS_CODES });
+  } catch (err) {
+    const timeoutErr = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
+    timeoutErr.code = 'PROVIDER_UNAVAILABLE';
+    timeoutErr.cause = err;
+    throw timeoutErr;
+  }
+}
+
 // A hung upstream connection previously had no ceiling — it could sit there
 // until Vercel's own function timeout killed the whole request, surfacing
 // as an opaque "server responded with error (504)" instead of a clean,
-// actionable message. Capping every individual attempt means a stall fails
-// fast enough to retry or report properly within the function's budget.
-const REQUEST_TIMEOUT_MS = 9000;
+// actionable message. Now that responses stream, a single fixed deadline
+// would also cut off a long-but-healthy answer, so instead we track two
+// independent limits per HTTP attempt: abort if no new data arrives for
+// STREAM_IDLE_TIMEOUT_MS (a genuinely dead connection), or if the attempt
+// runs past STREAM_HARD_TIMEOUT_MS in total regardless of activity (a
+// safety ceiling). With MAX_TOOL_ROUNDS = 2, two rounds at the hard limit
+// plus one tool-fetch comfortably fit inside Vercel's 60s maxDuration
+// (see vercel.json).
+const STREAM_IDLE_TIMEOUT_MS = 12000;
+const STREAM_HARD_TIMEOUT_MS = 20000;
 
-async function fetchWithRetry(url, options, retries = 1) {
-  for (let attempt = 0; ; attempt += 1) {
-    let res;
-    try {
-      res = await fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    } catch (err) {
-      if (attempt >= retries) {
-        const timeoutErr = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
-        timeoutErr.code = 'PROVIDER_UNAVAILABLE';
-        timeoutErr.cause = err;
-        throw timeoutErr;
+function createStreamAbort() {
+  const controller = new AbortController();
+  const abort = () => controller.abort(new DOMException('Tiempo de espera agotado.', 'TimeoutError'));
+  let idleTimer = setTimeout(abort, STREAM_IDLE_TIMEOUT_MS);
+  const hardTimer = setTimeout(abort, STREAM_HARD_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    touch() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(abort, STREAM_IDLE_TIMEOUT_MS);
+    },
+    clear() {
+      clearTimeout(idleTimer);
+      clearTimeout(hardTimer);
+    },
+  };
+}
+
+// Both Gemini and Claude stream their response as Server-Sent Events —
+// lines starting with "data: ", events separated by a blank line. Yields
+// each event's raw JSON payload (skipping Anthropic's "event: ..." lines
+// and OpenAI-style "[DONE]" sentinels, neither of which either provider's
+// SSE stream strictly needs parsed here). Calls onActivity() on every raw
+// read so the caller can reset an idle timeout.
+async function* iterateSSE(res, onActivity) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      onActivity?.();
+      buffer += decoder.decode(value, { stream: true });
+      let sepIndex;
+      while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.slice(0, sepIndex);
+        buffer = buffer.slice(sepIndex + 2);
+        for (const line of block.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (payload && payload !== '[DONE]') yield payload;
+        }
       }
-      await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
-      continue;
     }
-    if (res.ok || attempt >= retries || !RETRYABLE_STATUS_CODES.includes(res.status)) {
-      return res;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // already released
     }
-    await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
   }
 }
 
@@ -75,14 +127,14 @@ function translateGeminiError(status, error, rawMessage) {
   return rawMessage;
 }
 
-export async function callGemini({ apiKey, model, system, messages, context = {} }) {
+export async function callGemini({ apiKey, model, system, messages, context = {}, onChunk }) {
   if (!apiKey) {
     const err = new Error('El proveedor Gemini no está configurado (falta GEMINI_API_KEY).');
     err.code = 'PROVIDER_UNAVAILABLE';
     throw err;
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   let contents = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
@@ -98,54 +150,80 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
   };
 
   for (let round = 0; ; round += 1) {
-    const res = await fetchWithRetry(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...baseBody, contents }),
-    });
+    const streamAbort = createStreamAbort();
+    let res;
+    try {
+      res = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...baseBody, contents }),
+        signal: streamAbort.signal,
+      });
 
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      const rawMessage = data?.error?.message || `Gemini respondió con estado ${res.status}.`;
-      const err = new Error(translateGeminiError(res.status, data?.error, rawMessage));
-      err.code = 'PROVIDER_ERROR';
-      err.status = res.status;
-      throw err;
-    }
-
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    const functionCallPart = parts.find((p) => p.functionCall);
-
-    if (!functionCallPart || round >= MAX_TOOL_ROUNDS) {
-      const text = parts.map((p) => p.text || '').join('');
-      if (!text) {
-        const err = new Error('Gemini no devolvió contenido utilizable.');
-        err.code = 'PROVIDER_EMPTY';
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const rawMessage = data?.error?.message || `Gemini respondió con estado ${res.status}.`;
+        const err = new Error(translateGeminiError(res.status, data?.error, rawMessage));
+        err.code = 'PROVIDER_ERROR';
+        err.status = res.status;
         throw err;
       }
-      return { content: text.trim(), provider: 'gemini', model };
+
+      // Gemini doesn't stream a function call token-by-token — it arrives
+      // whole in one event. Only the last round (no function call at all)
+      // is meant for the user, so we only forward chunks once we're not
+      // aware of a pending function call yet this round.
+      let functionCallPart = null;
+      let text = '';
+      for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
+        let data;
+        try {
+          data = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+          if (part.functionCall) {
+            functionCallPart = part;
+          } else if (typeof part.text === 'string') {
+            text += part.text;
+            if (!functionCallPart) onChunk?.(part.text);
+          }
+        }
+      }
+
+      if (!functionCallPart || round >= MAX_TOOL_ROUNDS) {
+        if (!text) {
+          const err = new Error('Gemini no devolvió contenido utilizable.');
+          err.code = 'PROVIDER_EMPTY';
+          throw err;
+        }
+        return { provider: 'gemini', model };
+      }
+
+      const { name, args } = functionCallPart.functionCall;
+      const toolResult = await executeTool(name, args, context);
+
+      contents = [
+        ...contents,
+        // Echo the whole part back verbatim (not just { functionCall }) —
+        // newer Gemini models attach a sibling `thoughtSignature` field the
+        // API requires to see again on the next turn, or it errors with
+        // "missing a thought_signature in functionCall parts".
+        { role: 'model', parts: [functionCallPart] },
+        // Google's own docs show role: 'function' here, but the live API
+        // currently rejects it ("Role 'function' is not supported"), so we use
+        // 'user' instead — a role it accepts unconditionally.
+        { role: 'user', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
+      ];
+    } finally {
+      streamAbort.clear();
     }
-
-    const { name, args } = functionCallPart.functionCall;
-    const toolResult = await executeTool(name, args, context);
-
-    contents = [
-      ...contents,
-      // Echo the whole part back verbatim (not just { functionCall }) —
-      // newer Gemini models attach a sibling `thoughtSignature` field the
-      // API requires to see again on the next turn, or it errors with
-      // "missing a thought_signature in functionCall parts".
-      { role: 'model', parts: [functionCallPart] },
-      // Google's own docs show role: 'function' here, but the live API
-      // currently rejects it ("Role 'function' is not supported"), so we use
-      // 'user' instead — a role it accepts unconditionally.
-      { role: 'user', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
-    ];
   }
 }
 
-export async function callClaude({ apiKey, model, system, messages }) {
+export async function callClaude({ apiKey, model, system, messages, onChunk }) {
   if (!apiKey) {
     const err = new Error('El proveedor Claude no está configurado (falta ANTHROPIC_API_KEY).');
     err.code = 'PROVIDER_UNAVAILABLE';
@@ -157,47 +235,70 @@ export async function callClaude({ apiKey, model, system, messages }) {
     model,
     max_tokens: 2048,
     system,
+    stream: true,
     messages: messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
   };
 
-  const res = await fetchWithRetry(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-  });
+  const streamAbort = createStreamAbort();
+  try {
+    const res = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+      signal: streamAbort.signal,
+    });
 
-  const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      const err = new Error(data?.error?.message || `Claude respondió con estado ${res.status}.`);
+      err.code = 'PROVIDER_ERROR';
+      err.status = res.status;
+      throw err;
+    }
 
-  if (!res.ok) {
-    const err = new Error(data?.error?.message || `Claude respondió con estado ${res.status}.`);
-    err.code = 'PROVIDER_ERROR';
-    err.status = res.status;
-    throw err;
+    let text = '';
+    for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
+      let data;
+      try {
+        data = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+      if (data?.type === 'content_block_delta' && data.delta?.type === 'text_delta') {
+        text += data.delta.text;
+        onChunk?.(data.delta.text);
+      } else if (data?.type === 'error') {
+        const err = new Error(data.error?.message || 'Claude devolvió un error durante el streaming.');
+        err.code = 'PROVIDER_ERROR';
+        throw err;
+      }
+    }
+
+    if (!text) {
+      const err = new Error('Claude no devolvió contenido utilizable.');
+      err.code = 'PROVIDER_EMPTY';
+      throw err;
+    }
+
+    return { provider: 'claude', model };
+  } finally {
+    streamAbort.clear();
   }
-
-  const text = data?.content?.map((c) => c.text || '').join('') || '';
-  if (!text) {
-    const err = new Error('Claude no devolvió contenido utilizable.');
-    err.code = 'PROVIDER_EMPTY';
-    throw err;
-  }
-
-  return { content: text.trim(), provider: 'claude', model };
 }
 
-export async function callProvider({ provider, model, system, messages, context }) {
+export async function callProvider({ provider, model, system, messages, context, onChunk }) {
   const resolvedModel = model || defaultModelFor(provider);
 
   if (provider === 'claude') {
     // Claude doesn't get the real-time tools yet (Gemini-only for now) — see docs/javascript.md.
-    return callClaude({ apiKey: process.env.ANTHROPIC_API_KEY, model: resolvedModel, system, messages });
+    return callClaude({ apiKey: process.env.ANTHROPIC_API_KEY, model: resolvedModel, system, messages, onChunk });
   }
   if (provider === 'gemini') {
-    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, context });
+    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, context, onChunk });
   }
 
   const err = new Error(`Proveedor desconocido: ${provider}`);

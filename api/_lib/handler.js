@@ -69,9 +69,9 @@ function sanitizeContext(context) {
   return result;
 }
 
-export async function handleChatRequest(body) {
+export async function handleChatRequest(body, onChunk) {
   const request = sanitizeRequest(body);
-  return callProvider(request);
+  return callProvider({ ...request, onChunk });
 }
 
 export function errorToResponse(err) {
