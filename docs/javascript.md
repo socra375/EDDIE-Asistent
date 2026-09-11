@@ -54,7 +54,25 @@ detalle del protocolo.
   este turno, pero la API en producción lo rechaza con "Role 'function' is
   not supported"; `'user'` sí es válido) — los chunks de una ronda con
   `functionCall` nunca se reenvían al usuario, solo los de la ronda final
-  con texto. Claude no recibe `tools` todavía (ver más abajo).
+  con texto. Claude no recibe `tools` todavía (ver más abajo). Al llegar a
+  `MAX_TOOL_ROUNDS` rondas de herramientas, la siguiente petición ya no
+  declara `tools` en absoluto — así se fuerza una respuesta en texto en
+  vez de dejar que Gemini siga "pidiendo" una herramienta que nunca se va
+  a ejecutar y terminar sin nada que mostrar.
+
+  Los modelos `gemini-flash-latest`/`gemini-flash-lite-latest` llevan
+  "thinking" interno que consume tokens de `maxOutputTokens` — con un
+  presupuesto corto, ese razonamiento invisible puede comerse todo el
+  límite antes de producir texto visible, dejando `finishReason:
+  MAX_TOKENS` y una respuesta vacía (el error "Gemini no devolvió
+  contenido utilizable."). Por eso `generationConfig` desactiva el
+  thinking para esos dos modelos (`thinkingConfig: { thinkingBudget: 0 }`)
+  — no lo necesitan para un chat conversacional, y así también responden
+  más rápido. `gemini-pro-latest` no permite desactivarlo del todo, así
+  que en su lugar recibe un `maxOutputTokens` más alto. Si aun así la
+  respuesta llega vacía, el mensaje de error ahora distingue la causa real
+  (bloqueo por políticas de contenido vs. límite de tokens agotado) en vez
+  del genérico de antes.
 
   Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
   `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no
@@ -167,15 +185,19 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   es lo que anima `EddieCore`), y la función `sendMessage(texto, {mode})`
   que:
   1. añade el mensaje del usuario al historial;
-  2. construye el system prompt con `buildSystemPrompt` (ver
+  2. prueba primero `getLocalAnswer` (ver `services/localAnswers.js`
+     más abajo) — si el mensaje es small talk o trivia que Eddie puede
+     responder por sí mismo, responde al instante y retorna sin tocar la
+     red ni al proveedor de IA;
+  3. si no hubo respuesta local, construye el system prompt con `buildSystemPrompt` (ver
      `services/personality.js`), inyectando el modo elegido, el idioma y
      la memoria si está activada;
-  3. llama a `sendChatMessage` (`services/api.js`) con los últimos
+  4. llama a `sendChatMessage` (`services/api.js`) con los últimos
      `MAX_HISTORY_SENT` mensajes y un `context` con el `timezone` del
      navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`) y la
      `location` de `useLocation()`, si existe — es lo que el backend pasa
      a las herramientas de Gemini;
-  4. le pasa un `onChunk(textoCompletoHastaAhora)` que, en cuanto llega el
+  5. le pasa un `onChunk(textoCompletoHastaAhora)` que, en cuanto llega el
      primer fragmento, agrega el mensaje del asistente al historial y pone
      `status` en `responding`; cada fragmento siguiente actualiza ese mismo
      mensaje por `id` — así la burbuja de Eddie crece en vivo en vez de
@@ -227,6 +249,16 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   mostrar en la interfaz si algo falla (red caída, backend con error,
   proveedor sin configurar, o un `{"type":"error",...}` a mitad de la
   transmisión).
+- **`localAnswers.js`** — la "memoria propia" de Eddie: `getLocalAnswer(texto, { timezone, language })`
+  reconoce small talk y trivia autorreferencial (cómo estás, qué día/hora
+  es, quién eres, gracias) por patrones de texto normalizado (sin
+  mayúsculas, acentos ni signos de puntuación) y devuelve la respuesta ya
+  lista, o `null` si el mensaje no coincide con ninguno — en ese caso
+  `ChatContext` sigue con el flujo normal hacia el proveedor de IA. Solo
+  actúa cuando `language === 'es'`, para no forzar una respuesta en
+  español dentro de una conversación en otro idioma. Estas respuestas
+  nunca fallan por una caída o límite de cuota del proveedor de IA, porque
+  nunca lo contactan.
 - **`personality.js`** — define la personalidad fija de Eddie
   (`CORE_PERSONALITY`) y los seis modos de respuesta (`MODES`: rápido,
   explicativo, tutor, técnico, investigación, creativo).
