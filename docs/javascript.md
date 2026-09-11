@@ -15,22 +15,36 @@ Nunca se mezclan: el frontend solo le habla al backend mediante
 Navegador                          Servidor
 ─────────────────────────         ─────────────────────────
 src/services/api.js  ──fetch──▶  api/chat.js (Vercel) o
-                                   server/dev-server.js (local)
+  (lee el body como stream)        server/dev-server.js (local)
                                          │
+                                         ▼
+                                  api/_lib/chatStream.js (abre el stream,
+                                         │                encuadra los eventos)
                                          ▼
                                   api/_lib/handler.js  (valida)
                                          │
                                          ▼
-                                  api/_lib/providers.js (Gemini/Claude)
+                                  api/_lib/providers.js (Gemini/Claude,
+                                                          emite chunks)
 ```
+
+La respuesta se transmite en vivo (streaming) en vez de esperar a que el
+proveedor termine de generar todo el texto: `api/chat.js` responde con un
+cuerpo NDJSON (una línea JSON por evento) que va escribiendo a medida que
+`providers.js` invoca su callback `onChunk`. Esto es lo que hace que el
+Chat muestre la respuesta palabra por palabra en vez de aparecer de golpe
+al final — ver "Flujo completo de un mensaje de chat" más abajo para el
+detalle del protocolo.
 
 ## Backend (`api/`, `server/`)
 
 - **`api/_lib/providers.js`** — un adaptador por proveedor
   (`callGemini`, `callClaude`), cada uno traduce el formato interno
-  `{ system, messages }` a la petición REST específica de esa API y
-  normaliza la respuesta a `{ content, provider, model }`. `callProvider`
-  elige cuál llamar según `provider`. Aquí, y solo aquí, se leen
+  `{ system, messages }` a la petición REST de esa API con `stream: true`
+  (Gemini: `:streamGenerateContent?alt=sse`; Claude: `stream: true` en el
+  body) y va llamando a `onChunk(texto)` con cada fragmento a medida que
+  llega, en vez de esperar la respuesta completa. `callProvider` elige
+  cuál llamar según `provider`. Aquí, y solo aquí, se leen
   `process.env.GEMINI_API_KEY` / `process.env.ANTHROPIC_API_KEY`.
   `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
   bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
@@ -38,12 +52,30 @@ src/services/api.js  ──fetch──▶  api/chat.js (Vercel) o
   devuelve el resultado como un turno `role: 'user'` antes de volver a
   preguntarle (la documentación de Google muestra `role: 'function'` para
   este turno, pero la API en producción lo rechaza con "Role 'function' is
-  not supported"; `'user'` sí es válido). Claude no recibe `tools` todavía
-  (ver más abajo). Cada llamada HTTP (a Gemini, a Claude, y a Open-Meteo
-  dentro de `tools.js`) lleva un `AbortSignal.timeout` — sin eso, una
-  conexión colgada no tenía techo y podía consumir todo el tiempo de la
-  función serverless, apareciendo en el navegador como un opaco "error
-  (504)" en vez de un mensaje claro.
+  not supported"; `'user'` sí es válido) — los chunks de una ronda con
+  `functionCall` nunca se reenvían al usuario, solo los de la ronda final
+  con texto. Claude no recibe `tools` todavía (ver más abajo).
+
+  Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
+  `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no
+  tenía techo y podía consumir todo el tiempo de la función serverless,
+  apareciendo en el navegador como un opaco "error (504)" en vez de un
+  mensaje claro. Como ahora la respuesta se transmite en vivo, un único
+  plazo fijo cortaría también una respuesta larga pero sana, así que
+  `createStreamAbort()` combina dos límites independientes por intento:
+  aborta si no llega ningún dato nuevo en `STREAM_IDLE_TIMEOUT_MS`
+  (conexión realmente muerta), o si el intento entero supera
+  `STREAM_HARD_TIMEOUT_MS` sin importar la actividad (techo de seguridad).
+- **`api/_lib/chatStream.js`** — capa compartida entre `api/chat.js`
+  (Vercel) y `server/dev-server.js` (Express) que abre la respuesta en
+  streaming la primera vez que hay un chunk que enviar, y la va
+  escribiendo como NDJSON (`{"type":"chunk","text":"…"}\n`, terminando con
+  `{"type":"done",...}` o, si algo falla después de haber empezado a
+  transmitir, `{"type":"error","message":"…"}`). Cualquier fallo *antes*
+  de ese primer chunk (validación, falta la clave, cuota excedida, el
+  primer intento fallando por completo) todavía responde con el código de
+  estado HTTP y el JSON de error de siempre — streaming no cambió ese
+  camino en absoluto, solo se le agregó el camino de éxito en vivo.
 - **`api/_lib/tools.js`** — las "herramientas" en tiempo real que Gemini
   puede invocar: `get_current_datetime` (hora/fecha real según el
   `timezone` del navegador) y `get_current_weather` (clima real vía
@@ -125,8 +157,13 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
      navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`) y la
      `location` de `useLocation()`, si existe — es lo que el backend pasa
      a las herramientas de Gemini;
-  4. añade la respuesta (o un mensaje de error legible) al historial y
-     actualiza `status`.
+  4. le pasa un `onChunk(textoCompletoHastaAhora)` que, en cuanto llega el
+     primer fragmento, agrega el mensaje del asistente al historial y pone
+     `status` en `responding`; cada fragmento siguiente actualiza ese mismo
+     mensaje por `id` — así la burbuja de Eddie crece en vivo en vez de
+     aparecer completa al final. Si la conexión falla después de haber
+     empezado a mostrar texto, ese texto se conserva y se le agrega una
+     nota de error en vez de reemplazarlo por un mensaje aparte.
 
   Cualquier módulo (Study, Code, Documents) reutiliza `sendMessage` desde
   `useChat()` para "preguntarle algo a Eddie" con un modo distinto, sin
@@ -151,9 +188,10 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `listening`, `transcript`, `interimTranscript` (lo que se está
   transcribiendo en vivo), `start`, `stop`, `error`. Detecta si el
   navegador no soporta la API y lo señala en vez de fallar en silencio.
-- **`useSpeechSynthesis.js`** — envuelve `window.speechSynthesis`. Expone
-  la lista real de `voices` instaladas en el navegador/SO (nunca asume que
-  existe una voz concreta), y `speak(texto, opciones)` / `stop()`.
+- **`useSpeechSynthesis.js`** — envuelve `window.speechSynthesis` con
+  `speak(texto, { lang, onEnd })` / `stop()`. Sin selector de voz: siempre
+  usa la voz por defecto del navegador para ese idioma, a
+  velocidad/tono/volumen normales.
 - **`useProviderHealth.js`** — hace `fetch('/api/health')` una vez al
   montar y devuelve `{ gemini: bool, claude: bool }`, usado en
   Configuración para mostrar si cada proveedor tiene su clave puesta en
@@ -163,10 +201,14 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
 
 - **`api.js`** — único punto de contacto con el backend
   (`sendChatMessage`), que además del `system` y los `messages` envía el
-  `context` (timezone/ubicación) para las herramientas en tiempo real.
-  Lanza `EddieApiError` con un mensaje ya en español y listo para mostrar
-  en la interfaz si algo falla (red caída, backend con error, proveedor
-  sin configurar).
+  `context` (timezone/ubicación) para las herramientas en tiempo real. Lee
+  el cuerpo de la respuesta como stream (`res.body.getReader()`), parsea
+  cada línea NDJSON y llama a `onChunk(textoAcumulado)` por cada
+  `{"type":"chunk",...}` — ver `api/_lib/chatStream.js` para el formato
+  exacto. Lanza `EddieApiError` con un mensaje ya en español y listo para
+  mostrar en la interfaz si algo falla (red caída, backend con error,
+  proveedor sin configurar, o un `{"type":"error",...}` a mitad de la
+  transmisión).
 - **`personality.js`** — define la personalidad fija de Eddie
   (`CORE_PERSONALITY`) y los seis modos de respuesta (`MODES`: rápido,
   explicativo, tutor, técnico, investigación, creativo).
@@ -235,11 +277,16 @@ llama a la IA, es un CRUD puro sobre `localStorage` vía `utils/storage.js`.
 2. `ChatPanel` llama a `sendMessage(texto, { mode })` de `ChatContext`.
 3. `ChatContext` arma el system prompt (`personality.js`) y llama a
    `sendChatMessage` (`services/api.js`), que hace `POST /api/chat`.
-4. `api/chat.js` (o `server/dev-server.js` en local) valida con
-   `handler.js` y llama a `providers.js`, que contacta a Gemini o Claude
-   con la clave del servidor.
-5. La respuesta normalizada vuelve al frontend; `ChatContext` la añade al
-   historial y cambia `status` a `responding` (lo que anima `EddieCore`).
+4. `api/chat.js` (o `server/dev-server.js` en local) delega en
+   `api/_lib/chatStream.js`, que valida con `handler.js` y llama a
+   `providers.js`, que contacta a Gemini o Claude con la clave del
+   servidor y pide la respuesta en streaming.
+5. Cada fragmento que genera el proveedor sale de inmediato como una línea
+   NDJSON hacia el frontend; `sendChatMessage` la parsea y llama a
+   `onChunk`, y `ChatContext` va actualizando el mismo mensaje del
+   asistente en el historial en cada llamada — `status` pasa a
+   `responding` desde el primer fragmento (lo que anima `EddieCore`)
+   y se mantiene así mientras el texto sigue llegando.
 6. Si `settings.voice.autoRead` está activado, `App.jsx`
    (`AutoReadBridge`) detecta el nuevo mensaje y lo lee en voz alta con
    `speakWithSettings` de `VoiceContext`.

@@ -73,6 +73,11 @@ export function ChatProvider({ children }) {
       const history = [...messages, userMessage].slice(-MAX_HISTORY_SENT);
       const system = buildSystemPrompt({ mode, language: settings.language, memory: settings.memoryEnabled ? memory : {} });
 
+      // Filled in as soon as the first chunk arrives, so the bubble appears
+      // and grows live instead of popping in all at once at the end.
+      const assistantId = nextId();
+      let responseStarted = false;
+
       try {
         const result = await sendChatMessage({
           provider: settings.provider,
@@ -83,17 +88,19 @@ export function ChatProvider({ children }) {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             location: location || undefined,
           },
+          onChunk: (fullTextSoFar) => {
+            if (!responseStarted) {
+              responseStarted = true;
+              setStatus('responding');
+              setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now() }]);
+            } else {
+              setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullTextSoFar } : m)));
+            }
+          },
         });
 
-        setStatus('responding');
-        const assistantMessage = {
-          id: nextId(),
-          role: 'assistant',
-          content: result.content,
-          timestamp: Date.now(),
-          provider: result.provider,
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+        const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider };
+        setMessages((prev) => (responseStarted ? prev.map((m) => (m.id === assistantId ? assistantMessage : m)) : [...prev, assistantMessage]));
         setLastReply(assistantMessage);
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);
         return assistantMessage;
@@ -101,10 +108,18 @@ export function ChatProvider({ children }) {
         setStatus('error');
         const message = err instanceof EddieApiError ? err.message : 'Ocurrió un error inesperado.';
         setErrorMessage(message);
-        setMessages((prev) => [
-          ...prev,
-          { id: nextId(), role: 'assistant', content: `No pude completar la solicitud: ${message}`, timestamp: Date.now(), isError: true },
-        ]);
+        if (responseStarted) {
+          // Some of the answer already streamed in — keep it visible and
+          // annotate it, instead of hiding it behind a separate error bubble.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: `${m.content}\n\n[No se pudo completar: ${message}]`, isError: true } : m)),
+          );
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId(), role: 'assistant', content: `No pude completar la solicitud: ${message}`, timestamp: Date.now(), isError: true },
+          ]);
+        }
         window.setTimeout(() => setStatus((s) => (s === 'error' ? 'idle' : s)), 2500);
         return null;
       }
