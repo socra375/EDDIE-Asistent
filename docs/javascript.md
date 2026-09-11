@@ -60,19 +60,21 @@ detalle del protocolo.
   vez de dejar que Gemini siga "pidiendo" una herramienta que nunca se va
   a ejecutar y terminar sin nada que mostrar.
 
-  Los modelos `gemini-flash-latest`/`gemini-flash-lite-latest` llevan
-  "thinking" interno que consume tokens de `maxOutputTokens` — con un
-  presupuesto corto, ese razonamiento invisible puede comerse todo el
-  límite antes de producir texto visible, dejando `finishReason:
-  MAX_TOKENS` y una respuesta vacía (el error "Gemini no devolvió
-  contenido utilizable."). Por eso `generationConfig` desactiva el
-  thinking para esos dos modelos (`thinkingConfig: { thinkingBudget: 0 }`)
-  — no lo necesitan para un chat conversacional, y así también responden
-  más rápido. `gemini-pro-latest` no permite desactivarlo del todo, así
-  que en su lugar recibe un `maxOutputTokens` más alto. Si aun así la
-  respuesta llega vacía, el mensaje de error ahora distingue la causa real
-  (bloqueo por políticas de contenido vs. límite de tokens agotado) en vez
-  del genérico de antes.
+  Los modelos `-latest` de Gemini llevan "thinking" interno que consume
+  tokens de `maxOutputTokens` — con un presupuesto corto, ese razonamiento
+  invisible puede comerse todo el límite antes de producir texto visible,
+  dejando `finishReason: MAX_TOKENS` y una respuesta vacía (el error
+  "Gemini no devolvió contenido utilizable."). Lo ideal sería desactivar
+  el thinking (`thinkingConfig.thinkingBudget: 0`), pero el nombre/forma
+  exacto de ese campo no es estable entre los distintos snapshots detrás
+  del alias "-latest" — se probó y, con la versión del modelo vigente en
+  ese momento, Gemini rechazaba toda petición con "Request contains an
+  invalid argument" (peor que el bug original). Por eso, en su lugar,
+  `generationConfig.maxOutputTokens` se subió a un valor generoso (4096)
+  para todos los modelos, para que sea difícil que el thinking consuma el
+  presupuesto completo. Si aun así la respuesta llega vacía, el mensaje de
+  error distingue la causa real (bloqueo por políticas de contenido vs.
+  límite de tokens agotado) en vez del genérico de antes.
 
   Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
   `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no
