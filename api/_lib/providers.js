@@ -154,6 +154,12 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
   const generationConfig = { temperature: 0.7, maxOutputTokens: 4096 };
   const systemInstruction = { role: 'system', parts: [{ text: system }] };
 
+  // A genuinely empty response (no function call, no text) sometimes clears
+  // on a plain retry of the exact same request — seen in practice even
+  // though the request itself is well-formed. Retried once, outside of
+  // MAX_TOOL_ROUNDS accounting, before giving up.
+  let emptyRetried = false;
+
   for (let round = 0; ; round += 1) {
     // Once MAX_TOOL_ROUNDS tool calls have already run, stop offering tools
     // at all instead of just ignoring a further functionCall after the fact
@@ -193,6 +199,7 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
       let text = '';
       let finishReason = null;
       let blockReason = null;
+      let safetyRatings = null;
       for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
         let data;
         try {
@@ -203,6 +210,7 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
         blockReason = data?.promptFeedback?.blockReason || blockReason;
         const candidate = data?.candidates?.[0];
         finishReason = candidate?.finishReason || finishReason;
+        safetyRatings = candidate?.safetyRatings || safetyRatings;
         const parts = candidate?.content?.parts || [];
         for (const part of parts) {
           if (part.functionCall) {
@@ -216,6 +224,17 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
 
       if (!functionCallPart || forceTextOnly) {
         if (!text) {
+          // Logged server-side (visible in Vercel's function logs) instead
+          // of just failing silently — the URL/apiKey are deliberately left
+          // out, everything else here is Gemini's own response metadata.
+          console.error(
+            `[callGemini] empty response — model=${model} round=${round} finishReason=${finishReason} blockReason=${blockReason} safetyRatings=${JSON.stringify(safetyRatings)} retried=${emptyRetried}`,
+          );
+          if (!emptyRetried) {
+            emptyRetried = true;
+            round -= 1; // cancel this loop's round += 1, so the retry doesn't burn a tool round or force tools off early
+            continue;
+          }
           const err = new Error(describeEmptyGeminiResponse(blockReason, finishReason));
           err.code = 'PROVIDER_EMPTY';
           throw err;

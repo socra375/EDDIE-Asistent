@@ -72,9 +72,16 @@ detalle del protocolo.
   invalid argument" (peor que el bug original). Por eso, en su lugar,
   `generationConfig.maxOutputTokens` se subió a un valor generoso (4096)
   para todos los modelos, para que sea difícil que el thinking consuma el
-  presupuesto completo. Si aun así la respuesta llega vacía, el mensaje de
-  error distingue la causa real (bloqueo por políticas de contenido vs.
-  límite de tokens agotado) en vez del genérico de antes.
+  presupuesto completo. Si aun así la respuesta llega vacía (sin
+  `functionCall` ni texto), se reintenta automáticamente una vez con la
+  misma petición exacta antes de rendirse — se observó en producción que
+  una respuesta vacía a veces se resuelve con un simple reintento — y el
+  detalle (`finishReason`, `blockReason`, `safetyRatings` de Gemini) se
+  registra con `console.error` en los logs del servidor para poder
+  diagnosticar el próximo caso sin adivinar. Si el reintento también llega
+  vacío, el mensaje de error final distingue la causa real (bloqueo por
+  políticas de contenido vs. límite de tokens agotado) en vez del genérico
+  de antes.
 
   Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
   `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no
