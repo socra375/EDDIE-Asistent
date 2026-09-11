@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { sendChatMessage, EddieApiError } from '../services/api';
 import { buildSystemPrompt } from '../services/personality';
+import { getLocalAnswer } from '../services/localAnswers';
 import {
   getConversations,
   saveConversations,
@@ -67,8 +68,23 @@ export function ChatProvider({ children }) {
 
       const userMessage = { id: nextId(), role: 'user', content: trimmed, timestamp: Date.now() };
       setMessages((prev) => (silent ? prev : [...prev, userMessage]));
-      setStatus('processing');
       setErrorMessage('');
+
+      // Small talk and self-referential trivia (how are you, what day is
+      // it) are answered by Eddie itself — no AI provider involved, so
+      // these never fail even if Gemini/Claude is down or rate-limited.
+      const localAnswer = getLocalAnswer(trimmed, {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: settings.language,
+      });
+      if (localAnswer) {
+        const assistantMessage = { id: nextId(), role: 'assistant', content: localAnswer, timestamp: Date.now(), provider: 'eddie' };
+        setMessages((prev) => [...prev, assistantMessage]);
+        setLastReply(assistantMessage);
+        return assistantMessage;
+      }
+
+      setStatus('processing');
 
       const history = [...messages, userMessage].slice(-MAX_HISTORY_SENT);
       const system = buildSystemPrompt({ mode, language: settings.language, memory: settings.memoryEnabled ? memory : {} });

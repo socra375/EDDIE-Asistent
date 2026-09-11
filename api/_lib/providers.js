@@ -140,23 +140,39 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
     parts: [{ text: m.content }],
   }));
 
-  const baseBody = {
-    systemInstruction: { role: 'system', parts: [{ text: system }] },
-    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048,
-    },
-  };
+  // These "-latest" models have thinking enabled internally, and its tokens
+  // count against maxOutputTokens — a short chat reply can end up entirely
+  // consumed by invisible thinking, leaving finishReason: MAX_TOKENS and no
+  // visible text at all ("Gemini no devolvió contenido utilizable."). Flash
+  // and Flash-Lite can fully disable it (thinkingBudget: 0), which also
+  // makes them faster since Eddie's chat replies don't need chain-of-thought.
+  // gemini-pro-latest can't disable thinking, so it gets more headroom
+  // instead.
+  const isPro = model.includes('pro');
+  const generationConfig = isPro
+    ? { temperature: 0.7, maxOutputTokens: 4096 }
+    : { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } };
+  const systemInstruction = { role: 'system', parts: [{ text: system }] };
 
   for (let round = 0; ; round += 1) {
+    // Once MAX_TOOL_ROUNDS tool calls have already run, stop offering tools
+    // at all instead of just ignoring a further functionCall after the fact
+    // — that previously let Gemini keep "calling" a tool we'd never execute,
+    // ending in the same empty-response error with no way to recover.
+    // Omitting `tools` here forces a plain-text answer using whatever the
+    // tool results already in `contents` gave it.
+    const forceTextOnly = round >= MAX_TOOL_ROUNDS;
+    const body = forceTextOnly
+      ? { systemInstruction, generationConfig, contents }
+      : { systemInstruction, generationConfig, tools: [{ functionDeclarations: TOOL_DECLARATIONS }], contents };
+
     const streamAbort = createStreamAbort();
     let res;
     try {
       res = await fetchWithRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...baseBody, contents }),
+        body: JSON.stringify(body),
         signal: streamAbort.signal,
       });
 
@@ -175,6 +191,8 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
       // aware of a pending function call yet this round.
       let functionCallPart = null;
       let text = '';
+      let finishReason = null;
+      let blockReason = null;
       for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
         let data;
         try {
@@ -182,7 +200,10 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
         } catch {
           continue;
         }
-        const parts = data?.candidates?.[0]?.content?.parts || [];
+        blockReason = data?.promptFeedback?.blockReason || blockReason;
+        const candidate = data?.candidates?.[0];
+        finishReason = candidate?.finishReason || finishReason;
+        const parts = candidate?.content?.parts || [];
         for (const part of parts) {
           if (part.functionCall) {
             functionCallPart = part;
@@ -193,9 +214,9 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
         }
       }
 
-      if (!functionCallPart || round >= MAX_TOOL_ROUNDS) {
+      if (!functionCallPart || forceTextOnly) {
         if (!text) {
-          const err = new Error('Gemini no devolvió contenido utilizable.');
+          const err = new Error(describeEmptyGeminiResponse(blockReason, finishReason));
           err.code = 'PROVIDER_EMPTY';
           throw err;
         }
@@ -221,6 +242,16 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
       streamAbort.clear();
     }
   }
+}
+
+function describeEmptyGeminiResponse(blockReason, finishReason) {
+  if (blockReason || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+    return 'Gemini bloqueó la respuesta por sus políticas de contenido. Intenta reformular tu mensaje.';
+  }
+  if (finishReason === 'MAX_TOKENS') {
+    return 'Gemini alcanzó su límite de tokens antes de generar una respuesta visible. Intenta con un mensaje más corto o vuelve a intentarlo.';
+  }
+  return 'Gemini no devolvió contenido utilizable. Inténtalo de nuevo.';
 }
 
 export async function callClaude({ apiKey, model, system, messages, onChunk }) {
