@@ -103,11 +103,15 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `{ location, status, requestLocation }`. Si el usuario lo deniega o el
   navegador no lo soporta, `location` queda en `null` y Eddie simplemente
   le pregunta la ciudad en vez de asumir una (ver `personality.js`).
-- **`VoiceContext.jsx`** — envuelve los hooks `useSpeechRecognition` y
-  `useSpeechSynthesis` en una sola instancia compartida (el micrófono del
-  navegador solo admite un reconocedor activo a la vez), y añade
-  `speakWithSettings(texto)` que aplica automáticamente la voz/velocidad/
-  tono/volumen guardados en `SettingsContext`.
+- **`VoiceContext.jsx`** — envuelve los hooks `useSpeechRecognition` (STT,
+  usado por el micrófono del Chat) y `useSpeechSynthesis` (TTS), y añade
+  `speakWithSettings(texto)` que llama a `synthesis.speak` con el idioma
+  activo. Los valores del contexto se nombran explícitamente
+  (`sttSupported`/`ttsSupported`, `stop`/`stopSpeaking`, etc.) en vez de
+  hacer `{ ...recognition, ...synthesis }` — ambos hooks devuelven una
+  clave `supported` (y `synthesis` también `stop`), así que un spread
+  plano dejaba que los valores de `synthesis` taparan silenciosamente a
+  los de `recognition`.
 - **`ChatContext.jsx`** — el más importante: mantiene el array de
   `messages`, el `status` (`idle | processing | responding | error`, que
   es lo que anima `EddieCore`), y la función `sendMessage(texto, {mode})`
@@ -186,7 +190,7 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
 
 ### Componentes (`src/components/`)
 
-Organizados por módulo (`Chat/`, `Voice/`, `Study/`, `Code/`, `Tasks/`,
+Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
 `Documents/`, `Settings/`), más dos carpetas transversales:
 
 - **`Core/EddieCore.jsx`** — el núcleo visual animado; solo recibe

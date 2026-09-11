@@ -38,10 +38,6 @@ export const DEFAULT_SETTINGS = {
   theme: 'dark',
   memoryEnabled: true,
   voice: {
-    voiceURI: '',
-    rate: 1,
-    pitch: 0.9,
-    volume: 1,
     autoRead: false,
   },
 };

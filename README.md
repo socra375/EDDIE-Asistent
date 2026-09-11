@@ -22,7 +22,7 @@ Backend (Express en local · función serverless en Vercel)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
-Chat / Voz (TTS) / Historial (localStorage)
+Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en Configuración
 ```
 
 - `api/chat.js` es una función serverless de Vercel (Node runtime). Es el
@@ -38,13 +38,12 @@ Chat / Voz (TTS) / Historial (localStorage)
 
 | Módulo | Qué hace |
 | --- | --- |
-| Chat | Conversación con Eddie, historial persistente, modos de respuesta (rápido, explicativo, tutor, técnico, investigación, creativo) |
-| Voz | Control de micrófono (STT), lectura en voz alta (TTS), selección de voz/idioma/velocidad/tono/volumen |
+| Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, modos de respuesta (rápido, explicativo, tutor, técnico, investigación, creativo) |
 | Estudio | Tutor: explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso |
 | Programación | Explicar, depurar, refactorizar código y generar ejemplos |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar |
 | Documentos | Genera resúmenes/informes/guías/cuestionarios, los exporta a TXT, CSV, DOCX o PDF y, con sesión iniciada, permite guardarlos directamente en Google Drive |
-| Configuración | Proveedor y modelo de IA, idioma, tema, historial de conversaciones (ver/abrir/eliminar), memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
+| Configuración | Proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
 un reloj en vivo en la barra superior, y herramientas que Gemini puede
@@ -174,16 +173,18 @@ Google) con protección CSRF por `state` y sesiones propias:
 
 Eddie usa la **Web Speech API** del navegador (sin dependencias externas):
 
-- **STT**: botón de micrófono, transcripción en tiempo real, manejo de
-  permisos denegados y aviso si el navegador no es compatible.
-- **TTS**: lee las respuestas de Eddie (manual o automáticamente si activas
-  "leer respuestas en voz alta" en Voz/Configuración). La lista de voces
-  disponibles depende del navegador/SO — Eddie detecta las voces instaladas y
-  te deja elegir una, en vez de asumir que existe una voz grave específica.
+- **STT**: el botón de micrófono en el Chat dicta el mensaje con
+  transcripción en tiempo real, maneja permisos denegados y avisa si el
+  navegador no es compatible.
+- **TTS**: si activas "Eddie lee sus respuestas en voz alta" en
+  Configuración, cada respuesta se lee automáticamente en cuanto llega, con
+  la voz/velocidad/tono/volumen por defecto del navegador para el idioma
+  activo — no hay selector de voz, es un simple interruptor on/off.
 
 Compatibilidad: mejor soporte en Chrome/Edge. Safari y Firefox tienen soporte
 parcial o distinto del estándar; si el navegador no implementa
-`SpeechRecognition`, Eddie lo indica y el chat sigue funcionando por texto.
+`SpeechRecognition`/`speechSynthesis`, Eddie lo indica y el chat sigue
+funcionando por texto.
 
 ## Exportación de documentos
 
@@ -297,7 +298,7 @@ db/
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
-  components/          Chat, Voice, Study, Code, Tasks, Documents, Settings, Core, Layout, Shared
+  components/          Chat, Study, Code, Tasks, Documents, Settings, Core, Layout, Shared
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext
   hooks/               useSpeechRecognition, useSpeechSynthesis, useProviderHealth
   services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js
