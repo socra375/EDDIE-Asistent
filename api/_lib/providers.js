@@ -143,15 +143,15 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
   // These "-latest" models have thinking enabled internally, and its tokens
   // count against maxOutputTokens — a short chat reply can end up entirely
   // consumed by invisible thinking, leaving finishReason: MAX_TOKENS and no
-  // visible text at all ("Gemini no devolvió contenido utilizable."). Flash
-  // and Flash-Lite can fully disable it (thinkingBudget: 0), which also
-  // makes them faster since Eddie's chat replies don't need chain-of-thought.
-  // gemini-pro-latest can't disable thinking, so it gets more headroom
-  // instead.
-  const isPro = model.includes('pro');
-  const generationConfig = isPro
-    ? { temperature: 0.7, maxOutputTokens: 4096 }
-    : { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } };
+  // visible text at all ("Gemini no devolvió contenido utilizable."). We'd
+  // rather disable thinking outright (thinkingBudget: 0), but the exact
+  // config field/shape for it isn't stable across model snapshots behind
+  // the "-latest" alias — sending the wrong one made Gemini reject every
+  // request with "Request contains an invalid argument" instead, which is
+  // strictly worse than the original bug. So instead we just give every
+  // model more headroom, generous enough that thinking is unlikely to
+  // consume the whole budget before an answer is produced.
+  const generationConfig = { temperature: 0.7, maxOutputTokens: 4096 };
   const systemInstruction = { role: 'system', parts: [{ text: system }] };
 
   for (let round = 0; ; round += 1) {
