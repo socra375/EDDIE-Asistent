@@ -3,6 +3,7 @@
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
 import { TOOL_DECLARATIONS, executeTool } from './tools.js';
+import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
 // current recommended Flash/Pro/Flash-Lite model, so this never goes stale
@@ -30,24 +31,13 @@ export function defaultModelFor(provider) {
 const RETRYABLE_STATUS_CODES = [503, 529];
 
 async function fetchWithRetry(url, options, retries = 1) {
-  for (let attempt = 0; ; attempt += 1) {
-    let res;
-    try {
-      res = await fetch(url, options);
-    } catch (err) {
-      if (attempt >= retries) {
-        const timeoutErr = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
-        timeoutErr.code = 'PROVIDER_UNAVAILABLE';
-        timeoutErr.cause = err;
-        throw timeoutErr;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
-      continue;
-    }
-    if (res.ok || attempt >= retries || !RETRYABLE_STATUS_CODES.includes(res.status)) {
-      return res;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+  try {
+    return await sharedFetchWithRetry(url, options, { retries, retryableStatusCodes: RETRYABLE_STATUS_CODES });
+  } catch (err) {
+    const timeoutErr = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
+    timeoutErr.code = 'PROVIDER_UNAVAILABLE';
+    timeoutErr.cause = err;
+    throw timeoutErr;
   }
 }
 

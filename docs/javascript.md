@@ -82,7 +82,25 @@ detalle del protocolo.
   Open-Meteo, gratuito y sin API key; geocodifica el nombre de ciudad si
   se da uno, o usa las coordenadas de `context.location` si no). Existen
   para que Eddie nunca tenga que inventar la hora o el clima a partir de
-  su entrenamiento.
+  su entrenamiento. `executeTool(name, args, context)` nunca deja
+  escapar una excepción: busca la declaración de la herramienta en
+  `TOOL_DECLARATIONS`, valida `args` contra sus `parameters.properties`
+  declarados (tipo de cada argumento, argumentos requeridos presentes,
+  sin argumentos desconocidos) devolviendo un `{ error }` legible si algo
+  no encaja, y ejecuta la herramienta dentro de un `try/catch` propio —
+  así un tipo de dato inesperado del modelo o un fallo interno de la
+  herramienta se convierte en un resultado de error que se le devuelve a
+  Gemini como cualquier otro, en vez de abortar toda la petición de chat.
+  Las llamadas HTTP a Open-Meteo (geocodificación y pronóstico) usan el
+  `fetchWithRetry` compartido (ver más abajo) para reintentar una vez
+  ante un fallo de red transitorio.
+- **`api/_lib/fetchWithRetry.js`** — wrapper genérico de reintento con
+  backoff alrededor de `fetch`, usado tanto por `providers.js` (Gemini y
+  Claude) como por `tools.js` (Open-Meteo). Acepta `options` como objeto
+  o como función `() => options`; la forma de función se usa quien pase
+  un `AbortSignal.timeout(...)` (una señal de un solo uso que empieza a
+  contar al crearse), para que cada intento reciba una señal nueva en vez
+  de reutilizar una que ya pudo haber expirado en el intento anterior.
 - **`api/_lib/handler.js`** — valida la petición entrante antes de
   reenviarla: proveedor permitido, número y tamaño de mensajes, longitud
   del system prompt, y sanea el `context` opcional (`timezone` como
