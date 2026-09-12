@@ -70,18 +70,30 @@ detalle del protocolo.
   del alias "-latest" — se probó y, con la versión del modelo vigente en
   ese momento, Gemini rechazaba toda petición con "Request contains an
   invalid argument" (peor que el bug original). Por eso, en su lugar,
-  `generationConfig.maxOutputTokens` se subió a un valor generoso (4096)
-  para todos los modelos, para que sea difícil que el thinking consuma el
-  presupuesto completo. Si aun así la respuesta llega vacía (sin
-  `functionCall` ni texto), se reintenta automáticamente una vez con la
-  misma petición exacta antes de rendirse — se observó en producción que
-  una respuesta vacía a veces se resuelve con un simple reintento — y el
-  detalle (`finishReason`, `blockReason`, `safetyRatings` de Gemini) se
-  registra con `console.error` en los logs del servidor para poder
-  diagnosticar el próximo caso sin adivinar. Si el reintento también llega
-  vacío, el mensaje de error final distingue la causa real (bloqueo por
-  políticas de contenido vs. límite de tokens agotado) en vez del genérico
-  de antes.
+  `generationConfig.maxOutputTokens` se subió a un valor generoso (8192)
+  para todos los modelos — se observó en producción que 4096 no bastaba
+  para una respuesta explicativa/técnica (p. ej. "qué es HTML" bajo el
+  modo "Explicativo", que le pide a Gemini razonar paso a paso y por lo
+  tanto consume más tokens de thinking que un simple saludo). Si aun así
+  la respuesta llega vacía (sin `functionCall` ni texto), se reintenta
+  automáticamente una vez con la misma petición exacta antes de rendirse
+  — se observó en producción que una respuesta vacía a veces se resuelve
+  con un simple reintento — y el detalle (`finishReason`, `blockReason`,
+  `safetyRatings` de Gemini) se registra con `console.error` en los logs
+  del servidor para poder diagnosticar el próximo caso sin adivinar. Si
+  el reintento también llega vacío, el mensaje de error final distingue
+  la causa real (bloqueo por políticas de contenido vs. límite de tokens
+  agotado) en vez del genérico de antes.
+
+  Sumar el reintento y la ronda final forzada sin herramientas eleva el
+  máximo teórico a 4 intentos HTTP por petición de chat (2 rondas de
+  herramientas + 1 ronda final en texto, más 1 reintento gastado en la
+  que llegue vacía primero) — a `STREAM_HARD_TIMEOUT_MS` cada uno, ese
+  peor caso supera el `maxDuration` de 60s de Vercel (`vercel.json`).
+  Por eso `callGemini` controla también un presupuesto de tiempo total
+  (`OVERALL_TIME_BUDGET_MS`, 45s): al superarlo, falla con su propio
+  mensaje claro en vez de dejar que Vercel mate la función primero con un
+  504 opaco.
 
   Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
   `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no

@@ -49,11 +49,18 @@ async function fetchWithRetry(url, options, retries = 1) {
 // independent limits per HTTP attempt: abort if no new data arrives for
 // STREAM_IDLE_TIMEOUT_MS (a genuinely dead connection), or if the attempt
 // runs past STREAM_HARD_TIMEOUT_MS in total regardless of activity (a
-// safety ceiling). With MAX_TOOL_ROUNDS = 2, two rounds at the hard limit
-// plus one tool-fetch comfortably fit inside Vercel's 60s maxDuration
-// (see vercel.json).
+// safety ceiling).
 const STREAM_IDLE_TIMEOUT_MS = 12000;
 const STREAM_HARD_TIMEOUT_MS = 20000;
+
+// callGemini can now make up to 4 HTTP attempts in the worst case (2 tool
+// rounds + 1 forced text-only round, plus one empty-response retry spent on
+// whichever round hits it first) — at STREAM_HARD_TIMEOUT_MS per attempt
+// that's up to 80s, past Vercel's 60s maxDuration (see vercel.json). This is
+// a wall-clock budget across the whole call: once it's spent, we fail with
+// our own clear message instead of letting Vercel kill the function first
+// with an opaque 504.
+const OVERALL_TIME_BUDGET_MS = 45000;
 
 function createStreamAbort() {
   const controller = new AbortController();
@@ -149,9 +156,11 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
   // the "-latest" alias — sending the wrong one made Gemini reject every
   // request with "Request contains an invalid argument" instead, which is
   // strictly worse than the original bug. So instead we just give every
-  // model more headroom, generous enough that thinking is unlikely to
-  // consume the whole budget before an answer is produced.
-  const generationConfig = { temperature: 0.7, maxOutputTokens: 4096 };
+  // model a lot of headroom (seen in practice: 4096 wasn't enough for a
+  // longer explanatory answer under "explicativo" mode, which explicitly
+  // asks for a step-by-step explanation and likely triggers more internal
+  // reasoning than plain small talk does).
+  const generationConfig = { temperature: 0.7, maxOutputTokens: 8192 };
   const systemInstruction = { role: 'system', parts: [{ text: system }] };
 
   // A genuinely empty response (no function call, no text) sometimes clears
@@ -159,8 +168,15 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
   // though the request itself is well-formed. Retried once, outside of
   // MAX_TOOL_ROUNDS accounting, before giving up.
   let emptyRetried = false;
+  const startedAt = Date.now();
 
   for (let round = 0; ; round += 1) {
+    if (Date.now() - startedAt > OVERALL_TIME_BUDGET_MS) {
+      const err = new Error('El proveedor de IA tardó demasiado en responder. Inténtalo de nuevo en unos segundos.');
+      err.code = 'PROVIDER_UNAVAILABLE';
+      throw err;
+    }
+
     // Once MAX_TOOL_ROUNDS tool calls have already run, stop offering tools
     // at all instead of just ignoring a further functionCall after the fact
     // — that previously let Gemini keep "calling" a tool we'd never execute,
