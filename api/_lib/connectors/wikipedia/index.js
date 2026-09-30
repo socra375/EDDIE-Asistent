@@ -44,6 +44,7 @@ export default {
   tools: [
     {
       label: 'Consultar Wikipedia',
+      activity: 'Consultando Wikipedia…',
       sensitive: false,
       declaration: {
         name: 'search_wikipedia',

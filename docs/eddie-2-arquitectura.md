@@ -18,7 +18,7 @@ api/
   cron.js                      ← NUEVO: tareas programadas (resumen matutino, recordatorios)
   _lib/
     providers.js               ← Gemini + Claude + Groq (respaldo automático)
-    agent.js                   ← NUEVO: bucle de varios pasos + protocolo de confirmación
+    confirm.js                 ← (sesión 8) ejecuta la acción que el usuario confirmó (POST /api/chat?action=confirm)
     connectors/
       registry.js              ← (sesión 7) lista de conectores, herramientas activas por petición y estados del hub
       validate.js              ← (sesión 7) validación de argumentos compartida
@@ -70,7 +70,9 @@ export default {
     {
       label: 'Buscar correos',  // cómo se muestra en el hub
       declaration: { name: 'gmail_search', description: '…', parameters: { … } },
+      activity: 'Buscando correos…',  // lo que la app muestra mientras corre
       sensitive: false,        // true → requiere confirmación antes de ejecutarse
+      prepare: async (args, ctx) => { … },  // solo si sensitive: valida, completa y describe la tarjeta
       run: async (args, ctx) => { … },  // ctx: timezone, ubicación y tareas del usuario, y emit(acción) para cambios en la app
     },
   ],
@@ -82,18 +84,30 @@ export default {
 - `registry.js` reutiliza para todas las herramientas la validación de argumentos (`validate.js`), el aislamiento de fallos (todo error vuelve al modelo como `{ error }`) y los reintentos de `api/_lib/fetchWithRetry.js`.
 - Solo se ofrecen a la IA las herramientas de los conectores configurados en el servidor y que el usuario no apagó en el hub (`settings.disabledConnectors`, que el chat envía como `disabledConnectors`).
 - Estados que muestra el hub: `ready`, `connected`, `needs_account`, `needs_setup` y `planned`; "apagado" es la decisión del usuario y vive en sus ajustes.
-- Hasta que exista el protocolo de confirmación (sesión 8), una herramienta `sensitive` nunca se ejecuta.
+- Una herramienta `sensitive` nunca se ejecuta desde la IA: pasa por el protocolo de confirmación (abajo).
 - Los tokens de cada conector se guardan cifrados en Postgres (tabla `connector_credentials`, AES-256-GCM con una clave en `CONNECTOR_SECRET`), igual que hoy se guardan los de Google en `googleCredentials.js`.
 
 ## Protocolo de confirmación
 
-Cuando la IA pide una herramienta marcada `sensitive: true`, el agente no la ejecuta. En su lugar, el stream del chat emite un evento nuevo:
+Implementado en la sesión 8.
+
+1. Cuando la IA pide una herramienta marcada `sensitive: true`, `registry.js` no la ejecuta: llama a su `prepare(args, ctx)` (valida y completa la petición, p. ej. encuentra la tarea exacta) y guarda una tarjeta en `toolset.confirmations`. A la IA le devuelve `{ status: 'awaiting_confirmation', instruction }`, para que pida confirmación en vez de decir que ya lo hizo.
+2. La tarjeta viaja en el evento final del stream:
 
 ```
-{"type":"confirm","id":"c_123","tool":"gmail_send","summary":"Enviar correo a Marcos: «Reunión mañana»","args":{…}}
+{"type":"done", …, "confirmations":[{"id":"…","tool":"delete_task","label":"Borrar tareas","args":{"title":"Comprar pan"},
+  "preview":{"title":"Borrar tarea","confirmLabel":"Borrar","danger":true,"fields":[{"key":"title","label":"Tarea","value":"Comprar pan"}]}}]}
 ```
 
-La interfaz muestra la tarjeta Enviar / Editar / Cancelar y responde con `POST /api/chat` incluyendo `{ confirm: { id, approved } }`. Los canales Telegram y WhatsApp usan botones del propio mensaje para lo mismo.
+3. La app la muestra bajo la respuesta (y en Inicio) con el botón de la acción ("Borrar", "Enviar"), **Editar** para los campos con `editable: true` y **Cancelar**. El usuario también puede decir o escribir "sí" / "no".
+4. Al confirmar, la app llama a `POST /api/chat?action=confirm` con `{ tool, args, context }`. El servidor comprueba que la herramienta siga activa y sea `sensitive`, valida los argumentos (pueden venir editados), vuelve a correr `prepare` y luego `run`; responde `{ result, actions }` sin volver a llamar a la IA. Solo acepta peticiones de la propia app (`Sec-Fetch-Site`).
+5. Si el proveedor falla y responde el respaldo Groq, las tarjetas del intento fallido se descartan.
+
+Los canales Telegram y WhatsApp usarán botones del propio mensaje para lo mismo.
+
+### Agente de varios pasos
+
+Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, por su límite de tokens por minuto), con las llamadas de una misma ronda en paralelo. A los 30 s se dejan de ofrecer herramientas para que la respuesta final quepa en el tiempo de Vercel. Mientras trabaja, el stream emite `{"type":"activity","label":"Buscando en internet…"}` y la app lo muestra en la burbuja de espera y en Inicio.
 
 ## Variables de entorno nuevas
 
@@ -103,7 +117,7 @@ La interfaz muestra la tarjeta Enviar / Editar / Cancelar y responde con `POST /
 | `CONNECTOR_SECRET` | 7 | Clave para cifrar tokens de conectores |
 | `TELEGRAM_BOT_TOKEN` | 17 | Bot de Telegram |
 | `TELEGRAM_WEBHOOK_SECRET` | 17 | Verifica que los mensajes vienen de Telegram |
-| `WEBSEARCH_API_KEY` | 13 | Proveedor de búsqueda web (plan gratis) |
+| `TAVILY_API_KEY` | 13 | Búsqueda web con Tavily (opcional: funciona sin clave con un límite bajo) |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | 23 | Spotify |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | 25 | Notion |
 | `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` / `WHATSAPP_VERIFY_TOKEN` | 27 | WhatsApp Cloud API |

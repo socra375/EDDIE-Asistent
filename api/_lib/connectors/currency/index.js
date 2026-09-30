@@ -57,6 +57,7 @@ export default {
   tools: [
     {
       label: 'Convertir monedas',
+      activity: 'Consultando la tasa de cambio…',
       sensitive: false,
       declaration: {
         name: 'convert_currency',

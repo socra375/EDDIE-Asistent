@@ -56,6 +56,7 @@ export default {
   tools: [
     {
       label: 'Buscar en internet',
+      activity: 'Buscando en internet…',
       sensitive: false,
       declaration: {
         name: 'search_web',

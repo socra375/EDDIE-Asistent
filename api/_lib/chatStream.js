@@ -8,17 +8,21 @@
 //                                     — stream finished (fallbackFrom is set when
 //                                       Groq answered for a failed provider;
 //                                       actions are app changes the tools
-//                                       asked for, e.g. create_task)
+//                                       asked for, e.g. create_task;
+//                                       confirmations are sensitive actions
+//                                       waiting for the user's OK)
+//   {"type":"activity","tool":...,"label":"Buscando en internet…"}
+//                                     — a tool started (Eddie is working)
 //   {"type":"error","message":"..."} — failed after the stream had already
 //                                       started (see below)
 //
-// The stream only opens once the first chunk is ready to send. Anything
-// that fails before that (bad request, missing API key, quota exceeded,
-// a fully-failed first attempt) still gets a normal HTTP status + JSON
-// body, exactly like before streaming existed — only a genuine mid-stream
-// failure (rare: the connection drops after real content was already
-// shown) has to fall back to an in-band error event, since the response's
-// status code can no longer change once headers are sent.
+// The stream only opens once the first chunk or tool activity is ready to
+// send. Anything that fails before that (bad request, missing API key,
+// quota exceeded, a fully-failed first attempt) still gets a normal HTTP
+// status + JSON body, exactly like before streaming existed — a failure
+// after that has to use an in-band error event, since the response's
+// status code can no longer change once headers are sent (the app handles
+// both the same way).
 import { handleChatRequest, errorToResponse } from './handler.js';
 
 export async function runChatStream(req, res) {
@@ -34,13 +38,21 @@ export async function runChatStream(req, res) {
   };
 
   try {
-    const result = await handleChatRequest(req.body, (text) => {
-      ensureStream();
-      res.write(`${JSON.stringify({ type: 'chunk', text })}\n`);
-    });
+    const result = await handleChatRequest(
+      req.body,
+      (text) => {
+        ensureStream();
+        res.write(`${JSON.stringify({ type: 'chunk', text })}\n`);
+      },
+      (activity) => {
+        ensureStream();
+        res.write(`${JSON.stringify({ type: 'activity', ...activity })}\n`);
+      },
+    );
     ensureStream();
     const done = { type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom };
     if (result.actions?.length) done.actions = result.actions;
+    if (result.confirmations?.length) done.confirmations = result.confirmations;
     res.write(`${JSON.stringify(done)}\n`);
     res.end();
   } catch (err) {

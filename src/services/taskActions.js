@@ -36,6 +36,12 @@ export async function applyTaskActions(actions, { signedIn = false } = {}) {
         // Re-read after the await: the user may have edited tasks meanwhile.
         saveTasks([...getTasks(), created || { id: localId(), ...draft, done: false }]);
         applied.push({ type: 'create_task', title: draft.title });
+      } else if (action?.type === 'delete_task' && action.id) {
+        const target = getTasks().find((t) => String(t.id) === String(action.id));
+        if (!target) continue;
+        if (signedIn) await remoteTasks.remove(target.id);
+        saveTasks(getTasks().filter((t) => String(t.id) !== String(target.id)));
+        applied.push({ type: 'delete_task', title: target.title });
       } else if (action?.type === 'complete_task' && action.id) {
         const target = getTasks().find((t) => String(t.id) === String(action.id));
         if (!target || target.done) continue;
@@ -53,6 +59,9 @@ export async function applyTaskActions(actions, { signedIn = false } = {}) {
       } else if (action?.type === 'complete_task') {
         saveTasks(getTasks().map((t) => (String(t.id) === String(action.id) ? { ...t, done: true } : t)));
         applied.push({ type: 'complete_task', title: action.title });
+      } else if (action?.type === 'delete_task') {
+        saveTasks(getTasks().filter((t) => String(t.id) !== String(action.id)));
+        applied.push({ type: 'delete_task', title: action.title });
       }
     }
   }

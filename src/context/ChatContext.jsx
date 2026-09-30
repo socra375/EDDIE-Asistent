@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { sendChatMessage, EddieApiError } from '../services/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { sendChatMessage, confirmAction, EddieApiError } from '../services/api';
 import { buildSystemPrompt, DEFAULT_MODE } from '../services/personality';
 import { getLocalAnswer } from '../services/localAnswers';
 import {
@@ -18,6 +18,28 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 const ChatContext = createContext(null);
 
 const MAX_HISTORY_SENT = 16;
+
+// Spoken or typed answers to a pending confirmation card ("sí" / "no").
+const YES_RE = /^(si|sip|claro|dale|ok|okey|vale|de acuerdo|adelante|hazlo|procede|confirmo|confirmado|confirmalo|confirma|borrala|borralo|envialo|enviala|si por favor|si hazlo|si dale|si confirmo)$/;
+const NO_RE = /^(no|nop|cancela|cancelar|cancelalo|cancelala|dejalo|dejala|mejor no|olvidalo|no gracias|no lo hagas|para)$/;
+
+function normalizeReply(text) {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(eddie )+|( eddie)+$/g, '');
+}
+
+// The card a "sí"/"no" would answer: a pending one on Eddie's latest reply.
+function latestPendingConfirmation(messages) {
+  const last = [...messages].reverse().find((m) => m.role === 'assistant');
+  const card = last?.confirmations?.find((c) => c.state === 'pending');
+  return card ? { messageId: last.id, card } : null;
+}
 let idCounter = 0;
 function nextId() {
   idCounter += 1;
@@ -41,6 +63,13 @@ export function ChatProvider({ children }) {
   const [status, setStatus] = useState('idle'); // idle | processing | responding | error
   const [errorMessage, setErrorMessage] = useState('');
   const [lastReply, setLastReply] = useState(null);
+  // What Eddie is doing right now while it works ("Buscando en internet…").
+  const [activity, setActivity] = useState('');
+  // Latest messages for callbacks that run later (a card being confirmed).
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     setActiveConversationId(conversationId);
@@ -65,6 +94,59 @@ export function ChatProvider({ children }) {
     });
   }, [messages, conversationId]);
 
+  // A short message from Eddie itself (no AI call), e.g. after a card is
+  // confirmed; it's spoken like any reply when voice is on.
+  const addEddieMessage = useCallback((content) => {
+    const message = { id: nextId(), role: 'assistant', content, timestamp: Date.now(), provider: 'eddie' };
+    setMessages((prev) => [...prev, message]);
+    setLastReply(message);
+  }, []);
+
+  const updateConfirmation = useCallback((messageId, confirmationId, patch) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, confirmations: m.confirmations.map((c) => (c.id === confirmationId ? { ...c, ...patch } : c)) } : m,
+      ),
+    );
+  }, []);
+
+  // The user's answer to a confirmation card: "cancel", or "confirm" with
+  // the card's arguments (possibly edited). Only a pending card can be
+  // answered, and only once.
+  const resolveConfirmation = useCallback(
+    async (messageId, confirmationId, decision, editedArgs) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      const card = message?.confirmations?.find((c) => c.id === confirmationId);
+      if (!card || card.state !== 'pending') return;
+
+      if (decision !== 'confirm') {
+        updateConfirmation(messageId, confirmationId, { state: 'cancelled' });
+        addEddieMessage('Cancelado, no hice nada.');
+        return;
+      }
+
+      const args = editedArgs || card.args;
+      updateConfirmation(messageId, confirmationId, { state: 'running', args });
+      try {
+        const { result, actions } = await confirmAction({
+          tool: card.tool,
+          args,
+          context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, tasks: tasksForContext() },
+          disabledConnectors: settings.disabledConnectors || [],
+        });
+        if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
+        const summary = result.summary || 'Listo, hecho.';
+        updateConfirmation(messageId, confirmationId, { state: 'done', result: summary });
+        addEddieMessage(summary);
+      } catch (err) {
+        const reason = err instanceof EddieApiError ? err.message : 'No se pudo completar la acción.';
+        updateConfirmation(messageId, confirmationId, { state: 'error', result: reason });
+        addEddieMessage(`No pude hacerlo: ${reason}`);
+      }
+    },
+    [settings, user, updateConfirmation, addEddieMessage],
+  );
+
   const sendMessage = useCallback(
     // `display` and `tag` let a chat skill send a full template to the AI
     // while the bubble shows only what the user typed; `skill` and `title`
@@ -81,6 +163,18 @@ export function ChatProvider({ children }) {
       if (title) replyMeta.title = title;
       setMessages((prev) => (silent ? prev : [...prev, userMessage]));
       setErrorMessage('');
+
+      // "Sí" / "no" right after Eddie asked to confirm something answers the
+      // card instead of starting a new request (voice-friendly).
+      const pending = !tag && latestPendingConfirmation(messages);
+      if (pending) {
+        const reply = normalizeReply(trimmed);
+        const decision = YES_RE.test(reply) ? 'confirm' : NO_RE.test(reply) ? 'cancel' : null;
+        if (decision) {
+          resolveConfirmation(pending.messageId, pending.card.id, decision);
+          return null;
+        }
+      }
 
       // Small talk and self-referential trivia (how are you, what day is
       // it) are answered by Eddie itself — no AI provider involved, so
@@ -124,8 +218,10 @@ export function ChatProvider({ children }) {
             tasks: tasksForContext(),
           },
           disabledConnectors: settings.disabledConnectors || [],
+          onActivity: (label) => setActivity(label || ''),
           onChunk: (fullTextSoFar) => {
             if (!responseStarted) {
+              setActivity('');
               responseStarted = true;
               setStatus('responding');
               setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...replyMeta }]);
@@ -137,6 +233,11 @@ export function ChatProvider({ children }) {
 
         const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider, ...replyMeta };
         if (result.fallbackFrom) assistantMessage.fallbackFrom = result.fallbackFrom;
+        setActivity('');
+        // Actions waiting for the user's OK, shown as cards under the reply.
+        if (result.confirmations?.length) {
+          assistantMessage.confirmations = result.confirmations.map((c) => ({ ...c, state: 'pending' }));
+        }
         // Tasks Eddie created or completed while answering: applied to the
         // Tareas list, and noted on the bubble so the change is visible.
         if (result.actions?.length) {
@@ -150,6 +251,7 @@ export function ChatProvider({ children }) {
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);
         return assistantMessage;
       } catch (err) {
+        setActivity('');
         setStatus('error');
         const message = err instanceof EddieApiError ? err.message : 'Ocurrió un error inesperado.';
         setErrorMessage(message);
@@ -169,7 +271,7 @@ export function ChatProvider({ children }) {
         return null;
       }
     },
-    [messages, settings, memory, location, user],
+    [messages, settings, memory, location, user, resolveConfirmation],
   );
 
   // Starts a fresh, empty conversation. The one being left behind is
@@ -225,6 +327,8 @@ export function ChatProvider({ children }) {
       sendMessage,
       resetConversation,
       lastReply,
+      activity,
+      resolveConfirmation,
       setStatus,
       conversations,
       conversationId,
@@ -232,7 +336,7 @@ export function ChatProvider({ children }) {
       deleteConversation,
       clearAllConversations,
     }),
-    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
+    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, activity, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

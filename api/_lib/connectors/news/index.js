@@ -98,6 +98,7 @@ export default {
   tools: [
     {
       label: 'Leer los titulares del día',
+      activity: 'Leyendo las noticias…',
       sensitive: false,
       declaration: {
         name: 'get_news',
