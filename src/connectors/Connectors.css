@@ -1,0 +1,241 @@
+.connectors {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  overflow-y: auto;
+  padding-bottom: 1rem;
+}
+
+.connectors__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem 1.2rem;
+}
+
+.connectors__summary p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.connectors__warning {
+  color: var(--warning) !important;
+}
+
+.connectors__state {
+  margin: 0;
+  padding: 1rem 1.2rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.connectors__state--error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--danger);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.connectors__state--error p {
+  margin: 0;
+}
+
+.connectors__heading {
+  margin: 0 0 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.connectors__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 0.9rem;
+}
+
+.connector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem 1.1rem;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.connector__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.connector__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  box-shadow: var(--glow);
+}
+
+.connector__title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.connector__title h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.connector__desc {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.connector__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector__tools li {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--text);
+}
+
+.connector__confirm {
+  color: var(--warning);
+}
+
+.connector__meta {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.connector__setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+
+.connector__setup code {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text);
+}
+
+.connector__action {
+  align-self: flex-start;
+}
+
+/* Switched off by the user, or not here yet: dimmed but still readable. */
+.connector--off,
+.connector--planned {
+  opacity: 0.6;
+}
+
+.connector--planned .connector__icon,
+.connector--off .connector__icon {
+  border-color: var(--panel-border);
+  color: var(--text-dim);
+  box-shadow: none;
+}
+
+.connector--needs_setup .connector__icon {
+  border-color: var(--danger);
+  color: var(--danger);
+  box-shadow: none;
+}
+
+.connector--needs_account .connector__icon {
+  border-color: var(--warning);
+  color: var(--warning);
+  box-shadow: none;
+}
+
+/* On/off switch: a HUD track with a sliding knob. */
+.connector__switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--panel-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.connector__switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.connector__switch[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.connector__switch[aria-checked='true']::after {
+  transform: translateX(22px);
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connector__switch,
+  .connector__switch::after,
+  .connector {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .connectors__grid {
+    grid-template-columns: 1fr;
+  }
+}

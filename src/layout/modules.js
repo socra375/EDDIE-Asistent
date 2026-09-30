@@ -6,6 +6,7 @@ export const MODULES = [
   { id: 'home', label: 'Inicio', icon: 'home', color: '#3fe8ff' },
   { id: 'chat', label: 'Chat', icon: 'chat', color: '#b9f7ff' },
   { id: 'tasks', label: 'Tareas', icon: 'check', color: '#4dffa6' },
+  { id: 'connectors', label: 'Conectores', icon: 'plug', color: '#ffb020' },
 ];
 
 export const SETTINGS = { id: 'settings', label: 'Configuración', icon: 'settings', color: '#6fd3e6' };

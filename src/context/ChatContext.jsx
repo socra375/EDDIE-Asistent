@@ -101,6 +101,7 @@ export function ChatProvider({ children }) {
         language: settings.language,
         memory: settings.memoryEnabled ? memory : {},
         tasks: getTasks(),
+        disabledConnectors: settings.disabledConnectors || [],
       });
 
       // Filled in as soon as the first chunk arrives, so the bubble appears
@@ -118,6 +119,7 @@ export function ChatProvider({ children }) {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             location: location || undefined,
           },
+          disabledConnectors: settings.disabledConnectors || [],
           onChunk: (fullTextSoFar) => {
             if (!responseStarted) {
               responseStarted = true;

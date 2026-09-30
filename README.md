@@ -18,7 +18,8 @@ Navegador (React + Vite)
 Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
-   └── api/_lib/providers.js → llama a Gemini o Claude según settings.provider
+   ├── api/_lib/providers.js → llama a Gemini, Claude o Groq (respaldo automático)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, clima…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -42,6 +43,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 | Inicio | Anillo central para hablar con Eddie (escuchando, procesando, hablando…), paneles de tiempo, ubicación, clima, sistema y tareas, y el chat como panel lateral |
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
+| Conectores | Qué servicios puede usar Eddie y en qué estado están (listo, conectado, por conectar, falta configurar, próximamente). Cada conector se enciende o apaga: al apagarlo, sus herramientas dejan de ofrecerse en el chat. Hoy: hora y fecha, clima, y Google Calendar y Drive |
 | Configuración | Proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
@@ -300,6 +302,8 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   calendar/events.js, drive/save.js
   tasks/[[...id]].js     GET/POST sin id, PATCH/DELETE con id (un solo archivo)
   settings/index.js, memory/index.js
+  connectors/[[...path]].js  GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: clock, weather, google
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
 server/
@@ -308,6 +312,7 @@ src/
   components/          Chat, Tasks, Settings, Core, Shared
   home/                Pantalla de Inicio (anillo de voz y paneles HUD)
   layout/              Barra de íconos, Mis chats, encabezado, logo, efectos HUD
+  connectors/          Hub de conectores (tarjetas por estado e interruptores)
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext
   hooks/               useSpeechRecognition, useSpeechSynthesis, useProviderHealth
   services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js, skills.js, localAnswers.js

@@ -2,7 +2,7 @@
 // Both functions take a normalized shape and stream their answer out via
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
-import { TOOL_DECLARATIONS, executeTool } from './tools.js';
+import { createToolset } from './connectors/registry.js';
 import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
@@ -125,7 +125,7 @@ async function* iterateSSE(res, onActivity) {
   }
 }
 
-// Gemini can ask to call one of TOOL_DECLARATIONS (real current time/weather)
+// Gemini can ask to call one of the active connectors' tools (real time, weather…)
 // instead of answering directly. When it does, we run the tool ourselves,
 // hand the result back as a "function" turn, and let it try again — up to
 // MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Kept
@@ -143,7 +143,10 @@ function translateGeminiError(status, error, rawMessage) {
   return rawMessage;
 }
 
-export async function callGemini({ apiKey, model, system, messages, context = {}, onChunk }) {
+// Used when a request has no tools at all (every connector switched off).
+const NO_TOOLS = { declarations: [], execute: async (name) => ({ error: `Herramienta desconocida: ${name}` }) };
+
+export async function callGemini({ apiKey, model, system, messages, toolset = NO_TOOLS, onChunk }) {
   if (!apiKey) {
     const err = new Error('El proveedor Gemini no está configurado (falta GEMINI_API_KEY).');
     err.code = 'PROVIDER_UNAVAILABLE';
@@ -191,11 +194,12 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
     // — that previously let Gemini keep "calling" a tool we'd never execute,
     // ending in the same empty-response error with no way to recover.
     // Omitting `tools` here forces a plain-text answer using whatever the
-    // tool results already in `contents` gave it.
-    const forceTextOnly = round >= MAX_TOOL_ROUNDS;
+    // tool results already in `contents` gave it. Same when the user switched
+    // every connector off: Gemini rejects an empty functionDeclarations list.
+    const forceTextOnly = round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0;
     const body = forceTextOnly
       ? { systemInstruction, generationConfig, contents }
-      : { systemInstruction, generationConfig, tools: [{ functionDeclarations: TOOL_DECLARATIONS }], contents };
+      : { systemInstruction, generationConfig, tools: [{ functionDeclarations: toolset.declarations }], contents };
 
     const streamAbort = createStreamAbort();
     let res;
@@ -268,7 +272,7 @@ export async function callGemini({ apiKey, model, system, messages, context = {}
       }
 
       const { name, args } = functionCallPart.functionCall;
-      const toolResult = await executeTool(name, args, context);
+      const toolResult = await toolset.execute(name, args);
 
       contents = [
         ...contents,
@@ -378,10 +382,12 @@ function toJsonSchema(schema) {
   return out;
 }
 
-const OPENAI_TOOLS = TOOL_DECLARATIONS.map((t) => ({
-  type: 'function',
-  function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
-}));
+function toOpenAITools(declarations) {
+  return declarations.map((t) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
+  }));
+}
 
 // Groq's free tier allows 8K tokens per minute per model and counts the
 // whole request (prompt + max_tokens) against it, so a long conversation is
@@ -412,13 +418,13 @@ function fitToGroqBudget(chat) {
   return [system, ...kept];
 }
 
-function groqRequestBody(model, chat, withTools) {
+function groqRequestBody(model, chat, tools) {
   const body = { model, messages: fitToGroqBudget(chat), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS };
   // gpt-oss models reason before answering; "low" keeps replies fast and
   // leaves more of the per-minute token budget for the answer itself. Other
   // model families reject this parameter, so it's only sent to gpt-oss.
   if (model.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low';
-  if (withTools) body.tools = OPENAI_TOOLS;
+  if (tools?.length) body.tools = tools;
   return body;
 }
 
@@ -487,7 +493,7 @@ function groqError(status, data, model) {
 // fragments (name first, then the JSON arguments piece by piece), so they're
 // stitched back together by index before running them — same round limits
 // and forced text-only last round as callGemini.
-export async function callGroq({ apiKey, model, system, messages, context = {}, onChunk }) {
+export async function callGroq({ apiKey, model, system, messages, toolset = NO_TOOLS, onChunk }) {
   if (!apiKey) {
     const err = new Error('El proveedor Groq no está configurado (falta GROQ_API_KEY).');
     err.code = 'PROVIDER_UNAVAILABLE';
@@ -501,10 +507,11 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
   ];
   let activeModel = groqReplacements.get(model) || model;
   let modelRecovered = false;
+  const tools = toOpenAITools(toolset.declarations);
 
   for (let round = 0; ; round += 1) {
     const forceTextOnly = round >= MAX_TOOL_ROUNDS;
-    const body = groqRequestBody(activeModel, chat, !forceTextOnly);
+    const body = groqRequestBody(activeModel, chat, forceTextOnly ? null : tools);
 
     const streamAbort = createStreamAbort();
     try {
@@ -576,7 +583,7 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
         } catch {
           // A malformed argument string just means "no arguments".
         }
-        results.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(await executeTool(call.name, args, context)) });
+        results.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(await toolset.execute(call.name, args)) });
       }
       chat = [
         ...chat,
@@ -593,17 +600,17 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
   }
 }
 
-function callSingleProvider({ provider, model, system, messages, context, onChunk }) {
+function callSingleProvider({ provider, model, system, messages, toolset, onChunk }) {
   const resolvedModel = model || defaultModelFor(provider);
   if (provider === 'claude') {
     // Claude doesn't get the real-time tools yet — see docs/javascript.md.
     return callClaude({ apiKey: process.env.ANTHROPIC_API_KEY, model: resolvedModel, system, messages, onChunk });
   }
   if (provider === 'gemini') {
-    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, context, onChunk });
+    return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
   }
   if (provider === 'groq') {
-    return callGroq({ apiKey: process.env.GROQ_API_KEY, model: resolvedModel, system, messages, context, onChunk });
+    return callGroq({ apiKey: process.env.GROQ_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
   }
   const err = new Error(`Proveedor desconocido: ${provider}`);
   err.code = 'BAD_REQUEST';
@@ -618,8 +625,11 @@ const FALLBACK_DEADLINE_MS = 40000;
 // overloaded, timeout, empty answer, missing key), Groq answers instead —
 // if GROQ_API_KEY is set. Once text has reached the user, switching would
 // mix two answers, so a mid-stream failure is reported as-is.
-export async function callProvider({ provider, model, system, messages, context, onChunk }) {
+// `disabledConnectors` lists the connectors the user switched off in the hub;
+// their tools are never offered to the model.
+export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk }) {
   const startedAt = Date.now();
+  const toolset = createToolset({ disabled: disabledConnectors, context });
   let started = false;
   const trackedChunk = (text) => {
     started = true;
@@ -627,7 +637,7 @@ export async function callProvider({ provider, model, system, messages, context,
   };
 
   try {
-    return await callSingleProvider({ provider, model, system, messages, context, onChunk: trackedChunk });
+    return await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk });
   } catch (err) {
     const canFallBack =
       provider !== 'groq' &&
@@ -639,7 +649,7 @@ export async function callProvider({ provider, model, system, messages, context,
 
     console.error(`[callProvider] ${provider} failed (${err.code || 'error'} ${err.status || ''}): ${err.message} — falling back to Groq`);
     try {
-      const result = await callSingleProvider({ provider: 'groq', system, messages, context, onChunk });
+      const result = await callSingleProvider({ provider: 'groq', system, messages, toolset, onChunk });
       return { ...result, fallbackFrom: provider };
     } catch (groqErr) {
       groqErr.message = `${err.message} (El respaldo Groq también falló: ${groqErr.message})`;

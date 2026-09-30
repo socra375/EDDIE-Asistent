@@ -13,6 +13,7 @@ import ChatPanel from './components/Chat/ChatPanel';
 import HomePanel from './home/HomePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
+import ConnectorsPanel from './connectors/ConnectorsPanel';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
 
@@ -77,6 +78,7 @@ function AppShell() {
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'tasks' && <TasksPanel />}
+          {activeModule === 'connectors' && <ConnectorsPanel />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
       </div>

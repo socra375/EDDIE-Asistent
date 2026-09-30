@@ -10,13 +10,13 @@ export class EddieApiError extends Error {}
 // The response streams as newline-delimited JSON — see api/_lib/chatStream.js
 // for the wire format. onChunk(fullTextSoFar) fires as each piece arrives so
 // the caller can render the answer live instead of waiting for it to finish.
-export async function sendChatMessage({ provider, model, system, messages, context, onChunk }) {
+export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, onChunk }) {
   let res;
   try {
     res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, model, system, messages, context }),
+      body: JSON.stringify({ provider, model, system, messages, context, disabledConnectors }),
     });
   } catch {
     throw new EddieApiError('No se pudo contactar al servidor de Eddie. Verifica tu conexión.');

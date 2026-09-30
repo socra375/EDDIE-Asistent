@@ -1,6 +1,6 @@
 // Shared retry-with-backoff wrapper around fetch, used by both the AI
-// provider calls (providers.js) and the tool calls Eddie makes on its own
-// (tools.js) — a transient network hiccup or a "come back later" status
+// provider calls (providers.js) and the connector tools Eddie calls on its
+// own (connectors/) — a transient network hiccup or a "come back later" status
 // from either an AI provider or Open-Meteo shouldn't fail the whole request.
 //
 // `options` may be a plain fetch options object, or a function returning one

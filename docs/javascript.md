@@ -65,7 +65,8 @@ detalle del protocolo.
   `fitToGroqBudget` recorta los mensajes más antiguos para que la petición
   (prompt + `max_tokens`) quepa en los 8K tokens por minuto del plan
   gratuito.
-  `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
+  `callGemini` además declara `tools` (las de los conectores activos, ver
+  `api/_lib/connectors/` más abajo) y corre un
   bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
   `functionCall` en vez de texto, ejecuta la herramienta localmente y le
   devuelve el resultado como un turno `role: 'user'` antes de volver a
@@ -114,8 +115,8 @@ detalle del protocolo.
   mensaje claro en vez de dejar que Vercel mate la función primero con un
   504 opaco.
 
-  Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro de
-  `tools.js`) tiene un límite de tiempo — sin eso, una conexión colgada no
+  Cada intento de conexión (a Gemini, a Claude, y a Open-Meteo dentro del
+  conector de clima) tiene un límite de tiempo — sin eso, una conexión colgada no
   tenía techo y podía consumir todo el tiempo de la función serverless,
   apareciendo en el navegador como un opaco "error (504)" en vez de un
   mensaje claro. Como ahora la respuesta se transmite en vivo, un único
@@ -134,27 +135,46 @@ detalle del protocolo.
   primer intento fallando por completo) todavía responde con el código de
   estado HTTP y el JSON de error de siempre — streaming no cambió ese
   camino en absoluto, solo se le agregó el camino de éxito en vivo.
-- **`api/_lib/tools.js`** — las "herramientas" en tiempo real que Gemini
-  puede invocar: `get_current_datetime` (hora/fecha real según el
-  `timezone` del navegador) y `get_current_weather` (clima real vía
-  Open-Meteo, gratuito y sin API key; geocodifica el nombre de ciudad si
-  se da uno, o usa las coordenadas de `context.location` si no). Existen
-  para que Eddie nunca tenga que inventar la hora o el clima a partir de
-  su entrenamiento. `executeTool(name, args, context)` nunca deja
-  escapar una excepción: busca la declaración de la herramienta en
-  `TOOL_DECLARATIONS`, valida `args` contra sus `parameters.properties`
-  declarados (tipo de cada argumento, argumentos requeridos presentes,
-  sin argumentos desconocidos) devolviendo un `{ error }` legible si algo
-  no encaja, y ejecuta la herramienta dentro de un `try/catch` propio —
-  así un tipo de dato inesperado del modelo o un fallo interno de la
-  herramienta se convierte en un resultado de error que se le devuelve a
-  Gemini como cualquier otro, en vez de abortar toda la petición de chat.
-  Las llamadas HTTP a Open-Meteo (geocodificación y pronóstico) usan el
-  `fetchWithRetry` compartido (ver más abajo) para reintentar una vez
-  ante un fallo de red transitorio.
+- **`api/_lib/connectors/`** — los conectores de Eddie, cada uno en su
+  carpeta con el contrato de `docs/eddie-2-arquitectura.md` (id, nombre,
+  descripción, ícono, autorización, variables de entorno requeridas y
+  herramientas):
+  - `clock/`: `get_current_datetime` (hora/fecha real según el `timezone`
+    del navegador).
+  - `weather/`: `get_current_weather` (clima real vía Open-Meteo, gratuito
+    y sin API key; geocodifica el nombre de ciudad si se da uno, o usa las
+    coordenadas de `context.location` si no). Sus llamadas usan el
+    `fetchWithRetry` compartido para reintentar una vez ante un fallo de
+    red transitorio.
+  - `google/`: la cuenta de Google del login (Calendario desde Tareas y
+    Drive desde el chat); todavía sin herramientas para la IA (llegan en
+    la sesión 12). `auth.isConnected(user)` mira si hay credenciales
+    guardadas.
+  - `planned.js`: solo metadatos de los conectores que llegan en próximas
+    sesiones (Gmail, búsqueda web, Telegram, Spotify, Notion, WhatsApp y
+    el Chromebook), para mostrarlos en el hub.
+  - `registry.js`: `createToolset({ disabled, context })` arma, para cada
+    petición de chat, las declaraciones a ofrecer (solo conectores
+    configurados en el servidor y no apagados por el usuario) y un
+    `execute(name, args)` que nunca deja escapar una excepción: una
+    herramienta desconocida o apagada, argumentos inválidos (lo valida
+    `validate.js` contra los `parameters` declarados: tipos, requeridos,
+    sin argumentos desconocidos) o un fallo interno se convierten en un
+    `{ error }` que vuelve al modelo como cualquier resultado. Las
+    herramientas `sensitive` (enviar, borrar…) nunca se ejecutan hasta que
+    exista la confirmación en el chat (sesión 8).
+    `describeConnectors({ user })` da la vista pública para el hub con un
+    estado por conector: `ready`, `connected`, `needs_account`,
+    `needs_setup` (con los nombres de las variables que faltan, nunca sus
+    valores) o `planned`.
+- **`api/_lib/connectorsHandlers.js`** + **`api/connectors/[[...path]].js`**
+  — `GET /api/connectors` devuelve esa lista (funciona con o sin sesión).
+  Es una sola función comodín para que el OAuth y los webhooks de los
+  próximos conectores (Telegram, WhatsApp) quepan sin superar el límite
+  de 12 funciones del plan Hobby de Vercel (hoy hay 11).
 - **`api/_lib/fetchWithRetry.js`** — wrapper genérico de reintento con
-  backoff alrededor de `fetch`, usado tanto por `providers.js` (Gemini y
-  Claude) como por `tools.js` (Open-Meteo). Acepta `options` como objeto
+  backoff alrededor de `fetch`, usado tanto por `providers.js` (Gemini,
+  Claude y Groq) como por los conectores (Open-Meteo). Acepta `options` como objeto
   o como función `() => options`; la forma de función se usa quien pase
   un `AbortSignal.timeout(...)` (una señal de un solo uso que empieza a
   contar al crearse), para que cada intento reciba una señal nueva en vez
@@ -167,6 +187,9 @@ detalle del protocolo.
   ya que lo controla el cliente. Si algo no cuadra, lanza un error que
   `errorToResponse` traduce a un código HTTP (400 validación, 503
   proveedor sin clave, 502 error del proveedor).
+  También sanea `disabledConnectors` (lista de ids de conectores que el
+  usuario apagó en el hub: solo strings cortas en minúsculas, máximo 50),
+  que `callProvider` usa para no ofrecer esas herramientas.
 - **`api/chat.js`** / **`api/health.js`** — funciones serverless de
   Vercel; son wrappers finos sobre `handler.js` con las cabeceras CORS.
 - **`server/dev-server.js`** — un servidor Express que expone las mismas
@@ -406,7 +429,7 @@ transversales:
     memoria y pantalla; `N/D` si el navegador no lo expone) y TAREAS
     (pendientes reales de `getTasks()` con barra de progreso).
   - `weather.js`: `fetchWeather` y `fetchPlaceName`, con la misma tabla de
-    códigos de clima que `api/_lib/tools.js`.
+    códigos de clima que `api/_lib/connectors/weather/index.js`.
   - `HudPanel.jsx`: `HudPanel` y `HudRow`, el panel con título sobre el
     borde que usan todos los paneles de Inicio.
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en

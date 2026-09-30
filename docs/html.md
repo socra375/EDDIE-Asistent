@@ -60,7 +60,7 @@ Punto por punto:
 ## No hay más archivos `.html`
 
 No existen otras páginas HTML (`about.html`, `login.html`, etc.). La
-navegación entre módulos (Inicio, Chat, Tareas, Configuración) **no
+navegación entre módulos (Inicio, Chat, Tareas, Conectores, Configuración) **no
 cambia de página**: es un simple cambio de
 estado de React (`activeModule` en `src/App.jsx`) que decide qué componente
 renderizar dentro del mismo `<div id="root">`. Esto es lo que hace posible
@@ -84,7 +84,7 @@ Una vez montada, la app renderiza aproximadamente esta jerarquía (simplificada)
     │   │                        VOZ ON/OFF y tema)
     │   └── main.app-content    (aquí se monta el panel activo:
     │                            HomePanel (por defecto), ChatPanel,
-    │                            TasksPanel o
+    │                            TasksPanel, ConnectorsPanel o
     │                            SettingsPanel)
     └── (AutoReadBridge: componente sin salida visual, solo efectos)
 ```

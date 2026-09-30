@@ -31,6 +31,15 @@ export function SettingsProvider({ children }) {
     setSettings((prev) => ({ ...prev, voice: { ...prev.voice, ...patch } }));
   }
 
+  function setConnectorEnabled(id, enabled) {
+    setSettings((prev) => {
+      const off = new Set(prev.disabledConnectors || []);
+      if (enabled) off.delete(id);
+      else off.add(id);
+      return { ...prev, disabledConnectors: [...off] };
+    });
+  }
+
   function rememberFact(key, value) {
     if (!settings.memoryEnabled) return;
     setMemory(saveMemoryAndReturn(key, value));
@@ -67,6 +76,7 @@ export function SettingsProvider({ children }) {
       settings,
       updateSettings,
       updateVoiceSettings,
+      setConnectorEnabled,
       memory,
       rememberFact,
       forgetFact,
