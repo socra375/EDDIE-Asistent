@@ -1,4 +1,5 @@
 import Icon from './Icon';
+import { EddieMark } from './EddieLogo';
 import { MODULES, SETTINGS } from './modules';
 
 function RailButton({ item, active, onSelect }) {
@@ -20,6 +21,9 @@ function RailButton({ item, active, onSelect }) {
 export default function IconRail({ active, onSelect, chatListOpen, onToggleChatList }) {
   return (
     <nav className="rail" aria-label="Módulos">
+      <button type="button" className="rail__logo" onClick={() => onSelect('home')} aria-label="Eddie · Inicio">
+        <EddieMark size={40} />
+      </button>
       <button
         type="button"
         className="rail__item rail__toggle"

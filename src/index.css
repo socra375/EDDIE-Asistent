@@ -34,6 +34,9 @@
   --shadow-glow: inset 0 0 18px rgba(63, 232, 255, 0.08);
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'DejaVu Sans Mono', 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, ui-monospace, monospace;
+  --logo-ring: #3fe8ff;
+  --logo-letter: #b9f7ff;
+  --logo-amber: #ffb020;
 }
 
 :root[data-theme='light'] {
@@ -64,6 +67,9 @@
   --success: #12a868;
   --warning: #c77a00;
   --danger: #d6334a;
+  --logo-ring: #1c7fd6;
+  --logo-letter: #0d3b66;
+  --logo-amber: #d98a00;
 }
 
 * {

@@ -13,9 +13,15 @@ por React a partir de los componentes en `src/`.
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#020b10" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Eddie — asistente virtual de IA para estudiantes: tutor, programación, voz, tareas y documentos." />
-    <title>Eddie · Asistente de estudio</title>
+    <meta name="description" content="Eddie, tu asistente personal por voz y texto: agenda, tareas, clima, estudio y más." />
+    <meta property="og:title" content="Eddie · Asistente personal" />
+    <meta property="og:description" content="Eddie, tu asistente personal por voz y texto." />
+    <meta property="og:image" content="/eddie-logo.png" />
+    <title>Eddie · Asistente personal</title>
   </head>
   <body>
     <div id="root"></div>
@@ -30,8 +36,14 @@ Punto por punto:
   usuario puede cambiarlo desde Configuración; esto no traduce el HTML
   estático, solo las respuestas de Eddie y el propio texto de los
   componentes, que ya están escritos en español).
-- **`<link rel="icon">`**: favicon en SVG (`public/favicon.svg`), servido
-  como archivo estático por Vite desde `public/`.
+- **`<link rel="icon">`**: favicon en SVG (`public/favicon.svg`, el logo
+  de Eddie simplificado para que se lea a 16 px), servido como archivo
+  estático por Vite desde `public/`.
+- **`apple-touch-icon`, `manifest` y `theme-color`**: el ícono al guardar
+  Eddie en la pantalla de inicio del celular y los datos para instalarlo
+  como app (nombre, colores, íconos de 192 y 512 px).
+- **`og:*`**: título, descripción e imagen (`eddie-logo.png`) que se
+  muestran al compartir el enlace.
 - **`<meta name="viewport">`**: obligatorio para que el diseño responsive
   (grid de sidebar/contenido que se reordena en móvil) funcione en
   teléfonos y tablets.
@@ -98,6 +110,14 @@ Todo lo que se coloca en `public/` se copia tal cual a la raíz del build
 
 - `favicon.svg` — el icono de la pestaña del navegador, referenciado desde
   `index.html`.
+- `eddie-icon-512.png`, `eddie-icon-192.png` — el logo oficial (ícono) para
+  el manifiesto de instalación.
+- `apple-touch-icon.png` — el mismo ícono a 180 px con fondo sólido para
+  iOS.
+- `eddie-logo.png` — el logo completo (ícono + "EDDIE"), usado como imagen
+  al compartir el enlace.
+- `manifest.webmanifest` — nombre, colores y los íconos de la app
+  instalable.
 
 ## Accesibilidad básica
 
