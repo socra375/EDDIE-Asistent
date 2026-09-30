@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import TelegramControls from './TelegramControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
 import './Connectors.css';
@@ -21,7 +22,7 @@ const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
+function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onChanged }) {
   const switchable = isLive(connector) && connector.tools.length > 0;
   const status = STATUS[switchable && !enabled ? 'off' : connector.status] || STATUS.planned;
 
@@ -80,6 +81,8 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
           Conectar {connector.name}
         </a>
       )}
+
+      {connector.id === 'telegram' && <TelegramControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
 
       {connector.status === 'needs_setup' && (
         <p className="connector__setup">
@@ -145,6 +148,7 @@ export default function ConnectorsPanel({ notice = null }) {
       onToggle={setConnectorEnabled}
       onConnect={login}
       userEmail={user?.email}
+      onChanged={reload}
     />
   );
 

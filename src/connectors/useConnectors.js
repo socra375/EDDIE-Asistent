@@ -28,8 +28,9 @@ export function useConnectors(userKey) {
     };
   }, [userKey, attempt]);
 
-  const reload = useCallback(() => {
-    setState((prev) => ({ ...prev, status: 'loading' }));
+  // `silent` refreshes the list in place (no "Cargando…"), for polling.
+  const reload = useCallback((silent = false) => {
+    if (silent !== true) setState((prev) => ({ ...prev, status: 'loading' }));
     setAttempt((n) => n + 1);
   }, []);
 
