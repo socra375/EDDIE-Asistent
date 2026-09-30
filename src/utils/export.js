@@ -1,4 +1,4 @@
-// Client-side export helpers. TXT and CSV are native Blob downloads.
+// Client-side export helpers. TXT is a native Blob download.
 // PDF uses the browser's print-to-PDF dialog (no extra dependency needed).
 // DOC uses an HTML-in-.doc trick that Word/LibreOffice open natively.
 
@@ -11,19 +11,12 @@ function download(filename, content, mime) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Revoking right away can cancel the download or lose its filename.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function exportTxt(filename, content) {
   download(filename.endsWith('.txt') ? filename : `${filename}.txt`, content, 'text/plain;charset=utf-8');
-}
-
-export function exportCsv(filename, content) {
-  const rows = content
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => `"${line.replace(/"/g, '""')}"`);
-  download(filename.endsWith('.csv') ? filename : `${filename}.csv`, rows.join('\n'), 'text/csv;charset=utf-8');
 }
 
 function escapeHtml(text) {

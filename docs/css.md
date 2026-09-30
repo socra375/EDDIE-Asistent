@@ -82,7 +82,7 @@ Definidas una vez en `index.css` y usadas en todos los módulos:
 | `.rich-text__paragraph`, `.code-block` | Usadas por `RichText.jsx` para renderizar la respuesta de Eddie, distinguiendo párrafos normales de bloques de código |
 
 Esto evita repetir estilos de botón/input en cada módulo: `ChatPanel`,
-`StudyPanel`, `CodePanel`, etc. todos comparten `className="btn"` /
+`TasksPanel`, `SettingsPanel`, etc. todos comparten `className="btn"` /
 `className="input"`.
 
 ## 2. Capa por componente — un `.css` junto a cada `.jsx`
@@ -96,8 +96,8 @@ src/components/Chat/
 └── Chat.css          ← import './Chat.css' dentro de ChatPanel.jsx
 ```
 
-Esto se repite para `Core/`, `Layout/`, `Study/`, `Code/`,
-`Tasks/`, `Documents/`, `Settings/`. Como Vite no hace scope automático de
+Esto se repite para `Core/`, `Tasks/`, `Settings/`, y para `src/layout/`
+y `src/home/`. Como Vite no hace scope automático de
 CSS (no son CSS Modules), la convención para evitar colisiones es prefijar
 las clases con el nombre del bloque, estilo BEM ligero:
 
@@ -133,15 +133,15 @@ quien lo tenga configurado en el sistema.
 
 ## 4. Responsive
 
-No hay un framework de grid: cada módulo con layout de dos columnas
-(`Study`, `Code`, `Documents`) usa CSS Grid y lo colapsa a una columna con
-un único breakpoint:
+No hay un framework de grid: cada pantalla usa CSS Grid o Flexbox con
+breakpoints propios. El chat usa además una container query, porque vive
+en dos lugares de distinto ancho (su módulo y el panel lateral de Inicio):
 
 ```css
-.study-panel { display: grid; grid-template-columns: 340px 1fr; }
+.chat-panel { container-type: inline-size; }
 
-@media (max-width: 860px) {
-  .study-panel { grid-template-columns: 1fr; }
+@container (max-width: 560px) {
+  .chat-new__label { display: none; } /* "Nueva" queda solo con el ícono */
 }
 ```
 

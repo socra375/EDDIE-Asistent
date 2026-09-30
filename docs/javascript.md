@@ -203,16 +203,16 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   los de `recognition`.
 - **`ChatContext.jsx`** — el más importante: mantiene el array de
   `messages`, el `status` (`idle | processing | responding | error`, que
-  es lo que anima `EddieCore`), y la función `sendMessage(texto, {mode})`
-  que:
+  es lo que anima `EddieCore`), y la función
+  `sendMessage(texto, { mode, display, tag, skill, title })` que:
   1. añade el mensaje del usuario al historial;
   2. prueba primero `getLocalAnswer` (ver `services/localAnswers.js`
      más abajo) — si el mensaje es small talk o trivia que Eddie puede
      responder por sí mismo, responde al instante y retorna sin tocar la
      red ni al proveedor de IA;
   3. si no hubo respuesta local, construye el system prompt con `buildSystemPrompt` (ver
-     `services/personality.js`), inyectando el modo elegido, el idioma y
-     la memoria si está activada;
+     `services/personality.js`), inyectando el modo elegido, el idioma,
+     la memoria si está activada y las tareas pendientes (`getTasks()`);
   4. llama a `sendChatMessage` (`services/api.js`) con los últimos
      `MAX_HISTORY_SENT` mensajes y un `context` con el `timezone` del
      navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`) y la
@@ -226,9 +226,12 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
      empezado a mostrar texto, ese texto se conserva y se le agrega una
      nota de error en vez de reemplazarlo por un mensaje aparte.
 
-  Cualquier módulo (Study, Code, Documents) reutiliza `sendMessage` desde
-  `useChat()` para "preguntarle algo a Eddie" con un modo distinto, sin
-  duplicar lógica de llamada a la API.
+  Las habilidades del chat (`services/skills.js`) mandan una plantilla
+  completa como `texto`, pero guardan en el mensaje `display` (lo que el
+  usuario escribió, que es lo que muestra la burbuja) y `tag` (p. ej.
+  "Estudio · Cuestionario · básico"). `skill` y `title` viajan a la
+  respuesta para poder exportarla. Los mensajes con `tag` nunca pasan por
+  `getLocalAnswer`.
 
   También gestiona el **historial de conversaciones**: cada conversación
   vive en `conversations` (`{ id, title, messages, createdAt, updatedAt }`,
@@ -280,15 +283,28 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   español dentro de una conversación en otro idioma. Estas respuestas
   nunca fallan por una caída o límite de cuota del proveedor de IA, porque
   nunca lo contactan.
-- **`personality.js`** — define la personalidad fija de Eddie
-  (`CORE_PERSONALITY`) y los seis modos de respuesta (`MODES`: rápido,
-  explicativo, tutor, técnico, investigación, creativo).
-  `buildSystemPrompt({ mode, language, memory })` combina todo eso en el
-  texto que se envía como `system` a la API. `CORE_PERSONALITY` incluye
+- **`personality.js`** — define la personalidad de Eddie como asistente
+  personal (`CORE_PERSONALITY`: eficiente, proactivo con criterio,
+  honesto sobre lo que todavía no puede hacer, frases que suenen bien en
+  voz alta) y los siete modos de respuesta (`MODES`: asistente, el modo
+  por defecto `DEFAULT_MODE`, más rápido, explicativo, tutor, técnico,
+  investigación y creativo).
+  `buildSystemPrompt({ mode, language, memory, tasks })` combina todo eso
+  en el texto que se envía como `system` a la API, con hasta 1200
+  caracteres de memoria y las 8 tareas pendientes más prioritarias. En el
+  peor caso queda por debajo de los 6000 caracteres que acepta el backend
+  (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`). `CORE_PERSONALITY` incluye
   una instrucción de formato explícita: nada de asteriscos, guiones de
   viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se
   verían como caracteres sueltos), y separar ideas en párrafos con línea
   en blanco entre ellos — ver `RichText.jsx` para cómo se renderiza eso.
+- **`skills.js`** — las habilidades del chat, que reemplazan a las viejas
+  pantallas de Estudio, Programación y Documentos. Cada habilidad (`SKILLS`)
+  define su modo, sus acciones (plantillas `build(texto, opción)`), una
+  opción extra (nivel o lenguaje) y el placeholder del input.
+  `buildSkillRequest(skill, acción, texto, opción)` devuelve el `prompt` a
+  enviar, el `tag` de la burbuja, un `title` para exportar y el `mode`.
+  La habilidad General envía el texto tal cual.
 
 ### Utilidades (`src/utils/`)
 
@@ -296,15 +312,27 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   protegidas por `try/catch` (si el storage está lleno o deshabilitado, la
   app sigue funcionando como si no hubiera memoria guardada). Aquí viven
   `DEFAULT_SETTINGS` y las funciones para tareas, memoria y conversación.
-- **`export.js`** — genera y descarga documentos en TXT, CSV, `.doc`
+- **`export.js`** — genera y descarga documentos en TXT, `.doc`
   (HTML válido con esa extensión, que Word/LibreOffice abren igual) y PDF
   (abre una ventana de impresión y llama a `window.print()`, para no
   añadir una librería solo para generar PDFs).
 
 ### Componentes (`src/components/`)
 
-Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
-`Documents/`, `Settings/`), más dos carpetas transversales:
+Organizados por módulo (`Chat/`, `Tasks/`, `Settings/`), más dos carpetas
+transversales:
+
+- **`Chat/ChatPanel.jsx`** — arriba, la fila de habilidades (General,
+  Estudio, Código, Documentos) y un botón de conversación nueva; debajo,
+  los selectores de la habilidad activa (qué necesitas y nivel/lenguaje, o
+  el estilo de respuesta en General). El input es un `textarea` que crece
+  con el contenido: Enter envía y Shift+Enter agrega una línea. En espacios
+  angostos (el panel lateral de Inicio, el celular) una container query
+  compacta la barra.
+- **`Chat/MessageActions.jsx`** — debajo de cada respuesta: Copiar y, si
+  vino de la habilidad Documentos o es larga (600+ caracteres), TXT, DOC,
+  PDF y Drive (con sesión iniciada). El nombre del archivo sale del título
+  sin acentos, porque algunos navegadores descartan el nombre si los tiene.
 
 - **`Core/EddieCore.jsx`** — el núcleo visual animado; solo recibe
   `state` y `compact`, no sabe nada de chat ni de voz. Para `listening` y
@@ -367,8 +395,7 @@ Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
   `margin-bottom` de esa clase (`index.css`) separe visualmente cada
   párrafo en vez de que todo el texto quede en un solo bloque pegado. Los
   bloques de código se renderizan en `<pre><code>` con estilo
-  monoespaciado. Lo usan `ChatPanel`, `StudyPanel`, `CodePanel` y
-  `DocumentsPanel` para no reimplementar el mismo parseo cuatro veces.
+  monoespaciado. Lo usa `ChatPanel` para todas las respuestas.
 
 Cada panel de módulo sigue el mismo patrón: estado local con `useState`
 para el formulario, `useChat().sendMessage(...)` para preguntarle a Eddie,
@@ -477,6 +504,6 @@ endpoints.
 - **Botón "A Calendar" en Tareas** — llama a `remoteCalendar.createEventFromTask`,
   guarda el `googleEventId` devuelto en la tarea (local y remoto) para no
   volver a crear el evento dos veces.
-- **Botón "Guardar en Drive" en Documentos** — llama a `remoteDrive.save`
-  con el contenido generado por Eddie y muestra el enlace del archivo
-  creado.
+- **Botón "Drive" en las respuestas del chat** (`MessageActions.jsx`) —
+  llama a `remoteDrive.save` con el contenido de la respuesta y abre el
+  archivo creado.

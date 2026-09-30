@@ -83,7 +83,7 @@ export function clearMemory() {
 // instead of a list of timestamps.
 export function conversationTitle(messages) {
   const firstUserMessage = messages.find((m) => m.role === 'user');
-  const text = firstUserMessage?.content?.trim() || 'Conversación';
+  const text = (firstUserMessage?.display || firstUserMessage?.content)?.trim() || 'Conversación';
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
 

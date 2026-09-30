@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { sendChatMessage, EddieApiError } from '../services/api';
-import { buildSystemPrompt } from '../services/personality';
+import { buildSystemPrompt, DEFAULT_MODE } from '../services/personality';
 import { getLocalAnswer } from '../services/localAnswers';
 import {
   getConversations,
@@ -8,6 +8,7 @@ import {
   getActiveConversationId,
   setActiveConversationId,
   conversationTitle,
+  getTasks,
 } from '../utils/storage';
 import { useSettings } from './SettingsContext';
 import { useLocation } from './LocationContext';
@@ -62,18 +63,26 @@ export function ChatProvider({ children }) {
   }, [messages, conversationId]);
 
   const sendMessage = useCallback(
-    async (text, { mode = 'explicativo', silent = false } = {}) => {
+    // `display` and `tag` let a chat skill send a full template to the AI
+    // while the bubble shows only what the user typed; `skill` and `title`
+    // ride along on the reply so it can be exported as a document.
+    async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title } = {}) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
       const userMessage = { id: nextId(), role: 'user', content: trimmed, timestamp: Date.now() };
+      if (display) userMessage.display = display;
+      if (tag) userMessage.tag = tag;
+      const replyMeta = {};
+      if (skill) replyMeta.skill = skill;
+      if (title) replyMeta.title = title;
       setMessages((prev) => (silent ? prev : [...prev, userMessage]));
       setErrorMessage('');
 
       // Small talk and self-referential trivia (how are you, what day is
       // it) are answered by Eddie itself — no AI provider involved, so
       // these never fail even if Gemini/Claude is down or rate-limited.
-      const localAnswer = getLocalAnswer(trimmed, {
+      const localAnswer = !tag && getLocalAnswer(trimmed, {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         language: settings.language,
       });
@@ -87,7 +96,12 @@ export function ChatProvider({ children }) {
       setStatus('processing');
 
       const history = [...messages, userMessage].slice(-MAX_HISTORY_SENT);
-      const system = buildSystemPrompt({ mode, language: settings.language, memory: settings.memoryEnabled ? memory : {} });
+      const system = buildSystemPrompt({
+        mode,
+        language: settings.language,
+        memory: settings.memoryEnabled ? memory : {},
+        tasks: getTasks(),
+      });
 
       // Filled in as soon as the first chunk arrives, so the bubble appears
       // and grows live instead of popping in all at once at the end.
@@ -108,14 +122,14 @@ export function ChatProvider({ children }) {
             if (!responseStarted) {
               responseStarted = true;
               setStatus('responding');
-              setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now() }]);
+              setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...replyMeta }]);
             } else {
               setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullTextSoFar } : m)));
             }
           },
         });
 
-        const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider };
+        const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider, ...replyMeta };
         setMessages((prev) => (responseStarted ? prev.map((m) => (m.id === assistantId ? assistantMessage : m)) : [...prev, assistantMessage]));
         setLastReply(assistantMessage);
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);

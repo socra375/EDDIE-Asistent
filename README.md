@@ -1,9 +1,9 @@
-# Eddie — Asistente virtual para estudiantes
+# Eddie — Asistente personal
 
-Eddie es un asistente de IA con interfaz futurista (estilo HUD) pensado para
-estudiantes: tutor académico, ayuda con programación, organización de tareas,
-creación de documentos, investigación y una experiencia de voz completa
-(Speech-to-Text y Text-to-Speech).
+Eddie es un asistente personal con interfaz estilo HUD, pensado para usarse
+por voz o por texto: organiza tu día y tus tareas, consulta hora y clima
+reales, te ayuda a estudiar, revisa código y redacta documentos y correos,
+con una experiencia de voz completa (Speech-to-Text y Text-to-Speech).
 
 La aplicación es funcional de extremo a extremo: el frontend nunca ve las
 claves de API, todas las llamadas a los proveedores de IA pasan por un
@@ -38,11 +38,9 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 
 | Módulo | Qué hace |
 | --- | --- |
-| Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, modos de respuesta (rápido, explicativo, tutor, técnico, investigación, creativo) |
-| Estudio | Tutor: explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso |
-| Programación | Explicar, depurar, refactorizar código y generar ejemplos |
-| Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar |
-| Documentos | Genera resúmenes/informes/guías/cuestionarios, los exporta a TXT, CSV, DOCX o PDF y, con sesión iniciada, permite guardarlos directamente en Google Drive |
+| Inicio | Anillo central para hablar con Eddie (escuchando, procesando, hablando…), paneles de tiempo, ubicación, clima, sistema y tareas, y el chat como panel lateral |
+| Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
+| Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
 | Configuración | Proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (ver/eliminar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
@@ -188,7 +186,7 @@ funcionando por texto.
 
 ## Exportación de documentos
 
-- **TXT / CSV**: generados como Blob y descargados directamente.
+- **TXT**: generado como Blob y descargado directamente.
 - **DOCX**: se genera un archivo `.doc` con contenido HTML válido, que Word y
   LibreOffice abren de forma nativa. No es un `.docx` binario real (eso
   requeriría una librería adicional), pero el resultado es un documento
@@ -298,11 +296,13 @@ db/
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
-  components/          Chat, Study, Code, Tasks, Documents, Settings, Core, Layout, Shared
+  components/          Chat, Tasks, Settings, Core, Shared
+  home/                Pantalla de Inicio (anillo de voz y paneles HUD)
+  layout/              Barra de íconos, Mis chats, encabezado, logo, efectos HUD
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext
   hooks/               useSpeechRecognition, useSpeechSynthesis, useProviderHealth
-  services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js
-  utils/               storage.js (localStorage), export.js (TXT/CSV/DOC/PDF)
+  services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js, skills.js, localAnswers.js
+  utils/               storage.js (localStorage), export.js (TXT/DOC/PDF)
 ```
 
 Documentación técnica más detallada, por capa:
