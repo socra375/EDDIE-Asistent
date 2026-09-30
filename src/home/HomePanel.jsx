@@ -127,6 +127,15 @@ export default function HomePanel({ onOpenTasks }) {
                   {expanded ? 'Ver menos' : 'Ver más'}
                 </button>
               )}
+              {lastAssistant?.links?.length > 0 && (
+                <div className="home__links">
+                  {lastAssistant.links.map((link) => (
+                    <a key={link.url} className="btn" href={link.url} target="_blank" rel="noopener noreferrer">
+                      <Icon name="play" size={14} /> {link.opened ? 'Abierto' : 'Abrir'} {link.label}
+                    </a>
+                  ))}
+                </div>
+              )}
               {pendingCards.map((card) => (
                 <ConfirmCard
                   key={card.id}
