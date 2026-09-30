@@ -1,8 +1,15 @@
 # Arquitectura de voz en tiempo real (diseño, no implementado)
 
+> **Actualización (30 sep 2026):** el reconocimiento de voz ya no depende
+> solo del navegador: `useWhisperRecognition` graba el turno con
+> `MediaRecorder`, detecta el final de la frase por volumen y lo transcribe
+> con Whisper en Groq (`whisper-large-v3-turbo`, `POST
+> /api/chat?action=transcribe`). Sigue siendo por turnos, no streaming; el
+> resto de este documento (streaming y <1 s) sigue siendo una propuesta.
+
 ## Estado actual vs. lo que se propone
 
-Hoy Eddie no tiene ningún pipeline de voz "en vivo": `useSpeechRecognition`
+Antes de Whisper, Eddie no tenía ningún pipeline de voz "en vivo": `useSpeechRecognition`
 (STT) y `useSpeechSynthesis` (TTS) son wrappers delgados sobre la Web Speech
 API del navegador. Son turnos discretos, no un stream:
 

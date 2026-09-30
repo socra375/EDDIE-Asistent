@@ -5,6 +5,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { runChatStream } from '../api/_lib/chatStream.js';
+import { runTranscription, MAX_AUDIO_BYTES } from '../api/_lib/transcribe.js';
 import { parseCookies } from '../api/_lib/cookies.js';
 import { applyResult, respondError } from '../api/_lib/respond.js';
 import { startGoogleLogin, handleGoogleCallback, logout, me, deleteAccount } from '../api/_lib/authHandlers.js';
@@ -19,6 +20,7 @@ const app = express();
 const PORT = process.env.PORT || 8787;
 
 app.use(cors());
+app.use(express.raw({ type: 'application/octet-stream', limit: MAX_AUDIO_BYTES }));
 app.use(express.json({ limit: '1mb' }));
 
 function cookiesOf(req) {
@@ -27,7 +29,7 @@ function cookiesOf(req) {
 
 // ---- Chat (Gemini/Claude) ----
 
-app.post('/api/chat', (req, res) => runChatStream(req, res));
+app.post('/api/chat', (req, res) => (req.query.action === 'transcribe' ? runTranscription(req, res) : runChatStream(req, res)));
 
 app.get('/api/health', (_req, res) => {
   res.json({

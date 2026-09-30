@@ -22,7 +22,7 @@ const QUICK_STARTS = [
 export default function ChatPanel({ showCore = true }) {
   const { messages, status, sendMessage, resetConversation } = useChat();
   const { rememberFact } = useSettings();
-  const { sttSupported, listening, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
+  const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
   const [mode, setMode] = useState(DEFAULT_MODE);
   const [skillId, setSkillId] = useState('general');
@@ -37,8 +37,18 @@ export default function ChatPanel({ showCore = true }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, status]);
 
+  // Only a listen started from this panel's mic fills its input (the ring
+  // on Inicio sends its own). With Whisper the text arrives once, right as
+  // `listening` drops, so the last transcript is copied after it ends too.
+  const ownsMicRef = useRef(false);
+  const wasListeningRef = useRef(false);
   useEffect(() => {
-    if (listening) setInput(`${transcript}${interimTranscript}`);
+    const ended = wasListeningRef.current && !listening;
+    wasListeningRef.current = listening;
+    if (!ownsMicRef.current) return;
+    const text = `${transcript}${interimTranscript}`;
+    if (listening || (ended && text)) setInput(text);
+    if (ended) ownsMicRef.current = false;
   }, [transcript, interimTranscript, listening]);
 
   // The input grows with its content (wrapped lines included) up to the
@@ -97,8 +107,13 @@ export default function ChatPanel({ showCore = true }) {
   }
 
   function toggleMic() {
-    if (listening) stop();
-    else start();
+    if (transcribing) return;
+    if (listening) {
+      stop();
+      return;
+    }
+    ownsMicRef.current = true;
+    start();
   }
 
   return (
@@ -221,7 +236,11 @@ export default function ChatPanel({ showCore = true }) {
           )}
         </div>
 
-        {sttError && <p className="chat-panel__hint chat-panel__hint--error">{sttError}</p>}
+        {transcribing ? (
+          <p className="chat-panel__hint">Transcribiendo tu voz…</p>
+        ) : (
+          sttError && <p className="chat-panel__hint chat-panel__hint--error">{sttError}</p>
+        )}
 
         <form className="chat-panel__input" onSubmit={handleSubmit}>
           <button
