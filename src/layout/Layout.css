@@ -162,6 +162,20 @@
   color: var(--text-dim);
 }
 
+.rail__logo {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.rail__logo:hover {
+  transform: rotate(-12deg) scale(1.06);
+}
+
 /* The module colors are tuned for the dark background; darken them on the
    light theme so the green and yellow icons stay legible on white. */
 :root[data-theme='light'] .rail__item .icon {
@@ -358,13 +372,10 @@
 }
 
 .header__title {
+  display: flex;
+  justify-content: center;
   margin: 0;
-  padding-left: 0.7em;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.7em;
-  color: var(--accent-2);
-  text-shadow: 0 0 12px var(--accent);
+  line-height: 0;
 }
 
 .header__section {
@@ -472,6 +483,10 @@
   }
 
   .rail__item[data-tooltip]:hover::after {
+    display: none;
+  }
+
+  .rail__logo {
     display: none;
   }
 

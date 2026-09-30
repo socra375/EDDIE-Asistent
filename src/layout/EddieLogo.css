@@ -1,0 +1,39 @@
+.eddie-logo {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--logo-ring) 55%, transparent));
+}
+
+.eddie-logo__ring,
+.eddie-logo__amber-stroke,
+.eddie-logo__dots,
+.eddie-logo__ticks {
+  fill: none;
+}
+
+.eddie-logo__ring {
+  stroke: var(--logo-ring);
+}
+
+.eddie-logo__amber-stroke {
+  stroke: var(--logo-amber);
+}
+
+.eddie-logo__dots,
+.eddie-logo__ticks {
+  stroke: var(--logo-ring);
+  opacity: 0.75;
+}
+
+.eddie-logo__letter {
+  fill: var(--logo-letter);
+}
+
+.eddie-logo__amber {
+  fill: var(--logo-amber);
+}
+
+:root[data-theme='light'] .eddie-logo {
+  filter: none;
+}

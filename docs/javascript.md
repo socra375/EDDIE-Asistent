@@ -329,6 +329,12 @@ Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
     ajuste `voice.autoRead` de Configuración; al apagarlo corta la voz en
     curso) y tema.
   - `HudFx.jsx`: capa decorativa de fondo (rejilla, escaneo, viñeta, marco).
+  - `EddieLogo.jsx`: el logo oficial redibujado en SVG a partir de los PNG
+    de `public/`. `EddieMark` es el ícono (anillo + "E"; va arriba en la
+    barra de íconos y lleva a Inicio) y `EddieWordmark` el logo completo
+    con "EDDIE" y la línea de pulso (va en el encabezado). Sus colores
+    salen de `--logo-ring`, `--logo-letter` y `--logo-amber`, que el tema
+    claro redefine.
   - `Layout.css`: grid de tres columnas; la columna de chats se colapsa a
     ancho 0 en vez de desmontarse (arranca cerrada). Bajo 1100px se oculta
     la columna, y bajo 860px la barra de íconos pasa abajo.

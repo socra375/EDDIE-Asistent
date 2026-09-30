@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useLocation } from '../context/LocationContext';
 import LiveClock from './LiveClock';
+import { EddieWordmark } from './EddieLogo';
 
 const GPS_CHIP = {
   granted: ['GPS · ACTIVO', 'on'],
@@ -52,7 +53,9 @@ export default function Header({ section }) {
       </div>
 
       <div className="header__brand">
-        <h1 className="header__title">EDDIE</h1>
+        <h1 className="header__title">
+          <EddieWordmark height={64} title="Eddie" />
+        </h1>
         <p className="header__section">{section}</p>
       </div>
 
