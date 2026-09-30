@@ -41,6 +41,11 @@ export const DEFAULT_SETTINGS = {
   voice: {
     autoRead: false,
   },
+  // Wake word: say it and Eddie starts listening (see services/wakeWord.js).
+  wake: {
+    enabled: false,
+    word: 'eddie',
+  },
   // Connectors switched off in the Conectores hub; everything else is on,
   // so a newly added connector works without the user opting in.
   disabledConnectors: [],
@@ -49,7 +54,12 @@ export const DEFAULT_SETTINGS = {
 export function getSettings() {
   const stored = read(KEYS.settings, null);
   if (!stored) return { ...DEFAULT_SETTINGS };
-  return { ...DEFAULT_SETTINGS, ...stored, voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) } };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) },
+    wake: { ...DEFAULT_SETTINGS.wake, ...(stored.wake || {}) },
+  };
 }
 
 export function saveSettings(settings) {

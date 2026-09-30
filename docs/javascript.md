@@ -528,6 +528,22 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   proyectos mencionados o los 3 recientes; decisiones y conocimientos que
   comparten palabras con el mensaje; contexto vigente; todo dentro del
   presupuesto de caracteres, por líneas completas).
+- **`wakeWord.js`** — la palabra clave de activación, sin APIs del navegador:
+  `findWakeWord(texto, palabra)` -> `{ found, rest }` (la palabra debe ir al
+  principio, con un "oye/hey/hola/ok" opcional delante; ignora mayúsculas y
+  acentos; para "eddie" acepta lo que suelen escribir los reconocedores:
+  eddy, edie, edi, edy; `rest` es lo dicho después, cortado del texto
+  original), `cleanWakeWord` (solo letras, números y espacios; mínimo 3
+  letras; tope de 30 caracteres, así nada rompe la expresión regular).
+  `hooks/useWakeWordListener.js` mantiene el reconocedor del navegador
+  escuchando (continuo, se reinicia solo, se rinde tras 6 caídas rápidas,
+  `denied` si el micrófono está bloqueado) y se pausa mientras Eddie usa el
+  micrófono o habla; `context/WakeWordContext.jsx` lo conecta con el chat:
+  con comando lo envía, sin comando abre el micrófono y envía al terminar
+  (su propia bandera, para no duplicar el envío del anillo de Inicio);
+  `context/wakeWordState.js` es el contexto y `useWakeWord()`. Ajustes en
+  `settings.wake` ({ enabled, word }), que se sincronizan con la cuenta; la
+  tarjeta vive en `memory/MemoryPanel.jsx`.
 - **`memoryActions.js`** — `applyMemoryActions(actions)` aplica las acciones
   `memory_add`, `memory_project` y `memory_forget` de las herramientas del
   conector `memory` (no guarda nada si la memoria está apagada) y avisa con

@@ -44,7 +44,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 | Hoy | El día de un vistazo: saludo, agenda de hoy y mañana (Google Calendar), correos importantes sin leer (Gmail), tareas pendientes (vencidas primero), clima y titulares de noticias. Cada tarjeta explica qué falta si está vacía (iniciar sesión, conectar Gmail, conector apagado) y el botón "Resumen del día con Eddie" le pide que te lo cuente con sus herramientas, por voz si está activa. Se actualiza solo cada 5 minutos |
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
-| Memoria | Lo que Eddie recuerda de ti, por categoría: perfil, preferencias, proyectos (estado, stack, último cambio, próximo objetivo), decisiones, conocimientos y contexto temporal (con fecha de vencimiento). Eddie guarda lo que le cuentas sin que se lo pidas (y te avisa), usa solo lo que viene al caso en cada respuesta y tú puedes añadir, editar y borrar todo; nunca guarda contraseñas ni tarjetas |
+| Memoria | Lo que Eddie recuerda de ti, por categoría: perfil, preferencias, proyectos (estado, stack, último cambio, próximo objetivo), decisiones, conocimientos y contexto temporal (con fecha de vencimiento). Eddie guarda lo que le cuentas sin que se lo pidas (y te avisa), usa solo lo que viene al caso en cada respuesta y tú puedes añadir, editar y borrar todo; nunca guarda contraseñas ni tarjetas. Aquí también eliges la **palabra clave de activación** (por defecto "Eddie"): dila y Eddie te escucha sin tocar nada |
 | Conectores | Qué servicios puede usar Eddie y en qué estado están (listo, conectado, por conectar, falta configurar, próximamente). Cada conector se enciende o apaga: al apagarlo, sus herramientas dejan de ofrecerse en el chat. Hoy: hora y fecha, clima, y Google Calendar y Drive |
 | Configuración | Proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (activar/borrar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
@@ -239,6 +239,23 @@ Google) con protección CSRF por `state` y sesiones propias:
    cookie — el frontend nunca ve ni maneja tokens de Google directamente.
 4. Los tokens de Calendar/Drive se guardan en `google_credentials` y se
    renuevan automáticamente con el `refresh_token` cuando expiran.
+
+## Palabra clave de activación
+
+En **Memoria → Palabra clave de activación** activas "Escuchar la palabra clave" y eliges la
+palabra o frase (por defecto "Eddie"; acepta "Jarvis", "computadora central"…). Con Eddie
+abierto en una pestaña, basta decirla:
+
+- **"Eddie, ¿qué tengo hoy?"** — lo que sigue a la palabra se envía tal cual.
+- **"Eddie"** solo — se abre el micrófono y lo que digas después se envía al terminar.
+
+Solo reacciona si la palabra va **al principio** de la frase (admite "oye", "hey", "hola" delante),
+así que hablar *de* Eddie ("le dije a Eddie que…") no lo despierta. Se pausa mientras Eddie te
+escucha, piensa o habla (así no se despierta con su propia voz) y, al despertarlo por voz,
+activa la lectura de respuestas en voz alta. Usa el reconocimiento de voz del navegador (en
+Chrome el audio lo procesa el servicio de voz de Google): funciona en Chrome y Edge, con la
+pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagada ni en Firefox.
+Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
 ## Telegram (hablar con Eddie desde el celular)
 

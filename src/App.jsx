@@ -16,6 +16,7 @@ import SettingsPanel from './components/Settings/SettingsPanel';
 import ConnectorsPanel from './connectors/ConnectorsPanel';
 import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
+import { WakeWordProvider } from './context/WakeWordContext';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
 
@@ -116,7 +117,9 @@ export default function App() {
         <LocationProvider>
           <VoiceProvider>
             <ChatProvider>
-              <AppShell />
+              <WakeWordProvider>
+                <AppShell />
+              </WakeWordProvider>
             </ChatProvider>
           </VoiceProvider>
         </LocationProvider>
