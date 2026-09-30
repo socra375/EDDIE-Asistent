@@ -123,6 +123,8 @@ cuentas). Configurándola, los usuarios pueden iniciar sesión con Google
 para:
 
 - Sincronizar tareas, configuración y memoria entre dispositivos.
+- Pedirle a Eddie tu agenda ("¿qué tengo mañana?"), crear eventos y
+  moverlos o borrarlos con confirmación.
 - Agregar tareas con fecha de entrega a Google Calendar (permiso limitado
   a `calendar.events`, no a todo el calendario).
 - Guardar los documentos que genera Eddie directamente en Google Drive
