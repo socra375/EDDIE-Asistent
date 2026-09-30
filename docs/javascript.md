@@ -167,9 +167,10 @@ detalle del protocolo.
     estado por conector: `ready`, `connected`, `needs_account`,
     `needs_setup` (con los nombres de las variables que faltan, nunca sus
     valores) o `planned`.
-- **`api/_lib/connectorsHandlers.js`** + **`api/connectors/[[...path]].js`**
+- **`api/_lib/connectorsHandlers.js`** + **`api/connectors.js`**
   — `GET /api/connectors` devuelve esa lista (funciona con o sin sesión).
-  Es una sola función comodín para que el OAuth y los webhooks de los
+  Es una sola función (`vercel.json` reescribe `/api/connectors/<id>/...`
+  a `/api/connectors?path=<id>/...`) para que el OAuth y los webhooks de los
   próximos conectores (Telegram, WhatsApp) quepan sin superar el límite
   de 12 funciones del plan Hobby de Vercel (hoy hay 11).
 - **`api/_lib/fetchWithRetry.js`** — wrapper genérico de reintento con
@@ -488,9 +489,11 @@ sin duplicarla — el mismo patrón que ya usaba `/api/chat`.
 El plan gratuito de Vercel limita a 12 funciones serverless por
 despliegue, así que endpoints relacionados de bajo tráfico comparten
 archivo en `api/`: `auth/session.js` sirve `GET`/`POST`/`DELETE` para
-me/logout/eliminar cuenta, y `tasks/[[...id]].js` (ruta "catch-all"
-opcional de Vercel) sirve tanto `/api/tasks` como `/api/tasks/<id>` según
-haya o no un id y el método HTTP. En Express (`server/dev-server.js`) esto
+me/logout/eliminar cuenta, y `tasks.js` sirve tanto `/api/tasks` como `/api/tasks/<id>`
+(`vercel.json` reescribe el segundo a `/api/tasks?id=<id>`) según
+haya o no un id y el método HTTP. No se usan rutas "catch-all" opcionales
+(`[[...id]].js`): fuera de Next.js, Vercel no les enviaba la ruta sin id y
+la respondía la página de la app. En Express (`server/dev-server.js`) esto
 no hace falta —no tiene ese límite—, así que ahí cada ruta sigue siendo
 explícita.
 

@@ -1,7 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/connectors/:path*", "destination": "/api/connectors?path=:path*" },
+    { "source": "/api/tasks/:id", "destination": "/api/tasks?id=:id" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "functions": {
     "api/chat.js": {
       "maxDuration": 60

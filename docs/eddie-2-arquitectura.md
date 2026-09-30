@@ -14,8 +14,8 @@ Guía de referencia para las 35 sesiones del plan de Eddie 2.0 (asistente person
 ```
 api/
   chat.js                      ← sin cambios: entrada del chat (streaming NDJSON)
-  connectors/[[...path]].js    ← (sesión 7) lista para el hub; luego OAuth y webhooks de todos los conectores
-  cron/[[...job]].js           ← NUEVO: tareas programadas (resumen matutino, recordatorios)
+  connectors.js                ← (sesión 7) lista para el hub; luego OAuth y webhooks de todos los conectores
+  cron.js                      ← NUEVO: tareas programadas (resumen matutino, recordatorios)
   _lib/
     providers.js               ← Gemini + Claude + Groq (respaldo automático)
     agent.js                   ← NUEVO: bucle de varios pasos + protocolo de confirmación
@@ -42,7 +42,7 @@ src/
 desktop/                       ← NUEVO (semana 8): app Tauri que envuelve la web
 ```
 
-**Límite de Vercel Hobby (12 funciones):** con `api/connectors/[[...path]].js` (sesión 7) hay 11 archivos en `api/`. Todos los conectores comparten esa función y todas las tareas programadas compartirán `api/cron/[[...job]].js`, con el mismo patrón de ruta comodín que ya usa `api/tasks/[[...id]].js`. Eso deja el total en 12.
+**Límite de Vercel Hobby (12 funciones):** con `api/connectors.js` (sesión 7) hay 11 archivos en `api/`. Todos los conectores comparten esa función y todas las tareas programadas compartirán `api/cron.js`, con el mismo patrón que ya usan `api/tasks.js` y `api/connectors.js`: un archivo simple más una reescritura en `vercel.json` para las subrutas (las rutas comodín opcionales `[[...x]].js` no reciben la ruta base fuera de Next.js). Eso deja el total en 12.
 
 ## Contrato de un conector
 
