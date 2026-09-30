@@ -16,9 +16,15 @@ import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 // SettingsPanel.jsx for the other options a user can pick instead.
 const GEMINI_DEFAULT_MODEL = 'gemini-flash-lite-latest';
 const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-5';
+// Groq's free tier is fast and generous; this model supports tool calling.
+// GROQ_MODEL lets the model be swapped from Vercel without a code change if
+// Groq retires it.
+const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 
 export function defaultModelFor(provider) {
-  return provider === 'claude' ? CLAUDE_DEFAULT_MODEL : GEMINI_DEFAULT_MODEL;
+  if (provider === 'claude') return CLAUDE_DEFAULT_MODEL;
+  if (provider === 'groq') return process.env.GROQ_MODEL || GROQ_DEFAULT_MODEL;
+  return GEMINI_DEFAULT_MODEL;
 }
 
 // Both providers occasionally return a transient "model overloaded /
@@ -356,18 +362,180 @@ export async function callClaude({ apiKey, model, system, messages, onChunk }) {
   }
 }
 
-export async function callProvider({ provider, model, system, messages, context, onChunk }) {
-  const resolvedModel = model || defaultModelFor(provider);
+// Gemini's tool schema uses upper-case types ("OBJECT", "STRING"); the
+// OpenAI-style APIs (Groq) expect standard lower-case JSON Schema.
+function toJsonSchema(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const out = { ...schema };
+  if (typeof out.type === 'string') out.type = out.type.toLowerCase();
+  if (out.properties) {
+    out.properties = Object.fromEntries(Object.entries(out.properties).map(([k, v]) => [k, toJsonSchema(v)]));
+  }
+  if (out.items) out.items = toJsonSchema(out.items);
+  return out;
+}
 
+const OPENAI_TOOLS = TOOL_DECLARATIONS.map((t) => ({
+  type: 'function',
+  function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
+}));
+
+// Groq speaks the OpenAI Chat Completions protocol. Tool calls stream in as
+// fragments (name first, then the JSON arguments piece by piece), so they're
+// stitched back together by index before running them — same round limits
+// and forced text-only last round as callGemini.
+export async function callGroq({ apiKey, model, system, messages, context = {}, onChunk }) {
+  if (!apiKey) {
+    const err = new Error('El proveedor Groq no está configurado (falta GROQ_API_KEY).');
+    err.code = 'PROVIDER_UNAVAILABLE';
+    throw err;
+  }
+
+  const url = 'https://api.groq.com/openai/v1/chat/completions';
+  let chat = [
+    { role: 'system', content: system },
+    ...messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+  ];
+
+  for (let round = 0; ; round += 1) {
+    const forceTextOnly = round >= MAX_TOOL_ROUNDS;
+    const body = { model, messages: chat, stream: true, temperature: 0.7, max_tokens: 4096 };
+    if (!forceTextOnly) body.tools = OPENAI_TOOLS;
+
+    const streamAbort = createStreamAbort();
+    try {
+      const res = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+        signal: streamAbort.signal,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message =
+          res.status === 429
+            ? 'Se alcanzó el límite gratuito de Groq por ahora. Espera un momento y vuelve a intentarlo.'
+            : data?.error?.message || `Groq respondió con estado ${res.status}.`;
+        const err = new Error(message);
+        err.code = 'PROVIDER_ERROR';
+        err.status = res.status;
+        throw err;
+      }
+
+      let text = '';
+      const toolCalls = [];
+      for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
+        let data;
+        try {
+          data = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        if (data?.error) {
+          const err = new Error(data.error.message || 'Groq devolvió un error durante el streaming.');
+          err.code = 'PROVIDER_ERROR';
+          throw err;
+        }
+        const delta = data?.choices?.[0]?.delta || {};
+        if (typeof delta.content === 'string' && delta.content) {
+          text += delta.content;
+          onChunk?.(delta.content);
+        }
+        for (const call of delta.tool_calls || []) {
+          const slot = (toolCalls[call.index ?? 0] ||= { id: '', name: '', arguments: '' });
+          if (call.id) slot.id = call.id;
+          if (call.function?.name) slot.name += call.function.name;
+          if (call.function?.arguments) slot.arguments += call.function.arguments;
+        }
+      }
+
+      const calls = toolCalls.filter((c) => c && c.name);
+      if (calls.length === 0 || forceTextOnly) {
+        if (!text) {
+          const err = new Error('Groq no devolvió contenido utilizable.');
+          err.code = 'PROVIDER_EMPTY';
+          throw err;
+        }
+        return { provider: 'groq', model };
+      }
+
+      const results = [];
+      for (const call of calls) {
+        let args = {};
+        try {
+          args = call.arguments ? JSON.parse(call.arguments) : {};
+        } catch {
+          // A malformed argument string just means "no arguments".
+        }
+        results.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(await executeTool(call.name, args, context)) });
+      }
+      chat = [
+        ...chat,
+        {
+          role: 'assistant',
+          content: text || null,
+          tool_calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments || '{}' } })),
+        },
+        ...results,
+      ];
+    } finally {
+      streamAbort.clear();
+    }
+  }
+}
+
+function callSingleProvider({ provider, model, system, messages, context, onChunk }) {
+  const resolvedModel = model || defaultModelFor(provider);
   if (provider === 'claude') {
-    // Claude doesn't get the real-time tools yet (Gemini-only for now) — see docs/javascript.md.
+    // Claude doesn't get the real-time tools yet — see docs/javascript.md.
     return callClaude({ apiKey: process.env.ANTHROPIC_API_KEY, model: resolvedModel, system, messages, onChunk });
   }
   if (provider === 'gemini') {
     return callGemini({ apiKey: process.env.GEMINI_API_KEY, model: resolvedModel, system, messages, context, onChunk });
   }
-
+  if (provider === 'groq') {
+    return callGroq({ apiKey: process.env.GROQ_API_KEY, model: resolvedModel, system, messages, context, onChunk });
+  }
   const err = new Error(`Proveedor desconocido: ${provider}`);
   err.code = 'BAD_REQUEST';
   throw err;
+}
+
+// Past this point the first provider has eaten too much of Vercel's 60s
+// limit (vercel.json) for a second attempt to finish in time.
+const FALLBACK_DEADLINE_MS = 40000;
+
+// When the chosen provider fails before saying anything (quota exceeded,
+// overloaded, timeout, empty answer, missing key), Groq answers instead —
+// if GROQ_API_KEY is set. Once text has reached the user, switching would
+// mix two answers, so a mid-stream failure is reported as-is.
+export async function callProvider({ provider, model, system, messages, context, onChunk }) {
+  const startedAt = Date.now();
+  let started = false;
+  const trackedChunk = (text) => {
+    started = true;
+    onChunk?.(text);
+  };
+
+  try {
+    return await callSingleProvider({ provider, model, system, messages, context, onChunk: trackedChunk });
+  } catch (err) {
+    const canFallBack =
+      provider !== 'groq' &&
+      err.code !== 'BAD_REQUEST' &&
+      !started &&
+      Boolean(process.env.GROQ_API_KEY) &&
+      Date.now() - startedAt < FALLBACK_DEADLINE_MS;
+    if (!canFallBack) throw err;
+
+    console.error(`[callProvider] ${provider} failed (${err.code || 'error'} ${err.status || ''}): ${err.message} — falling back to Groq`);
+    try {
+      const result = await callSingleProvider({ provider: 'groq', system, messages, context, onChunk });
+      return { ...result, fallbackFrom: provider };
+    } catch (groqErr) {
+      groqErr.message = `${err.message} (El respaldo Groq también falló: ${groqErr.message})`;
+      throw groqErr;
+    }
+  }
 }

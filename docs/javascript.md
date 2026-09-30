@@ -39,13 +39,23 @@ detalle del protocolo.
 ## Backend (`api/`, `server/`)
 
 - **`api/_lib/providers.js`** — un adaptador por proveedor
-  (`callGemini`, `callClaude`), cada uno traduce el formato interno
+  (`callGemini`, `callClaude`, `callGroq`), cada uno traduce el formato interno
   `{ system, messages }` a la petición REST de esa API con `stream: true`
   (Gemini: `:streamGenerateContent?alt=sse`; Claude: `stream: true` en el
   body) y va llamando a `onChunk(texto)` con cada fragmento a medida que
   llega, en vez de esperar la respuesta completa. `callProvider` elige
-  cuál llamar según `provider`. Aquí, y solo aquí, se leen
-  `process.env.GEMINI_API_KEY` / `process.env.ANTHROPIC_API_KEY`.
+  cuál llamar según `provider` y, si falla antes de enviar texto y existe
+  `GROQ_API_KEY`, reintenta con Groq (devuelve `fallbackFrom` con el
+  proveedor original, que llega al chat en el evento `done`). No hay
+  respaldo si ya se mostró texto (se mezclarían dos respuestas), si la
+  petición era inválida, o si ya pasaron 40 s (no alcanzaría el límite de
+  60 s de Vercel). Si Groq también falla, el error incluye ambos motivos.
+  Aquí, y solo aquí, se leen `process.env.GEMINI_API_KEY`,
+  `process.env.ANTHROPIC_API_KEY` y `process.env.GROQ_API_KEY`.
+  `callGroq` usa la API compatible con OpenAI de Groq y las mismas
+  herramientas de hora y clima: convierte el esquema de Gemini a JSON
+  Schema estándar (`toJsonSchema`) y junta las llamadas a herramientas que
+  llegan en fragmentos por el stream antes de ejecutarlas.
   `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
   bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
   `functionCall` en vez de texto, ejecuta la herramienta localmente y le

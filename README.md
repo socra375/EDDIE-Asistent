@@ -26,7 +26,8 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 ```
 
 - `api/chat.js` es una función serverless de Vercel (Node runtime). Es el
-  único lugar donde se leen `GEMINI_API_KEY` y `ANTHROPIC_API_KEY`.
+  único lugar donde se leen `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` y
+  `GROQ_API_KEY`.
 - `server/dev-server.js` es un servidor Express local que expone la misma
   lógica (`api/_lib/*`) en `http://localhost:8787`, para poder desarrollar sin
   instalar la CLI de Vercel. Vite proxea `/api` hacia ese servidor en
@@ -84,6 +85,12 @@ exclusivamente desde variables de entorno del backend:
 
 - `GEMINI_API_KEY` — habilita el proveedor Gemini.
 - `ANTHROPIC_API_KEY` — habilita el proveedor Claude.
+- `GROQ_API_KEY` — habilita Groq (Llama, gratis y muy rápido), como
+  proveedor elegible y como **respaldo automático**: si el proveedor elegido
+  falla antes de empezar a responder (límite gratuito, saturación, tiempo
+  agotado o clave faltante), Groq responde en su lugar y la respuesta lleva
+  la etiqueta "vía Groq". `GROQ_MODEL` (opcional) cambia el modelo de Groq
+  sin tocar el código.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en
@@ -226,7 +233,8 @@ funcionando por texto.
 
 1. Sube el repositorio a GitHub.
 2. Importa el repo en Vercel.
-3. En "Environment Variables" añade `GEMINI_API_KEY` y/o `ANTHROPIC_API_KEY`
+3. En "Environment Variables" añade `GEMINI_API_KEY`, `GROQ_API_KEY` y/o
+   `ANTHROPIC_API_KEY`
    y, si vas a habilitar el login con Google, también `DATABASE_URL`,
    `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (con tu
    dominio de Vercel) y `APP_URL` (el mismo dominio).

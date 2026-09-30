@@ -200,6 +200,11 @@ export default function ChatPanel({ showCore = true }) {
               <span className="bubble__author">
                 {m.role === 'user' ? 'Tú' : 'Eddie'}
                 {m.tag && <span className="bubble__tag">{m.tag}</span>}
+                {m.fallbackFrom && (
+                  <span className="bubble__tag bubble__tag--fallback" title={`${m.fallbackFrom} falló; respondió el respaldo`}>
+                    vía Groq
+                  </span>
+                )}
               </span>
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
