@@ -25,8 +25,12 @@ api/
       planned.js               ← (sesión 7) metadatos de los conectores que vienen, para el hub
       clock/                   ← (sesión 7) hora y fecha (antes en tools.js)
       weather/                 ← (sesión 7) clima con Open-Meteo (antes en tools.js)
+      tasks/                   ← crear y completar tareas desde el chat (acciones que aplica la app)
+      websearch/               ← búsqueda web con Tavily (sin clave o con TAVILY_API_KEY)
+      news/                    ← titulares de Google Noticias (RSS, sin clave)
+      wikipedia/               ← resúmenes de Wikipedia (sin clave)
+      currency/                ← tasas de cambio de open.er-api.com (sin clave)
       google/                  ← (sesión 7, sin herramientas aún) Gmail + Calendario + Drive (reutiliza google.js y googleCredentials.js)
-      websearch/
       telegram/
       whatsapp/
       spotify/
@@ -61,13 +65,13 @@ export default {
     start(state) {},           // URL de autorización
     callback(query) {},        // intercambia el código y guarda tokens cifrados
   },
-  note: null,                  // aviso opcional para el hub
+  note: null,                  // aviso opcional para el hub (texto, o función (env) => texto)
   tools: [
     {
       label: 'Buscar correos',  // cómo se muestra en el hub
       declaration: { name: 'gmail_search', description: '…', parameters: { … } },
       sensitive: false,        // true → requiere confirmación antes de ejecutarse
-      run: async (args, ctx) => { … },  // ctx: timezone y ubicación del usuario
+      run: async (args, ctx) => { … },  // ctx: timezone, ubicación y tareas del usuario, y emit(acción) para cambios en la app
     },
   ],
   webhook: null,               // Telegram/WhatsApp: handler de mensajes entrantes

@@ -128,10 +128,11 @@ async function* iterateSSE(res, onActivity) {
 // Gemini can ask to call one of the active connectors' tools (real time, weather…)
 // instead of answering directly. When it does, we run the tool ourselves,
 // hand the result back as a "function" turn, and let it try again — up to
-// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Kept
-// low (our two tools never legitimately need a 3rd round) since each round
-// is a full extra network round-trip against the function's time budget.
-const MAX_TOOL_ROUNDS = 2;
+// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Three
+// covers a real chain (search the web, then look something up on Wikipedia,
+// then create a task) while keeping each extra network round-trip inside
+// the function's time budget; tools asked for together run in parallel.
+const MAX_TOOL_ROUNDS = 3;
 
 // Google's own quota-exceeded message is accurate but in English and full
 // of jargon (RESOURCE_EXHAUSTED, links to rate-limit docs) — translate the
@@ -224,7 +225,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
       // whole in one event. Only the last round (no function call at all)
       // is meant for the user, so we only forward chunks once we're not
       // aware of a pending function call yet this round.
-      let functionCallPart = null;
+      const functionCallParts = [];
       let text = '';
       let finishReason = null;
       let blockReason = null;
@@ -243,15 +244,15 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
         const parts = candidate?.content?.parts || [];
         for (const part of parts) {
           if (part.functionCall) {
-            functionCallPart = part;
+            functionCallParts.push(part);
           } else if (typeof part.text === 'string') {
             text += part.text;
-            if (!functionCallPart) onChunk?.(part.text);
+            if (!functionCallParts.length) onChunk?.(part.text);
           }
         }
       }
 
-      if (!functionCallPart || forceTextOnly) {
+      if (!functionCallParts.length || forceTextOnly) {
         if (!text) {
           // Logged server-side (visible in Vercel's function logs) instead
           // of just failing silently — the URL/apiKey are deliberately left
@@ -271,20 +272,27 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
         return { provider: 'gemini', model };
       }
 
-      const { name, args } = functionCallPart.functionCall;
-      const toolResult = await toolset.execute(name, args);
+      // Gemini may ask for several tools at once ("weather and news");
+      // they run in parallel and all answers go back in one turn, in order.
+      const results = await Promise.all(functionCallParts.map((part) => toolset.execute(part.functionCall.name, part.functionCall.args)));
 
       contents = [
         ...contents,
-        // Echo the whole part back verbatim (not just { functionCall }) —
+        // Echo the whole parts back verbatim (not just { functionCall }) —
         // newer Gemini models attach a sibling `thoughtSignature` field the
         // API requires to see again on the next turn, or it errors with
         // "missing a thought_signature in functionCall parts".
-        { role: 'model', parts: [functionCallPart] },
+        { role: 'model', parts: functionCallParts },
         // Google's own docs show role: 'function' here, but the live API
         // currently rejects it ("Role 'function' is not supported"), so we use
         // 'user' instead — a role it accepts unconditionally.
-        { role: 'user', parts: [{ functionResponse: { name, response: { name, content: toolResult } } }] },
+        {
+          role: 'user',
+          parts: functionCallParts.map((part, i) => {
+            const { name } = part.functionCall;
+            return { functionResponse: { name, response: { name, content: results[i] } } };
+          }),
+        },
       ];
     } finally {
       streamAbort.clear();
@@ -401,10 +409,11 @@ function estimateTokens(message) {
   return Math.ceil(JSON.stringify(message).length / 3.5);
 }
 
-function fitToGroqBudget(chat) {
+// The tool definitions are sent with every request and count too.
+function fitToGroqBudget(chat, tools) {
   const [system, ...rest] = chat;
   const budget = GROQ_REQUEST_TOKEN_BUDGET - GROQ_MAX_OUTPUT_TOKENS;
-  let total = estimateTokens(system);
+  let total = estimateTokens(system) + (tools?.length ? estimateTokens(tools) : 0);
   const kept = [];
   for (let i = rest.length - 1; i >= 0; i -= 1) {
     const cost = estimateTokens(rest[i]);
@@ -419,7 +428,7 @@ function fitToGroqBudget(chat) {
 }
 
 function groqRequestBody(model, chat, tools) {
-  const body = { model, messages: fitToGroqBudget(chat), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS };
+  const body = { model, messages: fitToGroqBudget(chat, tools), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS };
   // gpt-oss models reason before answering; "low" keeps replies fast and
   // leaves more of the per-minute token budget for the answer itself. Other
   // model families reject this parameter, so it's only sent to gpt-oss.
@@ -575,16 +584,17 @@ export async function callGroq({ apiKey, model, system, messages, toolset = NO_T
         return { provider: 'groq', model: activeModel };
       }
 
-      const results = [];
-      for (const call of calls) {
-        let args = {};
-        try {
-          args = call.arguments ? JSON.parse(call.arguments) : {};
-        } catch {
-          // A malformed argument string just means "no arguments".
-        }
-        results.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(await toolset.execute(call.name, args)) });
-      }
+      const results = await Promise.all(
+        calls.map(async (call) => {
+          let args = {};
+          try {
+            args = call.arguments ? JSON.parse(call.arguments) : {};
+          } catch {
+            // A malformed argument string just means "no arguments".
+          }
+          return { role: 'tool', tool_call_id: call.id, content: JSON.stringify(await toolset.execute(call.name, args)) };
+        }),
+      );
       chat = [
         ...chat,
         {
@@ -637,7 +647,8 @@ export async function callProvider({ provider, model, system, messages, context 
   };
 
   try {
-    return await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk });
+    const result = await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk });
+    return { ...result, actions: toolset.actions };
   } catch (err) {
     const canFallBack =
       provider !== 'groq' &&
@@ -648,9 +659,12 @@ export async function callProvider({ provider, model, system, messages, context 
     if (!canFallBack) throw err;
 
     console.error(`[callProvider] ${provider} failed (${err.code || 'error'} ${err.status || ''}): ${err.message} — falling back to Groq`);
+    // Groq starts over, so whatever the failed attempt's tools queued (a task
+    // it created) is dropped; Groq's own calls queue it again if needed.
+    toolset.actions.length = 0;
     try {
       const result = await callSingleProvider({ provider: 'groq', system, messages, toolset, onChunk });
-      return { ...result, fallbackFrom: provider };
+      return { ...result, fallbackFrom: provider, actions: toolset.actions };
     } catch (groqErr) {
       groqErr.message = `${err.message} (El respaldo Groq también falló: ${groqErr.message})`;
       throw groqErr;

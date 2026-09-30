@@ -54,8 +54,8 @@ function sanitizeConnectorIds(value) {
   return value.filter((id) => typeof id === 'string' && /^[a-z0-9_-]{1,40}$/.test(id)).slice(0, 50);
 }
 
-// Optional real-time context (the user's timezone/coordinates) used by
-// Gemini's tools (current time, weather) — never trusted blindly, since
+// Optional context (the user's timezone, coordinates and tasks) used by the
+// connector tools (current time, weather, tasks) — never trusted blindly, since
 // it comes straight from the browser.
 function sanitizeContext(context) {
   if (!context || typeof context !== 'object') return {};
@@ -73,6 +73,14 @@ function sanitizeContext(context) {
     Math.abs(location.longitude) <= 180
   ) {
     result.location = { latitude: location.latitude, longitude: location.longitude };
+  }
+  // The user's task list, so the Tareas tools can find "the report task"
+  // by name. Only what they need, size-capped.
+  if (Array.isArray(context.tasks)) {
+    result.tasks = context.tasks
+      .filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string')
+      .slice(0, 50)
+      .map((t) => ({ id: t.id.slice(0, 80), title: t.title.slice(0, 200), done: Boolean(t.done) }));
   }
   return result;
 }

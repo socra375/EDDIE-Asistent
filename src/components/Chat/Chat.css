@@ -213,6 +213,26 @@
   font-size: 0.62rem;
 }
 
+.bubble__changes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bubble__changes li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--success) 55%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  color: var(--success);
+}
+
 .bubble__tag--fallback {
   border-color: color-mix(in srgb, var(--warning) 60%, transparent);
   color: var(--warning);

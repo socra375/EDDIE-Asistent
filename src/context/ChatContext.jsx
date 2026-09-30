@@ -12,6 +12,8 @@ import {
 } from '../utils/storage';
 import { useSettings } from './SettingsContext';
 import { useLocation } from './LocationContext';
+import { useAuth } from './AuthContext';
+import { applyTaskActions, tasksForContext } from '../services/taskActions';
 
 const ChatContext = createContext(null);
 
@@ -25,6 +27,7 @@ function nextId() {
 export function ChatProvider({ children }) {
   const { settings, memory } = useSettings();
   const { location } = useLocation();
+  const { user } = useAuth();
   const [conversations, setConversations] = useState(() => getConversations());
   const [conversationId, setConversationId] = useState(() => {
     const activeId = getActiveConversationId();
@@ -118,6 +121,7 @@ export function ChatProvider({ children }) {
           context: {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             location: location || undefined,
+            tasks: tasksForContext(),
           },
           disabledConnectors: settings.disabledConnectors || [],
           onChunk: (fullTextSoFar) => {
@@ -133,6 +137,14 @@ export function ChatProvider({ children }) {
 
         const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider, ...replyMeta };
         if (result.fallbackFrom) assistantMessage.fallbackFrom = result.fallbackFrom;
+        // Tasks Eddie created or completed while answering: applied to the
+        // Tareas list, and noted on the bubble so the change is visible.
+        if (result.actions?.length) {
+          applyTaskActions(result.actions, { signedIn: Boolean(user) });
+          assistantMessage.taskChanges = result.actions
+            .map((a) => (a.type === 'create_task' ? `Tarea creada: ${a.task?.title}` : a.type === 'complete_task' ? `Tarea hecha: ${a.title}` : null))
+            .filter(Boolean);
+        }
         setMessages((prev) => (responseStarted ? prev.map((m) => (m.id === assistantId ? assistantMessage : m)) : [...prev, assistantMessage]));
         setLastReply(assistantMessage);
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);
@@ -157,7 +169,7 @@ export function ChatProvider({ children }) {
         return null;
       }
     },
-    [messages, settings, memory, location],
+    [messages, settings, memory, location, user],
   );
 
   // Starts a fresh, empty conversation. The one being left behind is

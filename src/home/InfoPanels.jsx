@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from '../context/LocationContext';
 import { getTasks } from '../utils/storage';
+import { TASKS_CHANGED_EVENT } from '../services/taskActions';
 import { HudPanel, HudRow } from './HudPanel';
 import { fetchPlaceName, fetchWeather } from './weather';
 
@@ -194,8 +195,14 @@ export function SystemPanel() {
 const PRIORITY_RANK = { alta: 3, media: 2, baja: 1 };
 
 export function TasksSummary({ onOpenTasks }) {
-  // Read once per visit; the Tasks module owns editing and server sync.
-  const tasks = useMemo(() => getTasks(), []);
+  // Read on each visit and whenever Eddie changes the list from the chat;
+  // the Tasks module owns editing and server sync.
+  const [tasks, setTasks] = useState(() => getTasks());
+  useEffect(() => {
+    const reload = () => setTasks(getTasks());
+    window.addEventListener(TASKS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(TASKS_CHANGED_EVENT, reload);
+  }, []);
   const done = tasks.filter((t) => t.done).length;
   const pending = tasks
     .filter((t) => !t.done)

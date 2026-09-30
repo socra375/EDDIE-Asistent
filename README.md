@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude o Groq (respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, clima…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, clima, tareas, internet, noticias, Wikipedia, monedas…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -99,6 +99,10 @@ exclusivamente desde variables de entorno del backend:
   (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
   (opcional) lo cambia, p. ej. a `whisper-large-v3`. Sin la clave, o si
   eliges "El del navegador" en Configuración → Voz, se usa la Web Speech API.
+- `TAVILY_API_KEY` — (opcional) la **búsqueda web** funciona sin clave con
+  un límite bajo; una clave gratis de https://app.tavily.com (1.000
+  búsquedas al mes) lo amplía. Noticias, Wikipedia, monedas y tareas no
+  necesitan ninguna clave.
 - `ELEVENLABS_API_KEY` — (opcional) la **voz propia de Eddie**: las
   respuestas se leen con ElevenLabs usando la voz `bUQeiO7gn4ehGuSnZf26`
   y el modelo `eleven_flash_v2_5` (en español, rápido y a mitad de
@@ -315,7 +319,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   tasks.js               GET/POST sin id, PATCH/DELETE con id (un solo archivo + reescritura en vercel.json)
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: clock, weather, google
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: clock, weather, tasks, websearch, news, wikipedia, currency, google
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
 server/
