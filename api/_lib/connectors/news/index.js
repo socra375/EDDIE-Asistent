@@ -93,6 +93,9 @@ export default {
   name: 'Noticias',
   description: 'Los titulares del día en tu país, o las noticias recientes de un tema, desde Google Noticias.',
   icon: 'news',
+  category: 'informacion',
+  // Offered to the model only when the conversation touches the topic.
+  route: /noticia|titular|actualidad|news|qu[eé] (pasa|est[aá] pasando|hay de nuevo)/i,
   auth: null,
   requiredEnv: [],
   tools: [

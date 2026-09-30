@@ -99,6 +99,9 @@ export default {
   name: 'Clima',
   description: 'Eddie consulta el clima actual de cualquier ciudad, o el de tu ubicación si la compartes.',
   icon: 'cloud',
+  category: 'informacion',
+  // Offered to the model only when the conversation touches the topic.
+  route: /clima|tiempo|lluvi|llov|temperatura|pron[oó]stico|calor|fr[ií]o|paraguas|nublad|soleado|weather|forecast/i,
   auth: null,
   requiredEnv: [],
   tools: [

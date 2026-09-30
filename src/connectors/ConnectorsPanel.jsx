@@ -15,6 +15,8 @@ const STATUS = {
   planned: { label: 'Próximamente', tone: '' },
 };
 
+const CATEGORY = { asistente: 'Asistente', informacion: 'Información', comunicacion: 'Comunicación', agenda: 'Agenda' };
+
 const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -33,6 +35,7 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
           <Icon name={connector.icon || 'plug'} size={20} />
         </span>
         <div className="connector__title">
+          {CATEGORY[connector.category] && <span className="connector__category">{CATEGORY[connector.category]}</span>}
           <h3>{connector.name}</h3>
           <span className={`chip ${status.tone}`}>{status.label}</span>
         </div>
@@ -55,7 +58,8 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
           {connector.tools.map((t) => (
             <li key={t.name}>
               {t.label}
-              {t.sensitive && <span className="connector__confirm"> · con tu confirmación</span>}
+              {t.risk === 'confirm' && <span className="connector__confirm"> · con tu confirmación</span>}
+              {t.risk === 'write' && <span className="connector__write"> · guarda cambios</span>}
             </li>
           ))}
         </ul>

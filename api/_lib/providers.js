@@ -2,7 +2,7 @@
 // Both functions take a normalized shape and stream their answer out via
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
-import { createToolset } from './connectors/registry.js';
+import { createToolset, intentFromMessages } from './connectors/registry.js';
 import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
@@ -742,7 +742,7 @@ const FALLBACKS = [
 // `onStep` hears every tool step as it starts and ends (see runTool).
 export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onStep }) {
   const startedAt = Date.now();
-  const toolset = createToolset({ disabled: disabledConnectors, context, onStep });
+  const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages) });
   const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
   let started = false;
   const trackedChunk = (text) => {

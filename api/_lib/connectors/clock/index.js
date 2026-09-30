@@ -18,6 +18,7 @@ export default {
   name: 'Hora y fecha',
   description: 'Eddie consulta la hora y la fecha reales en tu zona horaria, en vez de adivinarlas.',
   icon: 'clock',
+  category: 'asistente',
   auth: null,
   requiredEnv: [],
   tools: [

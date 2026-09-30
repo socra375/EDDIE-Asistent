@@ -2,6 +2,7 @@
 // Each connector lives in its own folder and follows the contract in
 // docs/eddie-2-arquitectura.md; adding one means importing it here.
 import clock from './clock/index.js';
+import calculator from './calculator/index.js';
 import weather from './weather/index.js';
 import google from './google/index.js';
 import gmail from './gmail/index.js';
@@ -16,17 +17,52 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, weather, tasks, websearch, news, wikipedia, currency, gmail, google];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
 }
 
-// Tools the AI may call in this request: connectors configured on the
-// server that the user hasn't switched off in the hub.
-function activeTools({ disabled = [], env = process.env } = {}) {
+// What the AI may do with a tool, for the hub and for reviewing a connector:
+//   read     looks something up, changes nothing
+//   write    changes something small and reversible in Eddie (a task)
+//   confirm  sensitive: never runs without the user's OK on a card
+export function toolRisk(tool) {
+  return tool.sensitive ? 'confirm' : tool.risk || 'read';
+}
+
+// Intent routing. Offering every tool on every message costs tokens (Groq's
+// free plan has 8K per minute) and gives a small model more ways to pick the
+// wrong one, so a connector with a `route` regex is offered only when the
+// conversation touches its topic; connectors without one (planner, clock,
+// calculator, tasks, web search) are always on. When `intent` is omitted
+// (the Hoy summary, tests) every active connector is offered.
+const INTENT_MAX = 600;
+
+export function intentFromMessages(messages = []) {
+  const text = (m) => (typeof m?.content === 'string' ? m.content : '');
+  const users = messages.filter((m) => m?.role === 'user').slice(-2);
+  const assistant = messages.filter((m) => m?.role === 'assistant').slice(-1);
+  // The last answer counts too, so a bare "sí, mándalo" still points at email.
+  return [...assistant, ...users].map((m) => text(m).slice(0, INTENT_MAX)).join('\n');
+}
+
+function matchesIntent(connector, intent) {
+  if (intent == null || !connector.route) return true;
+  return connector.route.test(intent);
+}
+
+// Connectors the AI may use in this request: configured on the server, not
+// switched off in the hub, and relevant to what the user is talking about.
+function activeConnectors({ disabled = [], env = process.env, intent } = {}) {
   const off = new Set(disabled);
-  return CONNECTORS.filter((c) => !off.has(c.id) && missingEnv(c, env).length === 0).flatMap((c) => c.tools);
+  return CONNECTORS.filter((c) => !off.has(c.id) && missingEnv(c, env).length === 0 && matchesIntent(c, intent));
+}
+
+// Connectors the user could still use by name, whatever the topic — only the
+// confirmation and Hoy paths need this, and they skip routing entirely.
+function activeTools(options = {}) {
+  return activeConnectors(options).flatMap((c) => c.tools);
 }
 
 const MAX_CONFIRMATIONS = 3;
@@ -137,16 +173,20 @@ async function runTool(tools, name, args, context, hooks) {
 // zone, location and task list for tools that need them. Tools that change
 // something in the app (a new task) call context.emit(action); those actions
 // collect in `actions`, and sensitive requests in `confirmations`, and both
-// reach the browser with the finished answer. `onStep` hears every step as it
+// reach the browser with the finished answer. `intent` (text of the latest
+// messages) narrows the connectors offered; `offered` lists the ones kept.
+// `onStep` hears every step as it
 // starts and ends (for the live "Eddie está trabajando" list); `steps` keeps
 // the final state of each for the receipt.
-export function createToolset({ disabled = [], context = {}, env = process.env, onStep } = {}) {
-  const tools = activeTools({ disabled, env });
+export function createToolset({ disabled = [], context = {}, env = process.env, onStep, intent } = {}) {
+  const connectors = activeConnectors({ disabled, env, intent });
+  const tools = connectors.flatMap((c) => c.tools);
   const actions = [];
   const confirmations = [];
   const steps = [];
   const toolContext = { ...context, emit: (action) => actions.push(action) };
   return {
+    offered: connectors.map((c) => c.id),
     declarations: tools.map((t) => t.declaration),
     execute: (name, args) => runTool(tools, name, args, toolContext, { onStep, confirmations, steps }),
     actions,
@@ -213,12 +253,14 @@ export async function describeConnectors({ user = null, env = process.env } = {}
         name: c.name,
         description: c.description,
         icon: c.icon,
+        category: c.category || 'otros',
+        routing: c.route ? 'topic' : 'always',
         auth: c.auth?.type || null,
         connectScope: c.auth?.scope || null,
         status,
         missingEnv: missing,
         note: (typeof c.note === 'function' ? c.note(env) : c.note) || null,
-        tools: c.tools.map((t) => ({ name: t.declaration.name, label: t.label, sensitive: Boolean(t.sensitive) })),
+        tools: c.tools.map((t) => ({ name: t.declaration.name, label: t.label, sensitive: Boolean(t.sensitive), risk: toolRisk(t) })),
       };
     }),
   );

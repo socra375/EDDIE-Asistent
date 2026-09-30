@@ -28,6 +28,7 @@ export default {
   name: 'Planificador',
   description: 'Eddie planea los pedidos de varios pasos antes de ejecutarlos.',
   icon: 'check',
+  category: 'asistente',
   hidden: true,
   auth: null,
   requiredEnv: [],
