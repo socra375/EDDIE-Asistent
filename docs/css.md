@@ -171,12 +171,17 @@ Todo lo clicable muestra un anillo `--accent` al enfocarse con el teclado
   claro.
 - `src/home/Home.css`: paneles con el título montado sobre el borde
   (`.hud-panel__title`), filas etiqueta/valor (`.hud-row`) y el anillo de
-  Eddie. El anillo usa tres variables propias (`--ring`, `--ring-soft`,
-  `--ring-dim`) que cada estado redefine en `.eddie-ring[data-state=...]`:
-  `idle` (giro lento de 120 s y núcleo que respira), `listening` (barras de
-  onda y pulso del núcleo), `processing` (ámbar, arcos girando en 1,4 s),
-  `speaking` (brillo que late), `disabled` (gris, opacidad baja) y `error`
-  (rojo con tres destellos). `prefers-reduced-motion` las apaga todas.
+  Eddie, al estilo de la interfaz J.A.R.V.I.S.: banda de 48 segmentos
+  (`.seg`, los encendidos `.seg--lit` con su brillo en `--seg`), corchete
+  y puntos ámbar, núcleo oscuro con "E.D.D.I.E." en la fuente Michroma
+  (Google Fonts, cargada en `index.html`). El anillo usa cuatro variables
+  propias (`--ring`, `--ring-soft`, `--ring-dim`, `--ring-band`) que cada
+  estado redefine en `.eddie-ring[data-state=...]`: `idle` (bisel que gira
+  en 120 s y banda que respira), `listening` (los segmentos laten como un
+  medidor de audio y el nombre pulsa), `processing` (ámbar, la banda gira
+  en 4 s y arcos ámbar alrededor del núcleo), `speaking` (brillo que late),
+  `disabled` (desaturado y atenuado) y `error` (rojo con tres destellos).
+  `prefers-reduced-motion` las apaga todas.
 
 ## Resumen de convenciones al añadir estilos nuevos
 

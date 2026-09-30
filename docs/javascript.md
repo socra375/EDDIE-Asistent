@@ -421,9 +421,11 @@ transversales:
     auto-envía una escucha iniciada desde el anillo (`ringListenRef`), para
     no duplicar lo que el micrófono del `ChatPanel` ya pone en su input.
     Sin reconocimiento de voz, el anillo abre el chat de texto.
-  - `EddieRing.jsx`: el reloj circular en SVG (marcas, arcos de segundos,
-    minutos y día, aguja) más las capas de "procesando" y ondas. Los arcos
-    se actualizan cada 100 ms por `ref`, sin re-renderizar React.
+  - `EddieRing.jsx`: el anillo central en SVG, inspirado en J.A.R.V.I.S.
+    (banda segmentada, bisel de marcas, corchete ámbar y "E.D.D.I.E." en
+    el núcleo). Sigue siendo un reloj: arco exterior de segundos, arco
+    interior de minutos y un puntero ámbar que gira con los segundos; se
+    actualizan cada 100 ms por `ref`, sin re-renderizar React.
   - `InfoPanels.jsx`: TIEMPO, UBICACIÓN + CLIMA (Open-Meteo y
     geocodificación inversa de BigDataCloud directo desde el navegador,
     sin clave, refrescando cada 10 min), SISTEMA (batería, red, núcleos,
