@@ -7,7 +7,7 @@ Guía de referencia para las 35 sesiones del plan de Eddie 2.0 (asistente person
 1. **Un solo cerebro en la nube.** La web, Telegram, WhatsApp y la app de escritorio hablan con el mismo backend (`api/`). Ningún canal tiene lógica propia de IA.
 2. **Conectores como plugins.** Cada servicio externo (Gmail, Spotify, Notion…) es una carpeta autocontenida que declara su autorización y sus herramientas. Agregar uno nuevo no toca el resto.
 3. **Nada irreversible sin confirmación.** Enviar, borrar, publicar o gastar pasa siempre por una confirmación explícita del usuario.
-4. **Todo gratis por defecto.** Gemini como proveedor principal, Groq como respaldo; cada conector usa el plan gratuito de su servicio.
+4. **Todo gratis por defecto.** Gemini como proveedor principal, Groq y OpenRouter como respaldo; cada conector usa el plan gratuito de su servicio.
 
 ## Estructura de carpetas (destino)
 
@@ -17,7 +17,7 @@ api/
   connectors.js                ← (sesión 7) lista para el hub; luego OAuth y webhooks de todos los conectores
   cron.js                      ← NUEVO: tareas programadas (resumen matutino, recordatorios)
   _lib/
-    providers.js               ← Gemini + Claude + Groq (respaldo automático)
+    providers.js               ← Gemini + Claude + Groq + OpenRouter (respaldo automático)
     confirm.js                 ← (sesión 8) ejecuta la acción que el usuario confirmó (POST /api/chat?action=confirm)
     connectors/
       registry.js              ← (sesión 7) lista de conectores, herramientas activas por petición y estados del hub
@@ -102,7 +102,7 @@ Implementado en la sesión 8.
 
 3. La app la muestra bajo la respuesta (y en Inicio) con el botón de la acción ("Borrar", "Enviar"), **Editar** para los campos con `editable: true` y **Cancelar**. El usuario también puede decir o escribir "sí" / "no".
 4. Al confirmar, la app llama a `POST /api/chat?action=confirm` con `{ tool, args, context }`. El servidor comprueba que la herramienta siga activa y sea `sensitive`, valida los argumentos (pueden venir editados), vuelve a correr `prepare` y luego `run`; responde `{ result, actions }` sin volver a llamar a la IA. Solo acepta peticiones de la propia app (`Sec-Fetch-Site`).
-5. Si el proveedor falla y responde el respaldo Groq, las tarjetas del intento fallido se descartan.
+5. Si el proveedor falla y responde un respaldo (Groq u OpenRouter), las tarjetas del intento fallido se descartan.
 
 Los canales Telegram y WhatsApp usarán botones del propio mensaje para lo mismo.
 

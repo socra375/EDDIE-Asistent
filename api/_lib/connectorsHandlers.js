@@ -15,7 +15,7 @@ async function listConnectors(cookies) {
       user = null;
     }
   }
-  return { status: 200, json: { connectors: await describeConnectors({ user }), toolProviders: ['gemini', 'groq'] } };
+  return { status: 200, json: { connectors: await describeConnectors({ user }), toolProviders: ['gemini', 'groq', 'openrouter'] } };
 }
 
 export async function handleConnectorsRequest({ method, path = [], cookies = {} }) {

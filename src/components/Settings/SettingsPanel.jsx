@@ -24,7 +24,15 @@ const PROVIDER_MODELS = {
     { value: '', label: 'openai/gpt-oss-120b (predeterminado, gratis)' },
     { value: 'openai/gpt-oss-20b', label: 'openai/gpt-oss-20b (más rápido)' },
   ],
+  openrouter: [
+    { value: '', label: 'openrouter/free (predeterminado, gratis: elige un modelo gratuito)' },
+    { value: 'openrouter/auto', label: 'openrouter/auto (elige el mejor modelo; gasta créditos)' },
+  ],
 };
+
+// OpenRouter has hundreds of models, so besides the two above the user can
+// type any model id from openrouter.ai/models.
+const CUSTOM_MODEL = '__custom__';
 
 const CLOUD_VOICE = '__elevenlabs__';
 
@@ -53,6 +61,14 @@ export default function SettingsPanel({ onOpenConversation }) {
     useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
+  const [customModel, setCustomModel] = useState(false);
+
+  // A saved model that isn't in the list (typed before) also shows the field.
+  const knownModels = PROVIDER_MODELS[settings.provider];
+  const isCustomModel =
+    settings.provider === 'openrouter' && (customModel || (Boolean(settings.model) && !knownModels.some((m) => m.value === settings.model)));
+  const backups = [health?.groq && settings.provider !== 'groq' && 'Groq', health?.openrouter && settings.provider !== 'openrouter' && 'OpenRouter'].filter(Boolean);
+  const onFreeOpenRouter = settings.provider === 'openrouter' && (!settings.model || settings.model.endsWith(':free') || settings.model === 'openrouter/free');
 
   function chooseVoice(value) {
     if (value === CLOUD_VOICE) updateVoiceSettings({ tts: 'elevenlabs' });
@@ -125,36 +141,71 @@ export default function SettingsPanel({ onOpenConversation }) {
             <select
               className="select"
               value={settings.provider}
-              onChange={(e) => updateSettings({ provider: e.target.value, model: '' })}
+              onChange={(e) => {
+                setCustomModel(false);
+                updateSettings({ provider: e.target.value, model: '' });
+              }}
             >
               <option value="gemini">Google Gemini Flash</option>
               <option value="claude">Anthropic Claude</option>
               <option value="groq">Groq (gratis y rápido)</option>
+              <option value="openrouter">OpenRouter (cientos de modelos, con opción gratis)</option>
             </select>
           </label>
           <label>
             <span className="field-label">Modelo</span>
-            <select className="select" value={settings.model} onChange={(e) => updateSettings({ model: e.target.value })}>
-              {PROVIDER_MODELS[settings.provider].map((m) => (
+            <select
+              className="select"
+              value={isCustomModel ? CUSTOM_MODEL : settings.model}
+              onChange={(e) => {
+                const custom = e.target.value === CUSTOM_MODEL;
+                setCustomModel(custom);
+                updateSettings({ model: custom ? '' : e.target.value });
+              }}
+            >
+              {knownModels.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
+              {settings.provider === 'openrouter' && <option value={CUSTOM_MODEL}>Otro modelo (escribir su id)…</option>}
             </select>
           </label>
         </div>
+        {isCustomModel && (
+          <label>
+            <span className="field-label">Id del modelo de OpenRouter</span>
+            <input
+              className="input"
+              value={settings.model}
+              maxLength={99}
+              placeholder="p. ej. anthropic/claude-sonnet-5 o meta-llama/llama-4-maverick:free"
+              spellCheck={false}
+              autoCapitalize="off"
+              onChange={(e) => updateSettings({ model: e.target.value.trim() })}
+            />
+            <span className="settings-placeholder">Copia el id desde openrouter.ai/models (los gratuitos terminan en ":free"). Vacío = openrouter/free.</span>
+          </label>
+        )}
         {health && (
           <div className="settings-health">
             <span className={`health-dot ${health.gemini ? 'health-dot--ok' : 'health-dot--off'}`} /> Gemini {health.gemini ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.claude ? 'health-dot--ok' : 'health-dot--off'}`} /> Claude {health.claude ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.groq ? 'health-dot--ok' : 'health-dot--off'}`} /> Groq {health.groq ? 'configurado' : 'no configurado'}
+            <span className={`health-dot ${health.openrouter ? 'health-dot--ok' : 'health-dot--off'}`} /> OpenRouter{' '}
+            {health.openrouter ? 'configurado' : 'no configurado'}
           </div>
         )}
-        {health && settings.provider !== 'groq' && (
+        {health && (
           <p className="settings-placeholder">
-            {health.groq
-              ? 'Respaldo activo: si el proveedor elegido falla antes de responder (límite gratuito, saturación o error), Groq responde en su lugar.'
-              : 'Sin respaldo: agrega GROQ_API_KEY en las variables de entorno de Vercel para que Groq responda cuando el proveedor elegido falle.'}
+            {backups.length
+              ? `Respaldo activo: si el proveedor elegido falla antes de responder (límite gratuito, saturación o error), responde ${backups.join(' y, si también falla, ')}.`
+              : 'Sin respaldo: agrega GROQ_API_KEY u OPENROUTER_API_KEY en las variables de entorno de Vercel para que otro proveedor responda cuando el elegido falle.'}
+          </p>
+        )}
+        {onFreeOpenRouter && (
+          <p className="settings-placeholder">
+            Los modelos gratuitos de OpenRouter permiten 20 solicitudes por minuto y 50 al día; con 10 USD de créditos (una sola vez) el límite diario sube a 1.000.
           </p>
         )}
         {health && !health[settings.provider] && (

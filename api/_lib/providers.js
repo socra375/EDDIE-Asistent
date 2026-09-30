@@ -24,9 +24,16 @@ const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-5';
 // findAvailableGroqModel).
 const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
+// OpenRouter's free router picks, per request, a free model that supports
+// what the request needs (tools included), so it works with no credits at
+// all. OPENROUTER_MODEL (or the model picked in Configuración) overrides it
+// with any model id from openrouter.ai/models.
+const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
+
 export function defaultModelFor(provider) {
   if (provider === 'claude') return CLAUDE_DEFAULT_MODEL;
   if (provider === 'groq') return process.env.GROQ_MODEL || GROQ_DEFAULT_MODEL;
+  if (provider === 'openrouter') return process.env.OPENROUTER_MODEL || OPENROUTER_DEFAULT_MODEL;
   return GEMINI_DEFAULT_MODEL;
 }
 
@@ -503,54 +510,49 @@ function groqError(status, data, model) {
   return err;
 }
 
-// Groq speaks the OpenAI Chat Completions protocol. Tool calls stream in as
-// fragments (name first, then the JSON arguments piece by piece), so they're
-// stitched back together by index before running them — same round limits
-// and forced text-only last round as callGemini.
-export async function callGroq({ apiKey, model, system, messages, toolset = NO_TOOLS, onChunk }) {
+// Groq and OpenRouter both speak the OpenAI Chat Completions protocol. Tool
+// calls stream in as fragments (name first, then the JSON arguments piece by
+// piece), so they're stitched back together by index before running them —
+// same round limits and forced text-only last round as callGemini. What
+// differs per service lives in a "flavor": endpoint and headers, the request
+// body, how many tool rounds it can afford, and what to do about an HTTP
+// error (Groq swaps a retired model; OpenRouter drops tools for a model that
+// can't use them) — returning { model } or { dropTools } replays the round.
+async function callOpenAICompatible(flavor, { apiKey, model, system, messages, toolset = NO_TOOLS, onChunk }) {
   if (!apiKey) {
-    const err = new Error('El proveedor Groq no está configurado (falta GROQ_API_KEY).');
+    const err = new Error(`El proveedor ${flavor.name} no está configurado (falta ${flavor.envVar}).`);
     err.code = 'PROVIDER_UNAVAILABLE';
     throw err;
   }
 
-  const url = 'https://api.groq.com/openai/v1/chat/completions';
   let chat = [
     { role: 'system', content: system },
     ...messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
   ];
-  let activeModel = groqReplacements.get(model) || model;
-  let modelRecovered = false;
+  const state = { model: flavor.startModel?.(model) || model, toolsOff: false, recovered: false };
   const startedAt = Date.now();
   const tools = toOpenAITools(toolset.declarations);
 
   for (let round = 0; ; round += 1) {
-    const forceTextOnly = round >= GROQ_MAX_TOOL_ROUNDS || Date.now() - startedAt > TOOLS_CUTOFF_MS;
-    const body = groqRequestBody(activeModel, chat, forceTextOnly ? null : tools);
+    const forceTextOnly = state.toolsOff || round >= flavor.maxToolRounds || Date.now() - startedAt > TOOLS_CUTOFF_MS || tools.length === 0;
+    const body = flavor.requestBody(state.model, chat, forceTextOnly ? null : tools);
 
     const streamAbort = createStreamAbort();
     try {
-      const res = await fetchWithRetry(url, {
+      const res = await fetchWithRetry(flavor.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`, ...(flavor.headers?.() || {}) },
         body: JSON.stringify(body),
         signal: streamAbort.signal,
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        if (!modelRecovered && isMissingGroqModel(res.status, data)) {
-          modelRecovered = true;
-          const replacement = await findAvailableGroqModel(apiKey, activeModel);
-          if (replacement) {
-            console.error(`[callGroq] model ${activeModel} unavailable — switching to ${replacement}`);
-            groqReplacements.set(model, replacement);
-            activeModel = replacement;
-            round -= 1; // the retry replays this same round
-            continue;
-          }
-        }
-        throw groqError(res.status, data, activeModel);
+        const retry = await flavor.onHttpError({ status: res.status, data, apiKey, state, requestedModel: model });
+        if (retry?.model) state.model = retry.model;
+        if (retry?.dropTools) state.toolsOff = true;
+        round -= 1; // the retry replays this same round
+        continue;
       }
 
       let text = '';
@@ -563,7 +565,7 @@ export async function callGroq({ apiKey, model, system, messages, toolset = NO_T
           continue;
         }
         if (data?.error) {
-          const err = new Error(data.error.message || 'Groq devolvió un error durante el streaming.');
+          const err = new Error(data.error.message || `${flavor.name} devolvió un error durante el streaming.`);
           err.code = 'PROVIDER_ERROR';
           throw err;
         }
@@ -583,11 +585,11 @@ export async function callGroq({ apiKey, model, system, messages, toolset = NO_T
       const calls = toolCalls.filter((c) => c && c.name);
       if (calls.length === 0 || forceTextOnly) {
         if (!text) {
-          const err = new Error('Groq no devolvió contenido utilizable.');
+          const err = new Error(`${flavor.name} no devolvió contenido utilizable.`);
           err.code = 'PROVIDER_EMPTY';
           throw err;
         }
-        return { provider: 'groq', model: activeModel };
+        return { provider: flavor.id, model: state.model };
       }
 
       const results = await Promise.all(
@@ -616,6 +618,90 @@ export async function callGroq({ apiKey, model, system, messages, toolset = NO_T
   }
 }
 
+const GROQ_FLAVOR = {
+  id: 'groq',
+  name: 'Groq',
+  envVar: 'GROQ_API_KEY',
+  url: 'https://api.groq.com/openai/v1/chat/completions',
+  maxToolRounds: GROQ_MAX_TOOL_ROUNDS,
+  startModel: (model) => groqReplacements.get(model),
+  requestBody: groqRequestBody,
+  async onHttpError({ status, data, apiKey, state, requestedModel }) {
+    if (!state.recovered && isMissingGroqModel(status, data)) {
+      state.recovered = true;
+      const replacement = await findAvailableGroqModel(apiKey, state.model);
+      if (replacement) {
+        console.error(`[callGroq] model ${state.model} unavailable — switching to ${replacement}`);
+        groqReplacements.set(requestedModel, replacement);
+        return { model: replacement };
+      }
+    }
+    throw groqError(status, data, state.model);
+  },
+};
+
+export function callGroq(args) {
+  return callOpenAICompatible(GROQ_FLAVOR, args);
+}
+
+// ---- OpenRouter ----
+// One key, hundreds of models (openrouter.ai/models). The default is its
+// free router, so Eddie works with no credits; free models allow 20 requests
+// a minute and, below $10 of lifetime credits, 50 a day.
+const OPENROUTER_MAX_OUTPUT_TOKENS = 4096;
+const OPENROUTER_MAX_TOOL_ROUNDS = 4;
+
+function openRouterError(status, data, model) {
+  const raw = data?.error?.message || '';
+  let message;
+  if (status === 401) {
+    message = 'OpenRouter rechazó la clave: OPENROUTER_API_KEY no es válida o fue revocada. Revísala en Vercel.';
+  } else if (status === 402) {
+    message = `OpenRouter no tiene créditos para el modelo "${model}". Elige un modelo gratuito (openrouter/free o uno que termine en ":free") o agrega créditos.`;
+  } else if (status === 429) {
+    message =
+      'Se alcanzó el límite de OpenRouter (los modelos gratuitos permiten 20 solicitudes por minuto y 50 al día sin créditos). Espera un momento o agrega créditos.';
+  } else if (status === 403) {
+    message = 'OpenRouter bloqueó la solicitud (moderación del modelo). Reformula el mensaje o elige otro modelo.';
+  } else if (status === 404) {
+    message = `OpenRouter no tiene disponible el modelo "${model}" ahora mismo. Elige otro en Configuración.`;
+  } else {
+    message = raw || `OpenRouter respondió con estado ${status}.`;
+  }
+  const err = new Error(message);
+  err.code = 'PROVIDER_ERROR';
+  err.status = status;
+  return err;
+}
+
+const OPENROUTER_FLAVOR = {
+  id: 'openrouter',
+  name: 'OpenRouter',
+  envVar: 'OPENROUTER_API_KEY',
+  url: 'https://openrouter.ai/api/v1/chat/completions',
+  maxToolRounds: OPENROUTER_MAX_TOOL_ROUNDS,
+  // Optional headers that name the app on OpenRouter's side.
+  headers: () => ({ 'HTTP-Referer': process.env.APP_URL || 'https://github.com/socra375/EDDIE-Asistent', 'X-Title': 'Eddie' }),
+  requestBody(model, chat, tools) {
+    const body = { model, messages: chat, stream: true, temperature: 0.7, max_tokens: OPENROUTER_MAX_OUTPUT_TOKENS };
+    if (tools?.length) body.tools = tools;
+    return body;
+  },
+  async onHttpError({ status, data, state }) {
+    // A model with no tool support answers 404 "No endpoints found that
+    // support tool use": answer without tools instead of failing.
+    if ((status === 404 || status === 400) && !state.toolsOff && /tool/i.test(data?.error?.message || '')) {
+      console.error(`[callOpenRouter] ${state.model} can't use tools — continuing without them`);
+      return { dropTools: true };
+    }
+    throw openRouterError(status, data, state.model);
+  },
+};
+
+export function callOpenRouter(args) {
+  return callOpenAICompatible(OPENROUTER_FLAVOR, args);
+}
+
 function callSingleProvider({ provider, model, system, messages, toolset, onChunk }) {
   const resolvedModel = model || defaultModelFor(provider);
   if (provider === 'claude') {
@@ -628,6 +714,9 @@ function callSingleProvider({ provider, model, system, messages, toolset, onChun
   if (provider === 'groq') {
     return callGroq({ apiKey: process.env.GROQ_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
   }
+  if (provider === 'openrouter') {
+    return callOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
+  }
   const err = new Error(`Proveedor desconocido: ${provider}`);
   err.code = 'BAD_REQUEST';
   throw err;
@@ -637,10 +726,17 @@ function callSingleProvider({ provider, model, system, messages, toolset, onChun
 // limit (vercel.json) for a second attempt to finish in time.
 const FALLBACK_DEADLINE_MS = 40000;
 
+// Who can step in when the chosen provider fails, in order: Groq (fast),
+// then OpenRouter, each only if its key is set on the server.
+const FALLBACKS = [
+  { provider: 'groq', name: 'Groq', envVar: 'GROQ_API_KEY' },
+  { provider: 'openrouter', name: 'OpenRouter', envVar: 'OPENROUTER_API_KEY' },
+];
+
 // When the chosen provider fails before saying anything (quota exceeded,
-// overloaded, timeout, empty answer, missing key), Groq answers instead —
-// if GROQ_API_KEY is set. Once text has reached the user, switching would
-// mix two answers, so a mid-stream failure is reported as-is.
+// overloaded, timeout, empty answer, missing key), the next available one
+// answers instead. Once text has reached the user, switching would mix two
+// answers, so a mid-stream failure is reported as-is.
 // `disabledConnectors` lists the connectors the user switched off in the hub;
 // their tools are never offered to the model.
 // `onActivity` hears each tool as it starts ("Buscando en internet…").
@@ -656,26 +752,26 @@ export async function callProvider({ provider, model, system, messages, context 
 
   try {
     return withToolOutput(await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk }));
-  } catch (err) {
-    const canFallBack =
-      provider !== 'groq' &&
-      err.code !== 'BAD_REQUEST' &&
-      !started &&
-      Boolean(process.env.GROQ_API_KEY) &&
-      Date.now() - startedAt < FALLBACK_DEADLINE_MS;
-    if (!canFallBack) throw err;
+  } catch (firstErr) {
+    let err = firstErr;
+    const backups = FALLBACKS.filter((f) => f.provider !== provider && process.env[f.envVar]);
+    const canTry = () => err.code !== 'BAD_REQUEST' && !started && Date.now() - startedAt < FALLBACK_DEADLINE_MS;
 
-    console.error(`[callProvider] ${provider} failed (${err.code || 'error'} ${err.status || ''}): ${err.message} — falling back to Groq`);
-    // Groq starts over, so whatever the failed attempt's tools queued (a task
-    // it created, a card to confirm) is dropped; Groq's own calls queue it
-    // again if needed.
-    toolset.reset();
-    try {
-      const result = await callSingleProvider({ provider: 'groq', system, messages, toolset, onChunk });
-      return { ...withToolOutput(result), fallbackFrom: provider };
-    } catch (groqErr) {
-      groqErr.message = `${err.message} (El respaldo Groq también falló: ${groqErr.message})`;
-      throw groqErr;
+    for (const backup of backups) {
+      if (!canTry()) break;
+      console.error(`[callProvider] ${provider} failed (${firstErr.code || 'error'} ${firstErr.status || ''}): ${firstErr.message} — falling back to ${backup.name}`);
+      // The backup starts over, so whatever the failed attempt's tools queued
+      // (a task it created, a card to confirm) is dropped; the backup's own
+      // calls queue it again if needed.
+      toolset.reset();
+      try {
+        const result = await callSingleProvider({ provider: backup.provider, system, messages, toolset, onChunk: trackedChunk });
+        return { ...withToolOutput(result), fallbackFrom: provider };
+      } catch (backupErr) {
+        backupErr.message = `${err.message} (El respaldo ${backup.name} también falló: ${backupErr.message})`;
+        err = backupErr;
+      }
     }
+    throw err;
   }
 }
