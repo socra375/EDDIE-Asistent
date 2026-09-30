@@ -3,7 +3,7 @@
 import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { handleWebhook } from './bot.js';
-import { botUsername, ensureBotSetup } from './api.js';
+import { botUsername, ensureBotSetup, webhookStatus } from './api.js';
 import { createLinkCode, deleteLink, getLinkByUser, setVoiceReplies } from './store.js';
 
 export const TELEGRAM_ENV = ['DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'APP_URL'];
@@ -38,7 +38,7 @@ async function linkRequest(cookies, body) {
   const { code, minutes } = await createLinkCode(user.id, validTimezone(body?.timezone));
   const username = await botUsername();
   if (!username) return { status: 502, json: { error: 'No pude leer el nombre del bot de Telegram.' } };
-  return { status: 200, json: { code, minutes, username, url: `https://t.me/${username}?start=${code}` } };
+  return { status: 200, json: { code, minutes, username, url: `https://t.me/${username}?start=${code}`, webhook: await webhookStatus() } };
 }
 
 export async function handleTelegramRoute({ method, path = [], cookies = {}, headers = {}, body }) {
