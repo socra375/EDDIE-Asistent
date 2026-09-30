@@ -26,7 +26,9 @@ const PROVIDER_MODELS = {
   ],
 };
 
-// Voices for the chosen language, best-sounding first, for the picker.
+const CLOUD_VOICE = '__elevenlabs__';
+
+// Browser voices for the chosen language, by name, for the picker.
 function voicesFor(voices, language) {
   const base = (language || 'es').toLowerCase();
   return voices
@@ -47,9 +49,15 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, updateVoiceSettings, memory, forgetFact, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
-  const { ttsSupported, voices, sttEngine, whisperAvailable, speakWithSettings } = useVoice();
+  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoiceError, speakWithSettings } =
+    useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
+
+  function chooseVoice(value) {
+    if (value === CLOUD_VOICE) updateVoiceSettings({ tts: 'elevenlabs' });
+    else updateVoiceSettings({ tts: 'browser', voiceURI: value });
+  }
 
   async function handleDeleteAccount() {
     if (!window.confirm('Esto elimina tu cuenta de Google en Eddie y todas tus tareas, ajustes y memoria guardados en el servidor. ¿Continuar?')) return;
@@ -214,11 +222,16 @@ export default function SettingsPanel({ onOpenConversation }) {
           {ttsSupported && (
             <label>
               <span className="field-label">Voz de Eddie</span>
-              <select className="select" value={settings.voice.voiceURI || ''} onChange={(e) => updateVoiceSettings({ voiceURI: e.target.value })}>
-                <option value="">Automática (la más natural disponible)</option>
+              <select
+                className="select"
+                value={ttsEngine === 'elevenlabs' ? CLOUD_VOICE : settings.voice.voiceURI || ''}
+                onChange={(e) => chooseVoice(e.target.value)}
+              >
+                {cloudVoiceAvailable && <option value={CLOUD_VOICE}>Voz de Eddie · ElevenLabs</option>}
+                <option value="">Navegador · automática (la más natural)</option>
                 {voicesFor(voices, settings.language).map((v) => (
                   <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name} ({v.lang})
+                    Navegador · {v.name} ({v.lang})
                   </option>
                 ))}
               </select>
@@ -232,6 +245,12 @@ export default function SettingsPanel({ onOpenConversation }) {
               ? 'Whisper no está disponible: falta GROQ_API_KEY en Vercel o este navegador no puede grabar audio. Se usa el reconocimiento del navegador.'
               : 'Se usa el reconocimiento de voz del navegador.'}
         </p>
+        {!cloudVoiceAvailable && (
+          <p className="settings-placeholder">
+            Para la voz propia de Eddie (ElevenLabs), agrega ELEVENLABS_API_KEY en las variables de entorno de Vercel y vuelve a desplegar.
+          </p>
+        )}
+        {ttsEngine === 'elevenlabs' && cloudVoiceError && <p className="settings-warning">{cloudVoiceError}</p>}
         {ttsSupported && (
           <button type="button" className="btn settings-voice-test" onClick={() => speakWithSettings('Hola, soy Eddie. Así suena mi voz.')}>
             Probar voz

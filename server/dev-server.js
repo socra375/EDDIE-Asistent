@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import { runChatStream } from '../api/_lib/chatStream.js';
 import { runTranscription, MAX_AUDIO_BYTES } from '../api/_lib/transcribe.js';
+import { runSpeech } from '../api/_lib/speech.js';
 import { parseCookies } from '../api/_lib/cookies.js';
 import { applyResult, respondError } from '../api/_lib/respond.js';
 import { startGoogleLogin, handleGoogleCallback, logout, me, deleteAccount } from '../api/_lib/authHandlers.js';
@@ -29,7 +30,8 @@ function cookiesOf(req) {
 
 // ---- Chat (Gemini/Claude) ----
 
-app.post('/api/chat', (req, res) => (req.query.action === 'transcribe' ? runTranscription(req, res) : runChatStream(req, res)));
+const CHAT_ACTIONS = { transcribe: runTranscription, speak: runSpeech };
+app.post('/api/chat', (req, res) => (CHAT_ACTIONS[req.query.action] || runChatStream)(req, res));
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -37,6 +39,7 @@ app.get('/api/health', (_req, res) => {
     gemini: Boolean(process.env.GEMINI_API_KEY),
     claude: Boolean(process.env.ANTHROPIC_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
+    elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
     database: Boolean(process.env.DATABASE_URL),
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
   });

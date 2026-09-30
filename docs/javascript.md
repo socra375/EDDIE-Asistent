@@ -194,7 +194,17 @@ detalle del protocolo.
 - **`api/chat.js`** / **`api/health.js`** — funciones serverless de
   Vercel; son wrappers finos sobre `handler.js` con las cabeceras CORS.
   `api/chat.js` también atiende `POST /api/chat?action=transcribe` (voz a
-  texto) para no gastar otra de las 12 funciones del plan Hobby.
+  texto) y `?action=speak` (texto a voz) para no gastar otras de las 12
+  funciones del plan Hobby.
+- **`api/_lib/speech.js`** — texto a voz con ElevenLabs
+  (`/v1/text-to-speech/{voz}/stream`, MP3 a 64 kbps que se reenvía al
+  navegador tal como llega). Voz `bUQeiO7gn4ehGuSnZf26` (o
+  `ELEVENLABS_VOICE_ID`), modelo `eleven_flash_v2_5` (o `ELEVENLABS_MODEL`)
+  con `language_code` del idioma de la app. Máximo 600 caracteres por
+  petición y solo desde la propia app (`Sec-Fetch-Site`), para que otro
+  sitio no gaste los créditos. Traduce los errores de ElevenLabs: sin
+  créditos, clave inválida, voz de biblioteca en plan gratis (402) y voz
+  inexistente.
 - **`api/_lib/transcribe.js`** — voz a texto con Whisper en Groq
   (`/openai/v1/audio/transcriptions`, multipart, `temperature: 0`,
   `response_format: verbose_json`). Modelo `whisper-large-v3-turbo` (o
@@ -255,7 +265,9 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   final (con Whisper incluye la subida), y `recording`/`transcribing`
   separan las dos fases (el anillo muestra "TRANSCRIBIENDO"). También
   envuelve `useSpeechSynthesis` (TTS) y añade `speakWithSettings(texto)`,
-  que usa el idioma activo y la voz elegida (`settings.voice.voiceURI`). Los valores del contexto se nombran explícitamente
+  que usa el idioma activo y el motor de voz (`ttsEngine`: ElevenLabs si
+  el servidor tiene la clave y el usuario no eligió una voz del navegador
+  en `settings.voice.tts`/`voiceURI`). Los valores del contexto se nombran explícitamente
   (`sttSupported`/`ttsSupported`, `stop`/`stopSpeaking`, etc.) en vez de
   hacer `{ ...recognition, ...synthesis }` — ambos hooks devuelven una
   clave `supported` (y `synthesis` también `stop`), así que un spread
@@ -320,15 +332,22 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `listening`, `transcript`, `interimTranscript` (lo que se está
   transcribiendo en vivo), `start`, `stop`, `error`. Detecta si el
   navegador no soporta la API y lo señala en vez de fallar en silencio.
-- **`useSpeechSynthesis.js`** — envuelve `window.speechSynthesis` con
-  `speak(texto, { lang, voiceURI, onEnd })` / `stop()`. Elige la voz más
+- **`useSpeechSynthesis.js`** — `speak(texto, { lang, voiceURI, engine,
+  onEnd })` / `stop()` con dos motores. `engine: 'elevenlabs'` (la voz de
+  Eddie, por defecto cuando `/api/health` dice `elevenlabs: true`) pide el
+  audio a `POST /api/chat?action=speak` por partes (`splitForCloud`: una
+  primera corta de 160 caracteres para empezar a hablar antes y luego de
+  hasta 450) y descarga la siguiente mientras suena la actual; si una
+  falla, termina la respuesta con la voz del navegador y deja el motivo en
+  `cloudError` (sin clave, sin créditos o voz no permitida la desactivan
+  hasta recargar). `engine: 'browser'` usa `window.speechSynthesis`. Elige la voz más
   natural disponible para el idioma (prefiere las "Natural"/"Online" y las
   de Google sobre las locales tipo eSpeak) o la que el usuario eligió en
   Configuración; quita el Markdown (`speakableText`) y lee las respuestas
   largas por frases de hasta 220 caracteres (`splitForSpeech`), porque
-  Chrome corta las locuciones de más de ~15 s. Groq no ofrece voces en
-  español (su TTS solo tiene inglés y árabe), así que la voz sigue siendo
-  la del navegador.
+  Chrome corta las locuciones de más de ~15 s. (Groq no ofrece voces en
+  español —su TTS solo tiene inglés y árabe—, por eso la voz propia va
+  con ElevenLabs.)
 - **`useProviderHealth.js`** — hace `fetch('/api/health')` una vez al
   montar y devuelve `{ gemini: bool, claude: bool }`, usado en
   Configuración para mostrar si cada proveedor tiene su clave puesta en
