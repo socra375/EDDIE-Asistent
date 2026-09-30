@@ -1,8 +1,9 @@
+import { lazySessionUser } from './session.js';
 import { callProvider } from './providers.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 6000;
+const MAX_SYSTEM_LENGTH = 8000;
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq']);
 
 class ValidationError extends Error {}
@@ -85,9 +86,11 @@ export function sanitizeContext(context) {
   return result;
 }
 
-export async function handleChatRequest(body, onChunk, onActivity) {
+// `cookies` identify the signed-in user for account tools (Gmail); the
+// session is only looked up if such a tool runs.
+export async function handleChatRequest(body, onChunk, onActivity, { cookies = {} } = {}) {
   const request = sanitizeRequest(body);
-  return callProvider({ ...request, onChunk, onActivity });
+  return callProvider({ ...request, context: { ...request.context, getUser: lazySessionUser(cookies) }, onChunk, onActivity });
 }
 
 export function errorToResponse(err) {

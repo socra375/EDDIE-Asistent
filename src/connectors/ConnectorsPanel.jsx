@@ -17,6 +17,8 @@ const STATUS = {
 
 const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
 function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
   const switchable = isLive(connector) && connector.tools.length > 0;
   const status = STATUS[switchable && !enabled ? 'off' : connector.status] || STATUS.planned;
@@ -62,10 +64,17 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail }) {
       {connector.status === 'connected' && userEmail && <p className="connector__meta">Conectado como {userEmail}</p>}
       {connector.note && <p className="connector__meta">{connector.note}</p>}
 
-      {connector.status === 'needs_account' && connector.auth === 'google-login' && (
+      {connector.status === 'needs_account' && connector.auth === 'google-login' && !connector.connectScope && (
         <button type="button" className="btn btn-primary connector__action" onClick={onConnect}>
           Conectar con Google
         </button>
+      )}
+      {connector.status === 'needs_account' && connector.auth === 'google-login' && connector.connectScope && (
+        // Asks Google for this connector's extra permissions (and signs in
+        // too if needed); Google then sends the user back here.
+        <a className="btn btn-primary connector__action" href={`${API_BASE}/api/auth/google/start?scope=${connector.connectScope}`}>
+          Conectar {connector.name}
+        </a>
       )}
 
       {connector.status === 'needs_setup' && (
@@ -95,7 +104,24 @@ function Section({ title, children }) {
   );
 }
 
-export default function ConnectorsPanel() {
+// Why the user came back from Google (see the ?connected / ?google_error
+// handling in App.jsx).
+function connectNotice(notice, connectors) {
+  if (!notice) return null;
+  const name = connectors.find((c) => c.id === notice.connector)?.name || notice.connector;
+  if (notice.type === 'connected') {
+    const card = connectors.find((c) => c.id === notice.connector);
+    if (card && card.status !== 'connected') {
+      return { tone: 'warn', text: `Google no dio todos los permisos de ${name}. Vuelve a pulsar "Conectar ${name}" y marca todas las casillas.` };
+    }
+    return { tone: 'ok', text: `${name} quedó conectado. Ya puedes pedírselo a Eddie.` };
+  }
+  if (notice.error === 'missing_secret') return { tone: 'bad', text: `Para conectar ${name} falta configurar CONNECTOR_SECRET en Vercel.` };
+  if (notice.error === 'access_denied') return { tone: 'warn', text: `No se conectó ${name}: cancelaste el permiso en Google.` };
+  return { tone: 'bad', text: `No se pudo conectar ${name} (${notice.error}).` };
+}
+
+export default function ConnectorsPanel({ notice = null }) {
   const { user, login } = useAuth();
   const { settings, setConnectorEnabled } = useSettings();
   const { status, connectors, error, reload } = useConnectors(user?.id || null);
@@ -105,6 +131,7 @@ export default function ConnectorsPanel() {
   const pending = connectors.filter((c) => c.status === 'needs_account' || c.status === 'needs_setup');
   const planned = connectors.filter((c) => c.status === 'planned');
   const activeTools = live.filter((c) => !off.has(c.id)).reduce((n, c) => n + c.tools.length, 0);
+  const banner = status === 'ready' ? connectNotice(notice, connectors) : null;
 
   const card = (c) => (
     <ConnectorCard
@@ -139,6 +166,12 @@ export default function ConnectorsPanel() {
           </p>
         )}
       </div>
+
+      {banner && (
+        <p className={`glass-panel connectors__notice connectors__notice--${banner.tone}`} role="status">
+          {banner.text}
+        </p>
+      )}
 
       {status === 'loading' && <p className="connectors__state">Cargando conectores…</p>}
 

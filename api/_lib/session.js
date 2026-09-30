@@ -49,3 +49,17 @@ export async function requireUser(cookies) {
   }
   return user;
 }
+
+// For connector tools that act on the user's accounts (Gmail): looks the
+// session up only if a tool actually asks, and at most once per request —
+// most chat requests never need it. Resolves to null when signed out.
+export function lazySessionUser(cookies = {}) {
+  let pending = null;
+  return () => {
+    if (!pending) {
+      const sessionId = cookies[SESSION_COOKIE_NAME];
+      pending = process.env.DATABASE_URL && sessionId ? getSessionUser(sessionId).catch(() => null) : Promise.resolve(null);
+    }
+    return pending;
+  };
+}

@@ -175,6 +175,27 @@ frontend ni en el repositorio. Configuración → Cuenta de Google muestra un
 aviso si falta alguna de `DATABASE_URL` o `GOOGLE_CLIENT_ID`/`SECRET`, en
 vez de fallar en silencio.
 
+### 4. Gmail (opcional)
+
+Eddie puede buscar, leer y resumir tus correos, y enviarlos o responderlos
+**siempre con tu confirmación** (tarjeta con Enviar / Editar / Cancelar).
+Gmail se conecta aparte del login, desde el módulo **Conectores → Conectar
+Gmail**, y solo pide leer (`gmail.readonly`) y enviar (`gmail.send`): Eddie
+no puede borrar correos.
+
+1. En el mismo proyecto de Google Cloud: **Biblioteca → Gmail API →
+   Habilitar**.
+2. **Pantalla de consentimiento → Permisos (scopes)**: agrega
+   `.../auth/gmail.readonly` y `.../auth/gmail.send`. Mientras la app esté
+   en modo "Prueba", agrega tu correo en **Usuarios de prueba**. (En modo
+   prueba Google hace caducar el acceso cada 7 días: si Eddie dice que
+   vuelvas a conectar Gmail, pulsa el botón otra vez.)
+3. En Vercel agrega `CONNECTOR_SECRET`: un texto aleatorio de al menos 16
+   caracteres (mejor 40). Con él se cifran en la base de datos los accesos a
+   Google (AES-256-GCM); sin él, el botón de Gmail avisa que falta. No lo
+   cambies después: los accesos guardados dejarían de poder leerse y
+   habría que volver a conectar.
+
 ### Cómo funciona el login (para quien quiera entender/tocar el código)
 
 Es un flujo OAuth 2.0 "Authorization Code" implementado a mano (sin SDK de
@@ -306,7 +327,8 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   _lib/providers.js     Adaptadores Gemini / Claude
   _lib/db.js            Cliente Postgres (Neon) — solo backend
   _lib/google.js        OAuth de Google (autorizar/intercambiar/refrescar tokens)
-  _lib/googleCredentials.js  Guardar/renovar tokens de Google por usuario
+  _lib/googleCredentials.js  Guardar (cifrados) y renovar tokens de Google por usuario
+  _lib/secretBox.js      Cifrado AES-256-GCM de tokens con CONNECTOR_SECRET
   _lib/session.js        Sesiones opaco por cookie
   _lib/cookies.js, respond.js, httpErrors.js  Utilidades HTTP compartidas
   _lib/authHandlers.js, calendarHandlers.js, driveHandlers.js,

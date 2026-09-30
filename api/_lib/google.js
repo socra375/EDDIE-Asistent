@@ -17,6 +17,10 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
 ].join(' ');
 
+// Asked for only when the user connects Gmail (incremental authorization):
+// read/search mail and send it — no deleting, labeling or settings.
+export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send'];
+
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {
@@ -27,12 +31,14 @@ function requireEnv(name) {
   return value;
 }
 
-export function buildAuthorizeUrl(state) {
+// `extraScopes` adds permissions on top of the login ones (Gmail);
+// include_granted_scopes keeps whatever the user already granted.
+export function buildAuthorizeUrl(state, extraScopes = []) {
   const params = new URLSearchParams({
     client_id: requireEnv('GOOGLE_CLIENT_ID'),
     redirect_uri: requireEnv('GOOGLE_REDIRECT_URI'),
     response_type: 'code',
-    scope: GOOGLE_SCOPES,
+    scope: [GOOGLE_SCOPES, ...extraScopes].join(' '),
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',

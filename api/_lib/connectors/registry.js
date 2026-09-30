@@ -4,6 +4,7 @@
 import clock from './clock/index.js';
 import weather from './weather/index.js';
 import google from './google/index.js';
+import gmail from './gmail/index.js';
 import websearch from './websearch/index.js';
 import news from './news/index.js';
 import wikipedia from './wikipedia/index.js';
@@ -13,7 +14,7 @@ import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 
-export const CONNECTORS = [clock, weather, tasks, websearch, news, wikipedia, currency, google];
+export const CONNECTORS = [clock, weather, tasks, websearch, news, wikipedia, currency, gmail, google];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -169,6 +170,7 @@ export async function describeConnectors({ user = null, env = process.env } = {}
         description: c.description,
         icon: c.icon,
         auth: c.auth?.type || null,
+        connectScope: c.auth?.scope || null,
         status,
         missingEnv: missing,
         note: (typeof c.note === 'function' ? c.note(env) : c.note) || null,

@@ -59,9 +59,9 @@ app.all(['/api/connectors', '/api/connectors/*'], async (req, res) => {
 
 // ---- Auth (Google login) ----
 
-app.get('/api/auth/google/start', (_req, res) => {
+app.get('/api/auth/google/start', (req, res) => {
   try {
-    applyResult(res, startGoogleLogin());
+    applyResult(res, startGoogleLogin(req.query));
   } catch (err) {
     respondError(res, err);
   }

@@ -4,7 +4,8 @@
 // Express routes in server/dev-server.js are thin adapters over these.
 import { randomUUID } from 'node:crypto';
 import { getDb } from './db.js';
-import { buildAuthorizeUrl, exchangeCodeForTokens, fetchGoogleUserInfo } from './google.js';
+import { buildAuthorizeUrl, exchangeCodeForTokens, fetchGoogleUserInfo, GMAIL_SCOPES } from './google.js';
+import { hasTokenSecret } from './secretBox.js';
 import { saveCredentials } from './googleCredentials.js';
 import { createSession, destroySession, getSessionUser, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from './session.js';
 import { serializeCookie, clearCookie } from './cookies.js';
@@ -12,18 +13,30 @@ import { serializeCookie, clearCookie } from './cookies.js';
 const STATE_COOKIE_NAME = 'eddie_oauth_state';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
-export function startGoogleLogin() {
-  const state = randomUUID();
+// Extra permissions a connector can ask for on top of the login. The name
+// travels in the OAuth state so the callback knows where to send the user.
+const EXTRA_SCOPES = { gmail: GMAIL_SCOPES };
+
+// `query.scope` = "gmail" asks for Gmail access too ("Conectar Gmail" in
+// the Conectores hub); without it, it's the plain Google login.
+export function startGoogleLogin(query = {}) {
+  const extra = EXTRA_SCOPES[query.scope] ? query.scope : null;
+  if (extra && !hasTokenSecret()) {
+    // Mail access is never stored unencrypted; the hub explains what's missing.
+    return { status: 302, redirect: `${APP_URL}/?google_error=missing_secret&connect=${extra}` };
+  }
+  const state = extra ? `${randomUUID()}.${extra}` : randomUUID();
   return {
     status: 302,
-    redirect: buildAuthorizeUrl(state),
+    redirect: buildAuthorizeUrl(state, extra ? EXTRA_SCOPES[extra] : []),
     setCookie: [serializeCookie(STATE_COOKIE_NAME, state, { maxAge: 600 })],
   };
 }
 
 export async function handleGoogleCallback(cookies, query) {
+  const connector = typeof query.state === 'string' && query.state.includes('.') ? query.state.split('.').pop() : null;
   if (query.error) {
-    return { status: 302, redirect: `${APP_URL}/?google_error=${encodeURIComponent(query.error)}` };
+    return { status: 302, redirect: `${APP_URL}/?google_error=${encodeURIComponent(query.error)}${connector ? `&connect=${connector}` : ''}` };
   }
 
   const expectedState = cookies[STATE_COOKIE_NAME];
@@ -53,7 +66,7 @@ export async function handleGoogleCallback(cookies, query) {
 
   return {
     status: 302,
-    redirect: `${APP_URL}/`,
+    redirect: connector && EXTRA_SCOPES[connector] ? `${APP_URL}/?connected=${connector}` : `${APP_URL}/`,
     setCookie: [serializeCookie(SESSION_COOKIE_NAME, sessionId, { maxAge: SESSION_MAX_AGE }), clearCookie(STATE_COOKIE_NAME)],
   };
 }

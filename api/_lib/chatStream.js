@@ -24,6 +24,7 @@
 // status code can no longer change once headers are sent (the app handles
 // both the same way).
 import { handleChatRequest, errorToResponse } from './handler.js';
+import { parseCookies } from './cookies.js';
 
 export async function runChatStream(req, res) {
   let streamStarted = false;
@@ -48,6 +49,7 @@ export async function runChatStream(req, res) {
         ensureStream();
         res.write(`${JSON.stringify({ type: 'activity', ...activity })}\n`);
       },
+      { cookies: parseCookies(req.headers?.cookie) },
     );
     ensureStream();
     const done = { type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom };
