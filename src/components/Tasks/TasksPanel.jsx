@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getTasks, saveTasks } from '../../utils/storage';
 import { useAuth } from '../../context/AuthContext';
 import { remoteTasks, remoteCalendar } from '../../services/remote';
+import { TASKS_CHANGED_EVENT } from '../../services/taskActions';
 import Icon from '../../layout/Icon';
 import './Tasks.css';
 
@@ -33,6 +34,13 @@ export default function TasksPanel() {
   useEffect(() => {
     saveTasks(tasks);
   }, [tasks]);
+
+  // Eddie created or completed a task from the chat.
+  useEffect(() => {
+    const reload = () => setTasks(getTasks());
+    window.addEventListener(TASKS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(TASKS_CHANGED_EVENT, reload);
+  }, []);
 
   // On login, adopt the server's tasks as the source of truth — unless the
   // server has none yet and there's local work, in which case migrate it up

@@ -146,23 +146,48 @@ detalle del protocolo.
     coordenadas de `context.location` si no). Sus llamadas usan el
     `fetchWithRetry` compartido para reintentar una vez ante un fallo de
     red transitorio.
+  - `tasks/`: `create_task` y `complete_task`. No escriben nada: validan
+    contra las tareas que el navegador manda en `context.tasks` (búsqueda
+    aproximada sin acentos, aviso si hay varias parecidas o si ya existe),
+    entienden fechas como "mañana" o "el viernes" en la zona horaria del
+    usuario y emiten una acción (`context.emit`) que la app aplica al
+    terminar la respuesta (`src/services/taskActions.js`).
+  - `websearch/`: `search_web` con Tavily (resumen + fuentes). Sin clave
+    usa el modo "keyless" de Tavily (límite bajo); `TAVILY_API_KEY` (gratis,
+    1.000 búsquedas al mes) lo amplía. Su `note` en el hub depende de eso.
+  - `news/`: `get_news` con los RSS públicos de Google Noticias, en español
+    y del país del usuario (deducido del `timezone`), o de un tema de los
+    últimos 3 días.
+  - `wikipedia/`: `search_wikipedia` (busca en la Wikipedia en español y,
+    si no hay artículo, en la inglesa; devuelve resumen y enlace).
+  - `currency/`: `convert_currency` con open.er-api.com (tasa diaria, sin
+    clave), acepta "dólares", "pesos" o "euros" además de códigos ISO.
+  - `http.js`: `fetchJson`/`fetchText` para las herramientas (un reintento,
+    timeout corto, nunca lanza) y `clip` para acortar lo que vuelve al
+    modelo (cuenta contra el límite de tokens de Groq).
   - `google/`: la cuenta de Google del login (Calendario desde Tareas y
     Drive desde el chat); todavía sin herramientas para la IA (llegan en
     la sesión 12). `auth.isConnected(user)` mira si hay credenciales
     guardadas.
   - `planned.js`: solo metadatos de los conectores que llegan en próximas
-    sesiones (Gmail, búsqueda web, Telegram, Spotify, Notion, WhatsApp y
-    el Chromebook), para mostrarlos en el hub.
+    sesiones (Gmail, Telegram, Spotify, Notion, WhatsApp y el
+    Chromebook), para mostrarlos en el hub.
   - `registry.js`: `createToolset({ disabled, context })` arma, para cada
     petición de chat, las declaraciones a ofrecer (solo conectores
     configurados en el servidor y no apagados por el usuario) y un
     `execute(name, args)` que nunca deja escapar una excepción: una
     herramienta desconocida o apagada, argumentos inválidos (lo valida
     `validate.js` contra los `parameters` declarados: tipos, requeridos,
-    sin argumentos desconocidos) o un fallo interno se convierten en un
+    sin argumentos desconocidos, valores de `enum`) o un fallo interno se convierten en un
     `{ error }` que vuelve al modelo como cualquier resultado. Las
     herramientas `sensitive` (enviar, borrar…) nunca se ejecutan hasta que
     exista la confirmación en el chat (sesión 8).
+    Las acciones que emiten las herramientas se juntan en
+    `toolset.actions`; `callProvider` las devuelve con la respuesta (y las
+    descarta si pasa al respaldo de Groq, que empieza de cero) y
+    `chatStream.js` las manda en el evento `done`. Si el modelo pide varias
+    herramientas a la vez, Gemini y Groq las ejecutan en paralelo (hasta 3
+    rondas por respuesta).
     `describeConnectors({ user })` da la vista pública para el hub con un
     estado por conector: `ready`, `connected`, `needs_account`,
     `needs_setup` (con los nombres de las variables que faltan, nunca sus

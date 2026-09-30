@@ -4,10 +4,15 @@
 import clock from './clock/index.js';
 import weather from './weather/index.js';
 import google from './google/index.js';
+import websearch from './websearch/index.js';
+import news from './news/index.js';
+import wikipedia from './wikipedia/index.js';
+import currency from './currency/index.js';
+import tasks from './tasks/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { validateArgs } from './validate.js';
 
-export const CONNECTORS = [clock, weather, google];
+export const CONNECTORS = [clock, weather, tasks, websearch, news, wikipedia, currency, google];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -46,12 +51,17 @@ async function runTool(tools, name, args, context) {
 
 // What one chat request can use: the declarations to offer the model and a
 // function to run whichever one it picks. `context` carries the user's time
-// zone and location for tools that need them.
+// zone, location and task list for tools that need them. Tools that change
+// something in the app (a new task) call context.emit(action); those actions
+// collect in `actions` and reach the browser with the finished answer.
 export function createToolset({ disabled = [], context = {}, env = process.env } = {}) {
   const tools = activeTools({ disabled, env });
+  const actions = [];
+  const toolContext = { ...context, emit: (action) => actions.push(action) };
   return {
     declarations: tools.map((t) => t.declaration),
-    execute: (name, args) => runTool(tools, name, args, context),
+    execute: (name, args) => runTool(tools, name, args, toolContext),
+    actions,
   };
 }
 
@@ -87,7 +97,7 @@ export async function describeConnectors({ user = null, env = process.env } = {}
         auth: c.auth?.type || null,
         status,
         missingEnv: missing,
-        note: c.note || null,
+        note: (typeof c.note === 'function' ? c.note(env) : c.note) || null,
         tools: c.tools.map((t) => ({ name: t.declaration.name, label: t.label, sensitive: Boolean(t.sensitive) })),
       };
     }),

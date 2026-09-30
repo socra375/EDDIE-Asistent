@@ -224,6 +224,15 @@ export default function ChatPanel({ showCore = true }) {
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
               </div>
+              {m.taskChanges?.length > 0 && (
+                <ul className="bubble__changes" aria-label="Cambios en tus tareas">
+                  {m.taskChanges.map((change) => (
+                    <li key={change}>
+                      <Icon name="check" size={13} /> {change}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {m.role === 'assistant' && !m.isError && m.content && m.provider && <MessageActions message={m} />}
             </div>
           ))}

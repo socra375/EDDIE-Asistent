@@ -33,6 +33,9 @@ export function validateArgs(declaration, args) {
     if (check && value != null && !check(value)) {
       return `El argumento "${key}" de "${declaration.name}" debe ser de tipo ${schema.type}.`;
     }
+    if (schema.enum && value != null && !schema.enum.includes(value)) {
+      return `El argumento "${key}" de "${declaration.name}" debe ser uno de: ${schema.enum.join(', ')}.`;
+    }
   }
 
   return null;
