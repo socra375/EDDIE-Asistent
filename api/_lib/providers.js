@@ -742,7 +742,7 @@ const FALLBACKS = [
 // `onStep` hears every tool step as it starts and ends (see runTool).
 export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onStep }) {
   const startedAt = Date.now();
-  const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages) });
+  const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages, context.memory) });
   const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
   let started = false;
   const trackedChunk = (text) => {
