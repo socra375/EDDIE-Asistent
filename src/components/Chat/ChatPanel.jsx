@@ -11,6 +11,8 @@ import MessageActions from './MessageActions';
 import ConfirmCard from './ConfirmCard';
 import './Chat.css';
 
+const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter' };
+
 // Quick starts on an empty chat: some ask right away, others open a skill.
 const QUICK_STARTS = [
   { label: 'Planear mi día', icon: 'check', prompt: 'Ayúdame a planear mi día teniendo en cuenta mis tareas pendientes.' },
@@ -218,7 +220,7 @@ export default function ChatPanel({ showCore = true }) {
                 {m.tag && <span className="bubble__tag">{m.tag}</span>}
                 {m.fallbackFrom && (
                   <span className="bubble__tag bubble__tag--fallback" title={`${m.fallbackFrom} falló; respondió el respaldo`}>
-                    vía Groq
+                    vía {PROVIDER_NAMES[m.provider] || 'respaldo'}
                   </span>
                 )}
               </span>

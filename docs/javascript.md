@@ -39,21 +39,41 @@ detalle del protocolo.
 ## Backend (`api/`, `server/`)
 
 - **`api/_lib/providers.js`** — un adaptador por proveedor
-  (`callGemini`, `callClaude`, `callGroq`), cada uno traduce el formato interno
+  (`callGemini`, `callClaude`, `callGroq`, `callOpenRouter`), cada uno traduce el formato interno
   `{ system, messages }` a la petición REST de esa API con `stream: true`
   (Gemini: `:streamGenerateContent?alt=sse`; Claude: `stream: true` en el
   body) y va llamando a `onChunk(texto)` con cada fragmento a medida que
   llega, en vez de esperar la respuesta completa. `callProvider` elige
-  cuál llamar según `provider` y, si falla antes de enviar texto y existe
-  `GROQ_API_KEY`, reintenta con Groq (devuelve `fallbackFrom` con el
-  proveedor original, que llega al chat en el evento `done`). No hay
+  cuál llamar según `provider` y, si falla antes de enviar texto, prueba
+  los respaldos que tengan clave en el servidor, en este orden: Groq
+  (`GROQ_API_KEY`) y luego OpenRouter (`OPENROUTER_API_KEY`), sin repetir el
+  proveedor elegido (devuelve `fallbackFrom` con el proveedor original y
+  `provider` con quien respondió; ambos llegan al chat en el evento
+  `done`, y la burbuja dice "vía Groq" o "vía OpenRouter"). No hay
   respaldo si ya se mostró texto (se mezclarían dos respuestas), si la
   petición era inválida, o si ya pasaron 40 s (no alcanzaría el límite de
-  60 s de Vercel). Si Groq también falla, el error incluye ambos motivos.
-  Aquí, y solo aquí, se leen `process.env.GEMINI_API_KEY`,
-  `process.env.ANTHROPIC_API_KEY` y `process.env.GROQ_API_KEY`.
+  60 s de Vercel). Si los respaldos también fallan, el error junta todos
+  los motivos. Aquí, y solo aquí, se leen las claves de los proveedores:
+  `process.env.GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY` y
+  `OPENROUTER_API_KEY`.
+  Groq y OpenRouter comparten `callOpenAICompatible`, el bucle de la API
+  estilo OpenAI (stream SSE, herramientas en paralelo, rondas máximas y una
+  última ronda solo de texto); cada servicio aporta su "sabor": dirección,
+  cabeceras, cuerpo de la petición, rondas que puede pagar y qué hacer ante
+  un error HTTP. `callOpenRouter` usa `https://openrouter.ai/api/v1`, con
+  `openrouter/free` como modelo predeterminado (un router que elige, por
+  petición, un modelo gratuito que admita lo que se pide, herramientas
+  incluidas; `OPENROUTER_MODEL` o el modelo elegido en Configuración lo
+  cambian, y `openrouter/auto` o cualquier id de openrouter.ai/models
+  sirven), hasta 4 rondas de herramientas, `max_tokens` 4096 y las
+  cabeceras opcionales `HTTP-Referer` (`APP_URL`) y `X-Title`. Si el modelo
+  no admite herramientas (404 "No endpoints found that support tool use"),
+  repite la ronda sin ellas en vez de fallar. Traduce 401 (clave), 402 (sin
+  créditos), 429 (los modelos gratuitos permiten 20 solicitudes por minuto
+  y 50 al día sin créditos; 1.000 con 10 USD comprados una vez), 403
+  (moderación) y 404 (modelo no disponible).
   `callGroq` usa la API compatible con OpenAI de Groq y las mismas
-  herramientas de hora y clima: convierte el esquema de Gemini a JSON
+  herramientas de los conectores: convierte el esquema de Gemini a JSON
   Schema estándar (`toJsonSchema`) y junta las llamadas a herramientas que
   llegan en fragmentos por el stream antes de ejecutarlas. Su modelo
   predeterminado es `openai/gpt-oss-120b` (Groq retiró
@@ -212,7 +232,7 @@ detalle del protocolo.
     `activity`.
     Las acciones que emiten las herramientas se juntan en
     `toolset.actions`; `callProvider` las devuelve con la respuesta (y las
-    descarta si pasa al respaldo de Groq, que empieza de cero) y
+    descarta si pasa a un respaldo, que empieza de cero) y
     `chatStream.js` las manda en el evento `done`. Si el modelo pide varias
     herramientas a la vez, Gemini y Groq las ejecutan en paralelo (hasta 3
     rondas por respuesta).

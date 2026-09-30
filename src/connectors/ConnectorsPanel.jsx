@@ -162,7 +162,7 @@ export default function ConnectorsPanel({ notice = null }) {
         )}
         {settings.provider === 'claude' && (
           <p className="connectors__warning">
-            Con Claude, Eddie responde sin herramientas. Elige Gemini o Groq en Configuración para usar tus conectores.
+            Con Claude, Eddie responde sin herramientas. Elige Gemini, Groq u OpenRouter en Configuración para usar tus conectores.
           </p>
         )}
       </div>

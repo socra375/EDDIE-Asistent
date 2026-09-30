@@ -18,7 +18,7 @@ Navegador (React + Vite)
 Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
-   ├── api/_lib/providers.js → llama a Gemini, Claude o Groq (respaldo automático)
+   ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
    └── api/_lib/connectors/  → herramientas de los conectores activos (hora, clima, tareas, internet, noticias, Wikipedia, monedas…)
    ▼
 Respuesta unificada { content, provider, model }
@@ -87,6 +87,15 @@ exclusivamente desde variables de entorno del backend:
 
 - `GEMINI_API_KEY` — habilita el proveedor Gemini.
 - `ANTHROPIC_API_KEY` — habilita el proveedor Claude.
+- `OPENROUTER_API_KEY` — habilita OpenRouter (https://openrouter.ai/keys): una
+  sola clave para cientos de modelos. Por defecto usa `openrouter/free`, que
+  elige un modelo gratuito en cada petición (los gratuitos permiten 20
+  solicitudes por minuto y 50 al día; con 10 USD de créditos, comprados una
+  sola vez, el límite diario sube a 1.000). En Configuración → Proveedor de
+  IA puedes elegir `openrouter/auto` o escribir el id de cualquier modelo de
+  https://openrouter.ai/models. También funciona como **respaldo**: si el
+  proveedor elegido falla, responde primero Groq y, si tampoco puede,
+  OpenRouter. `OPENROUTER_MODEL` (opcional) cambia el modelo predeterminado.
 - `GROQ_API_KEY` — habilita Groq (modelo `openai/gpt-oss-120b`, gratis y muy rápido), como
   proveedor elegible y como **respaldo automático**: si el proveedor elegido
   falla antes de empezar a responder (límite gratuito, saturación, tiempo
