@@ -14,6 +14,7 @@ import HomePanel from './home/HomePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
 import ConnectorsPanel from './connectors/ConnectorsPanel';
+import TodayPanel from './today/TodayPanel';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
 
@@ -91,6 +92,9 @@ function AppShell() {
         <Header section={moduleLabel(activeModule)} />
         <main className="app-content">
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
+          {activeModule === 'today' && (
+            <TodayPanel onOpenTasks={() => setActiveModule('tasks')} onOpenConnectors={() => setActiveModule('connectors')} onOpenChat={openChat} />
+          )}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'tasks' && <TasksPanel />}
           {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}

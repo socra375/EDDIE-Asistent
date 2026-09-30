@@ -3,11 +3,10 @@ import { useLocation } from '../context/LocationContext';
 import { getTasks } from '../utils/storage';
 import { TASKS_CHANGED_EVENT } from '../services/taskActions';
 import { HudPanel, HudRow } from './HudPanel';
-import { fetchPlaceName, fetchWeather } from './weather';
+import { usePlaceAndWeather } from './usePlaceAndWeather';
 
 const pad = (n) => String(n).padStart(2, '0');
 const sessionStart = Date.now();
-const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 
 function isoWeek(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -47,40 +46,6 @@ export function TimePanel() {
       </div>
     </HudPanel>
   );
-}
-
-// Weather and place name refetch when the position moves or every 10 min.
-function usePlaceAndWeather(location) {
-  const [place, setPlace] = useState(null);
-  const [weather, setWeather] = useState(null);
-  const [weatherError, setWeatherError] = useState(false);
-  const lat = location?.latitude;
-  const lon = location?.longitude;
-
-  useEffect(() => {
-    if (lat == null || lon == null) return undefined;
-    const controller = new AbortController();
-    const coords = { latitude: lat, longitude: lon };
-    const load = () => {
-      fetchWeather(coords, controller.signal)
-        .then((w) => {
-          setWeather(w);
-          setWeatherError(false);
-        })
-        .catch((err) => err.name !== 'AbortError' && setWeatherError(true));
-    };
-    load();
-    fetchPlaceName(coords, controller.signal)
-      .then(setPlace)
-      .catch((err) => err.name !== 'AbortError' && setPlace(''));
-    const id = setInterval(load, WEATHER_REFRESH_MS);
-    return () => {
-      controller.abort();
-      clearInterval(id);
-    };
-  }, [lat, lon]);
-
-  return { place, weather, weatherError };
 }
 
 const LOCATION_STATUS = {

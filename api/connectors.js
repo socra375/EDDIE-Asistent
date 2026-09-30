@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   try {
     const raw = req.query.path;
     const path = (Array.isArray(raw) ? raw.join('/') : raw || '').split('/').filter(Boolean);
-    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: parseCookies(req.headers.cookie) }));
+    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: parseCookies(req.headers.cookie), query: req.query || {} }));
   } catch (err) {
     respondError(res, err);
   }

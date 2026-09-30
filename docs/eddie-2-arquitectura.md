@@ -41,7 +41,7 @@ src/
   layout/                      ← IconRail, ChatList, Header (reemplazan Sidebar y TopBar)
   core/                        ← Orbe central con estados + botones flotantes
   chat/                        ← panel de chat lateral + tarjetas de confirmación
-  today/                       ← panel "Hoy"
+  today/                       ← (sesiones 14–15) panel "Hoy": agenda, correos importantes, pendientes, clima y noticias
   connectors/                  ← (sesión 7) hub de conectores (tarjetas por estado e interruptores)
   skills/                      ← Estudio, Código, Documentos como habilidades del chat
 desktop/                       ← NUEVO (semana 8): app Tauri que envuelve la web
