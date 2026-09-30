@@ -52,6 +52,9 @@ export default {
   name: 'Monedas',
   description: 'Convierte entre monedas con la tasa de cambio del día (dólar, peso, euro y 160 más).',
   icon: 'coin',
+  category: 'informacion',
+  // Offered to the model only when the conversation touches the topic.
+  route: /d[oó]lar|euro|peso|moneda|divisa|cambio|convert|cotiz|tasa|\busd\b|\beur\b|\bdop\b|\bmxn\b|libra|yen|bitcoin/i,
   auth: null,
   requiredEnv: [],
   tools: [

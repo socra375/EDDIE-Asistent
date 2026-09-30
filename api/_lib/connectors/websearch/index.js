@@ -47,6 +47,7 @@ export default {
   name: 'Búsqueda web',
   description: 'Eddie busca información actual en internet y te dice de dónde la sacó.',
   icon: 'search',
+  category: 'informacion',
   auth: null,
   requiredEnv: [],
   note: (env) =>

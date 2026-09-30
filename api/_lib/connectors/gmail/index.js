@@ -231,6 +231,9 @@ export default {
   name: 'Gmail',
   description: 'Eddie busca, lee y resume tus correos, y los envía o responde con tu confirmación.',
   icon: 'mail',
+  category: 'comunicacion',
+  // Offered to the model only when the conversation touches the topic.
+  route: /correo|e-?mail|gmail|bandeja|inbox|mensaje|escrib|respond|reenv|env[ií]a|redact|borrador/i,
   auth: {
     type: 'google-login',
     scope: 'gmail',

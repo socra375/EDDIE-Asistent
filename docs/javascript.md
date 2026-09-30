@@ -183,6 +183,15 @@ detalle del protocolo.
     si no hay artículo, en la inglesa; devuelve resumen y enlace).
   - `currency/`: `convert_currency` con open.er-api.com (tasa diaria, sin
     clave), acepta "dólares", "pesos" o "euros" además de códigos ISO.
+  - `calculator/`: `calculate` — aritmética exacta sin `eval` (analizador
+    recursivo: `+ - * / ^`, `%` postfijo, paréntesis, `sqrt`, `abs`,
+    `round`, `min`, `max`, `ln`, `log`, `pi`, `e`…), con errores claros
+    (división entre cero, paréntesis, símbolos desconocidos) y redondeo del
+    ruido de punto flotante. Siempre ofrecida.
+  - `registry.js` exporta además `toolRisk`, `intentFromMessages` y el
+    enrutado por intención (`route` de cada conector, ver
+    `docs/eddie-2-arquitectura.md`); `callProvider` calcula el `intent`
+    con los últimos mensajes y se lo pasa a `createToolset`.
   - `http.js`: `fetchJson`/`fetchText` para las herramientas (un reintento,
     timeout corto, nunca lanza) y `clip` para acortar lo que vuelve al
     modelo (cuenta contra el límite de tokens de Groq).

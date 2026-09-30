@@ -273,6 +273,9 @@ export default {
   name: 'Google Calendar y Drive',
   description: 'Eddie consulta tu agenda y crea eventos; los mueve o borra con tu confirmación. También guarda respuestas en Drive y pasa tareas al Calendario.',
   icon: 'calendar',
+  category: 'agenda',
+  // Offered to the model only when the conversation touches the topic.
+  route: /calendario|agenda|evento|reuni[oó]n|cita\b|citas\b|recordatorio|cumplea|ma[nñ]ana|semana|hoy|agend|program|calendar|meeting|mueve|cambia|cancela|borra|drive/i,
   auth: {
     type: 'google-login',
     isConnected: (user) => hasGoogleCredentials(user.id),
@@ -304,6 +307,7 @@ export default {
       label: 'Crear eventos',
       activity: 'Creando el evento…',
       summarize: (result) => `Evento creado: ${result.event.title} · ${result.event.day}${result.event.start ? ` ${result.event.start}–${result.event.end}` : ''}`,
+      risk: 'write',
       sensitive: false,
       declaration: {
         name: 'create_event',

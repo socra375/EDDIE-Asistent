@@ -161,6 +161,17 @@
   color: var(--warning);
 }
 
+.connector__write {
+  color: var(--accent-2);
+}
+
+.connector__category {
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
 .connector__meta {
   margin: 0;
   font-size: 0.72rem;

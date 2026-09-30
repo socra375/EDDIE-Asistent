@@ -39,6 +39,9 @@ export default {
   name: 'Wikipedia',
   description: 'Datos de enciclopedia sobre personas, lugares, historia y ciencia, con el enlace al artículo.',
   icon: 'book',
+  category: 'informacion',
+  // Offered to the model only when the conversation touches the topic.
+  route: /qui[eé]n (es|fue|era|fue)|qu[eé] (es|fue|son|significa)|wikipedia|biograf|historia|defin|significa|capital|explica|cu[aá]ndo (naci|muri|fue)|d[oó]nde (queda|est[aá])/i,
   auth: null,
   requiredEnv: [],
   tools: [

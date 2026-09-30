@@ -102,6 +102,7 @@ export default {
   name: 'Tareas',
   description: 'Eddie crea tareas, las marca como hechas y, con tu confirmación, las borra, desde el chat o por voz.',
   icon: 'check',
+  category: 'asistente',
   auth: null,
   requiredEnv: [],
   tools: [
@@ -109,6 +110,7 @@ export default {
       label: 'Crear tareas',
       activity: 'Anotando la tarea…',
       summarize: (result) => `Tarea creada: «${result.task.title}»${result.task.dueDate ? ` (${result.task.dueDate})` : ''}`,
+      risk: 'write',
       sensitive: false,
       declaration: {
         name: 'create_task',
@@ -130,6 +132,7 @@ export default {
       label: 'Marcar tareas como hechas',
       activity: 'Marcando la tarea…',
       summarize: (result) => `Tarea completada: «${result.title}»`,
+      risk: 'write',
       sensitive: false,
       declaration: {
         name: 'complete_task',

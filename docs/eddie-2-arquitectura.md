@@ -59,6 +59,8 @@ export default {
   name: 'Gmail',
   description: 'Buscar, leer y resumir tus correos…',   // lo que ve el usuario en el hub
   icon: 'mail',                // nombre de ícono de src/layout/Icon.jsx
+  category: 'comunicacion',    // asistente | informacion | comunicacion | agenda (agrupa y etiqueta en el hub)
+  route: /correo|mail|gmail/i, // opcional: solo se ofrece cuando la conversación toca el tema (sin `route`, siempre)
   requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'], // sin ellas: "falta configurar"
   auth: {                      // null si no necesita cuenta (ej. búsqueda web)
     type: 'oauth2',
@@ -73,6 +75,8 @@ export default {
       declaration: { name: 'gmail_search', description: '…', parameters: { … } },
       activity: 'Buscando correos…',  // lo que la app muestra mientras corre
       sensitive: false,        // true → requiere confirmación antes de ejecutarse
+      risk: 'read',            // 'read' (por defecto) | 'write' (guarda algo reversible) — sensitive equivale a 'confirm'
+      summarize: (result) => '…', // una línea para el recibo del paso (opcional)
       prepare: async (args, ctx) => { … },  // solo si sensitive: valida, completa y describe la tarjeta
       run: async (args, ctx) => { … },  // ctx: timezone, ubicación y tareas del usuario, y emit(acción) para cambios en la app
     },
@@ -84,6 +88,7 @@ export default {
 - Para agregar un conector: crear su carpeta e importarlo en `registry.js`. Si estaba en `planned.js`, se quita de ahí.
 - `registry.js` reutiliza para todas las herramientas la validación de argumentos (`validate.js`), el aislamiento de fallos (todo error vuelve al modelo como `{ error }`) y los reintentos de `api/_lib/fetchWithRetry.js`.
 - Solo se ofrecen a la IA las herramientas de los conectores configurados en el servidor y que el usuario no apagó en el hub (`settings.disabledConnectors`, que el chat envía como `disabledConnectors`).
+- **Sistema de herramientas.** Cada conector tiene `category` y cada herramienta un riesgo (`toolRisk`): `read` (consulta), `write` (guarda un cambio reversible, como crear una tarea) o `confirm` (`sensitive`, pide tarjeta). El hub los muestra. El **enrutado por intención** ahorra tokens (el plan gratis de Groq da 8K por minuto) y le deja menos opciones equivocadas a un modelo pequeño: `createToolset({ intent })` recibe el texto de los últimos mensajes (`intentFromMessages`: los dos últimos del usuario y la última respuesta de Eddie, para que un "sí, mándalo" siga apuntando al correo) y solo ofrece los conectores sin `route` (planificador, hora, calculadora, tareas, búsqueda web) más los cuyo `route` coincide. Sin `intent` (el resumen de Hoy, la confirmación de tarjetas) se ofrece todo. `toolset.offered` lista los conectores ofrecidos.
 - Estados que muestra el hub: `ready`, `connected`, `needs_account`, `needs_setup` y `planned`; "apagado" es la decisión del usuario y vive en sus ajustes.
 - Una herramienta `sensitive` nunca se ejecuta desde la IA: pasa por el protocolo de confirmación (abajo).
 - Los tokens se guardan cifrados en Postgres (AES-256-GCM con una clave derivada de `CONNECTOR_SECRET`, `api/_lib/secretBox.js`). Los de Google ya van así en `google_credentials` (sesión 9); los conectores con cuenta propia (Spotify, Notion) usarán una tabla `connector_credentials` con el mismo cifrado.
