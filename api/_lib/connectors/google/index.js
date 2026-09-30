@@ -1,7 +1,7 @@
 // The user's Google account, connected through the existing Google login
 // (api/_lib/authHandlers.js). Today Tasks use it to add events to Calendar
 // and the chat to save replies to Drive; tools for Eddie to read and create
-// events by voice arrive in session 12, and Gmail in sessions 9–11.
+// events by voice arrive in session 12. Gmail is its own connector (gmail/).
 import { hasGoogleCredentials } from '../../googleCredentials.js';
 
 export default {

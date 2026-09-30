@@ -5,6 +5,8 @@
 // plus any app changes (actions) for the browser to apply.
 import { confirmTool } from './connectors/registry.js';
 import { sanitizeConnectorIds, sanitizeContext } from './handler.js';
+import { parseCookies } from './cookies.js';
+import { lazySessionUser } from './session.js';
 
 const TOOL_NAME_RE = /^[a-z0-9_]{1,64}$/;
 
@@ -27,7 +29,7 @@ export async function runConfirm(req, res) {
       name: tool,
       args,
       disabled: sanitizeConnectorIds(body.disabledConnectors),
-      context: sanitizeContext(body.context),
+      context: { ...sanitizeContext(body.context), getUser: lazySessionUser(parseCookies(req.headers.cookie)) },
     });
     if (outcome.error) {
       res.status(422).json({ error: outcome.error });

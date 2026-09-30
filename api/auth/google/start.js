@@ -3,7 +3,7 @@ import { applyResult, respondError } from '../../_lib/respond.js';
 
 export default function handler(req, res) {
   try {
-    applyResult(res, startGoogleLogin());
+    applyResult(res, startGoogleLogin(req.query));
   } catch (err) {
     respondError(res, err);
   }

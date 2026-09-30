@@ -166,13 +166,23 @@ detalle del protocolo.
   - `http.js`: `fetchJson`/`fetchText` para las herramientas (un reintento,
     timeout corto, nunca lanza) y `clip` para acortar lo que vuelve al
     modelo (cuenta contra el límite de tokens de Groq).
+  - `gmail/`: `search_emails` (sintaxis de búsqueda de Gmail),
+    `read_email` (texto plano o HTML limpiado, adjuntos por nombre) y
+    `send_email` (sensible: correo nuevo o respuesta con `reply_to_id`,
+    que conserva el hilo; la tarjeta deja editar Para, Asunto y Mensaje).
+    Usan el usuario de la sesión (`context.getUser`, que solo consulta la
+    base si una herramienta lo pide) y su token de Google; sin sesión o
+    sin los permisos de Gmail devuelven un `{ error }` que explica cómo
+    conectarlo. `auth.scope: 'gmail'` hace que el hub muestre "Conectar
+    Gmail" (`/api/auth/google/start?scope=gmail`). Requiere
+    `CONNECTOR_SECRET`.
   - `google/`: la cuenta de Google del login (Calendario desde Tareas y
     Drive desde el chat); todavía sin herramientas para la IA (llegan en
     la sesión 12). `auth.isConnected(user)` mira si hay credenciales
     guardadas.
   - `planned.js`: solo metadatos de los conectores que llegan en próximas
-    sesiones (Gmail, Telegram, Spotify, Notion, WhatsApp y el
-    Chromebook), para mostrarlos en el hub.
+    sesiones (Telegram, Spotify, Notion, WhatsApp y el Chromebook), para
+    mostrarlos en el hub.
   - `registry.js`: `createToolset({ disabled, context })` arma, para cada
     petición de chat, las declaraciones a ofrecer (solo conectores
     configurados en el servidor y no apagados por el usuario) y un
@@ -427,7 +437,7 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `buildSystemPrompt({ mode, language, memory, tasks })` combina todo eso
   en el texto que se envía como `system` a la API, con hasta 1200
   caracteres de memoria y las 8 tareas pendientes más prioritarias. En el
-  peor caso queda por debajo de los 6000 caracteres que acepta el backend
+  peor caso queda por debajo de los 8000 caracteres que acepta el backend
   (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`). `CORE_PERSONALITY` incluye
   una instrucción de formato explícita: nada de asteriscos, guiones de
   viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se
@@ -601,11 +611,19 @@ explícita.
   aleatorio, que se resuelve contra la tabla `sessions`. `requireUser(cookies)`
   lanza un error `UNAUTHORIZED` (→ 401) si no hay sesión válida; lo usan
   todos los endpoints que requieren estar logueado.
-- **`api/_lib/googleCredentials.js`** — guarda los tokens de Calendar/Drive
-  por usuario y los renueva automáticamente con el `refresh_token` cuando
-  están por expirar (`getValidAccessToken`).
+- **`api/_lib/googleCredentials.js`** — guarda los tokens de Google por
+  usuario (cifrados con `secretBox.js` si hay `CONNECTOR_SECRET`) y los
+  renueva automáticamente con el `refresh_token` cuando están por expirar
+  (`getValidAccessToken`, que conserva los permisos concedidos).
+  `hasGmailAccess(userId)` mira si entre ellos están los de Gmail.
+- **`api/_lib/secretBox.js`** — `sealToken`/`openToken`: AES-256-GCM con
+  una clave derivada de `CONNECTOR_SECRET`, guardado como
+  `enc:v1:<iv>.<tag>.<datos>`. Los tokens viejos sin cifrar se siguen
+  leyendo y se cifran en su próxima renovación.
 - **`api/_lib/authHandlers.js`** — el flujo OAuth completo: `startGoogleLogin`
-  (genera `state`, redirige a Google), `handleGoogleCallback` (valida
+  (genera `state`, redirige a Google; con `?scope=gmail` pide además los
+  permisos de Gmail —autorización incremental, `include_granted_scopes`— y
+  la vuelta llega a `/?connected=gmail`, que abre Conectores con un aviso), `handleGoogleCallback` (valida
   `state`, intercambia tokens, upsert de `users`, crea sesión), `logout`,
   `me`, `deleteAccount`.
 - **`api/_lib/calendarHandlers.js`** / **`driveHandlers.js`** — llaman a la

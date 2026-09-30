@@ -36,8 +36,23 @@ function AutoReadBridge() {
 // column, so it closes itself once the user picks something.
 const NARROW_QUERY = '(max-width: 1100px)';
 
+// Back from Google after "Conectar Gmail": ?connected=gmail, or
+// ?google_error=…&connect=gmail. Read once, then removed from the address.
+function readConnectReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const connected = params.get('connected');
+  const connector = connected || params.get('connect');
+  if (!connector || !/^[a-z0-9_-]{1,40}$/.test(connector)) return null;
+  return connected ? { type: 'connected', connector } : { type: 'error', connector, error: params.get('google_error') || 'error' };
+}
+
 function AppShell() {
-  const [activeModule, setActiveModule] = useState('home');
+  const [connectReturn] = useState(readConnectReturn);
+  const [activeModule, setActiveModule] = useState(() => (connectReturn ? 'connectors' : 'home'));
+
+  useEffect(() => {
+    if (connectReturn) window.history.replaceState(null, '', window.location.pathname);
+  }, [connectReturn]);
   const [chatListOpen, setChatListOpen] = useState(false);
 
   function closeListIfNarrow() {
@@ -78,7 +93,7 @@ function AppShell() {
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'tasks' && <TasksPanel />}
-          {activeModule === 'connectors' && <ConnectorsPanel />}
+          {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
       </div>

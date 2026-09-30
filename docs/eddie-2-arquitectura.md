@@ -30,7 +30,8 @@ api/
       news/                    ← titulares de Google Noticias (RSS, sin clave)
       wikipedia/               ← resúmenes de Wikipedia (sin clave)
       currency/                ← tasas de cambio de open.er-api.com (sin clave)
-      google/                  ← (sesión 7, sin herramientas aún) Gmail + Calendario + Drive (reutiliza google.js y googleCredentials.js)
+      gmail/                   ← (sesiones 9–11) buscar, leer y enviar/responder con confirmación (permisos incrementales)
+      google/                  ← (sesión 7, sin herramientas aún) Calendario + Drive (reutiliza google.js y googleCredentials.js)
       telegram/
       whatsapp/
       spotify/
@@ -85,7 +86,7 @@ export default {
 - Solo se ofrecen a la IA las herramientas de los conectores configurados en el servidor y que el usuario no apagó en el hub (`settings.disabledConnectors`, que el chat envía como `disabledConnectors`).
 - Estados que muestra el hub: `ready`, `connected`, `needs_account`, `needs_setup` y `planned`; "apagado" es la decisión del usuario y vive en sus ajustes.
 - Una herramienta `sensitive` nunca se ejecuta desde la IA: pasa por el protocolo de confirmación (abajo).
-- Los tokens de cada conector se guardan cifrados en Postgres (tabla `connector_credentials`, AES-256-GCM con una clave en `CONNECTOR_SECRET`), igual que hoy se guardan los de Google en `googleCredentials.js`.
+- Los tokens se guardan cifrados en Postgres (AES-256-GCM con una clave derivada de `CONNECTOR_SECRET`, `api/_lib/secretBox.js`). Los de Google ya van así en `google_credentials` (sesión 9); los conectores con cuenta propia (Spotify, Notion) usarán una tabla `connector_credentials` con el mismo cifrado.
 
 ## Protocolo de confirmación
 
@@ -114,7 +115,7 @@ Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, po
 | Variable | Sesión | Para qué |
 |---|---|---|
 | `GROQ_API_KEY` | 6 | Respaldo automático cuando Gemini alcanza su límite |
-| `CONNECTOR_SECRET` | 7 | Clave para cifrar tokens de conectores |
+| `CONNECTOR_SECRET` | 9 | Clave para cifrar los tokens guardados; necesaria para conectar Gmail |
 | `TELEGRAM_BOT_TOKEN` | 17 | Bot de Telegram |
 | `TELEGRAM_WEBHOOK_SECRET` | 17 | Verifica que los mensajes vienen de Telegram |
 | `TAVILY_API_KEY` | 13 | Búsqueda web con Tavily (opcional: funciona sin clave con un límite bajo) |
@@ -127,4 +128,4 @@ Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, po
 
 1. **Groq** — entra a https://console.groq.com, crea una cuenta gratis y luego ve a *API Keys* → *Create API Key*. Guárdala como `GROQ_API_KEY` en Vercel (*Settings → Environment Variables*).
 2. **Bot de Telegram** — en Telegram abre `@BotFather`, envía `/newbot` y elige un nombre (ej. "Eddie") y un usuario que termine en `bot`. Te devuelve un token que va como `TELEGRAM_BOT_TOKEN`.
-3. **Gmail en Google Cloud** — en el mismo proyecto del login actual: *APIs y servicios → Biblioteca → Gmail API → Habilitar*. Luego, en *Pantalla de consentimiento OAuth → Permisos*, agrega `gmail.readonly`, `gmail.send` y `gmail.modify`. Mientras la app esté "en prueba", agrega tu correo como usuario de prueba.
+3. **Gmail en Google Cloud** — en el mismo proyecto del login actual: *APIs y servicios → Biblioteca → Gmail API → Habilitar*. Luego, en *Pantalla de consentimiento OAuth → Permisos*, agrega `gmail.readonly` y `gmail.send` (Eddie no pide `gmail.modify`: no puede borrar ni mover correos). Mientras la app esté "en prueba", agrega tu correo como usuario de prueba; en ese modo Google hace caducar el acceso cada 7 días y hay que volver a pulsar "Conectar Gmail".

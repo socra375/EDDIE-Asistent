@@ -48,6 +48,33 @@
   margin: 0;
 }
 
+.connectors__notice {
+  margin: 0;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.85rem;
+  border-left: 3px solid var(--accent);
+}
+
+.connectors__notice--ok {
+  color: var(--success);
+  border-left-color: var(--success);
+}
+
+.connectors__notice--warn {
+  color: var(--warning);
+  border-left-color: var(--warning);
+}
+
+.connectors__notice--bad {
+  color: var(--danger);
+  border-left-color: var(--danger);
+}
+
+.connector__action[href] {
+  text-decoration: none;
+  text-align: center;
+}
+
 .connectors__heading {
   margin: 0 0 0.75rem;
   font-size: 0.72rem;
