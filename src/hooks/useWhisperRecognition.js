@@ -36,6 +36,8 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
+  // True once the user's voice was detected in this recording (there is no live text with Whisper).
+  const [heard, setHeard] = useState(false);
   const [error, setError] = useState('');
   const sessionRef = useRef(null);
 
@@ -70,9 +72,12 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
     [language],
   );
 
-  const stop = useCallback(() => {
+  // `{ silent: true }` ends the recording without the "no voice detected"
+  // warning — for a wait that simply ran out (the follow-up window).
+  const stop = useCallback((options) => {
     const session = sessionRef.current;
     if (!session || session.recorder.state === 'inactive') return;
+    session.silent = Boolean(options?.silent);
     session.recorder.stop();
   }, []);
 
@@ -84,6 +89,7 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
     if (sessionRef.current || transcribing) return;
     setError('');
     setTranscript('');
+    setHeard(false);
 
     let stream;
     try {
@@ -130,6 +136,7 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
         return;
       }
       if (rms > Math.max(0.012, noiseFloor * 3)) {
+        if (!session.heardSpeech) setHeard(true);
         session.heardSpeech = true;
         lastVoiceAt = now;
       }
@@ -143,11 +150,11 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
       if (e.data?.size) chunks.push(e.data);
     };
     recorder.onstop = () => {
-      const heard = session.heardSpeech;
+      const spoke = session.heardSpeech;
       cleanup(session);
       setRecording(false);
-      if (!heard) {
-        setError('No se detectó voz. Inténtalo de nuevo.');
+      if (!spoke) {
+        if (!session.silent) setError('No se detectó voz. Inténtalo de nuevo.');
         return;
       }
       const type = recorder.mimeType || mimeType || 'audio/webm';
@@ -172,5 +179,5 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
 
   const reset = useCallback(() => setTranscript(''), []);
 
-  return { supported: whisperSupported, recording, transcribing, transcript, error, start, stop, reset };
+  return { supported: whisperSupported, recording, transcribing, transcript, heard, error, start, stop, reset };
 }

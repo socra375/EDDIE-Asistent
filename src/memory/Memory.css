@@ -226,3 +226,11 @@
 .memory__wake-status--unsupported {
   color: var(--warning);
 }
+
+.memory__wake-wait {
+  max-width: 320px;
+}
+
+.memory__wake-status--waiting {
+  color: var(--accent);
+}

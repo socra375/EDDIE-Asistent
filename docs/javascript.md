@@ -541,7 +541,20 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   micrófono o habla; `context/WakeWordContext.jsx` lo conecta con el chat:
   con comando lo envía, sin comando abre el micrófono y envía al terminar
   (su propia bandera, para no duplicar el envío del anillo de Inicio);
-  `context/wakeWordState.js` es el contexto y `useWakeWord()`. Ajustes en
+  `context/wakeWordState.js` es el contexto y `useWakeWord()`.
+  **Tiempo de espera** (`settings.wake.followUpSeconds`, 0–30, por defecto 5;
+  `cleanFollowUpSeconds`): tras enviar un mensaje de la conversación de voz,
+  `beginAwait` deja anotado que se espera la respuesta; un sondeo (300 ms,
+  mientras la palabra está activa) abre la ventana cuando ya llegó la
+  respuesta, no hay nada ocupado y, si se va a leer en voz alta, ya terminó de
+  hablar (más 500 ms de cola de eco; si su voz no empieza en 6 s, se abre
+  igual). La ventana abre el micrófono `followUpSeconds` s; si `speechDetected`
+  (nuevo en `VoiceContext`: con el navegador, hay texto; con Whisper,
+  `heard`) sigue falso al vencer, se cierra con `stop({ silent: true })` (sin
+  el aviso "no se detectó voz") y todo vuelve a esperar la palabra. Con el
+  reconocedor del navegador, que no termina solo al callar, 1,6 s sin texto
+  nuevo cierran la escucha. `waiting` (ventana abierta, micrófono escuchando
+  y aún sin voz) y `secondsLeft` alimentan la tarjeta. Ajustes en
   `settings.wake` ({ enabled, word }), que se sincronizan con la cuenta; la
   tarjeta vive en `memory/MemoryPanel.jsx`.
 - **`memoryActions.js`** — `applyMemoryActions(actions)` aplica las acciones

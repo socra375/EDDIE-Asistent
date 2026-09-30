@@ -51,6 +51,8 @@ export function VoiceProvider({ children }) {
       transcribing: whisperActive ? whisper.transcribing : false,
       transcript: whisperActive ? whisper.transcript : browser.transcript,
       interimTranscript: whisperActive ? '' : browser.interimTranscript,
+      // Has the user started talking in this listen? (Whisper has no live text, so it says so itself.)
+      speechDetected: whisperActive ? whisper.heard : Boolean(browser.transcript || browser.interimTranscript),
       sttError: whisperActive ? whisper.error : browser.error,
       start: whisperActive ? whisper.start : browser.start,
       stop: whisperActive ? whisper.stop : browser.stop,

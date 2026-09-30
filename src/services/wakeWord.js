@@ -6,6 +6,17 @@ export const DEFAULT_WAKE_WORD = 'eddie';
 export const MIN_WAKE_LETTERS = 3;
 export const MAX_WAKE_LENGTH = 30;
 
+// After Eddie answers, the microphone stays open this many seconds for the
+// user to keep talking without repeating the wake word (0 = off).
+export const DEFAULT_FOLLOW_UP_SECONDS = 5;
+export const MAX_FOLLOW_UP_SECONDS = 30;
+
+export function cleanFollowUpSeconds(value, fallback = DEFAULT_FOLLOW_UP_SECONDS) {
+  const n = Math.round(Number(value));
+  if (value === '' || value === null || value === undefined || !Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, 0), MAX_FOLLOW_UP_SECONDS);
+}
+
 // What a recognizer commonly writes when it hears the default word.
 const DEFAULT_ALIASES = ['eddie', 'eddy', 'edie', 'edi', 'edy', 'hedi'];
 // Said before the word without changing its meaning ("oye Eddie").
