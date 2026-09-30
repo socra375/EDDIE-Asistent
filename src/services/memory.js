@@ -4,7 +4,7 @@
 //   { v: 2,
 //     profile:     [{ id, key, text, updatedAt }]   who the user is
 //     preferences: [{ id, key, text, updatedAt }]   how they like things done
-//     projects:    [{ id, name, status, stack, lastChange, nextGoal, updatedAt }]
+//     projects:    [{ id, name, status, stack, repo, lastChange, nextGoal, updatedAt }]
 //     decisions:   [{ id, text, project, date }]    what was decided, and why
 //     knowledge:   [{ id, text, date }]             stable facts worth keeping
 //     context:     [{ id, text, expiresAt, date }]  temporary ("viaja el sábado")
@@ -78,6 +78,7 @@ function cleanList(category, raw, now) {
         name,
         status: clean(item.status, FIELD_MAX),
         stack: clean(item.stack, FIELD_MAX),
+        repo: clean(item.repo, 100),
         lastChange: clean(item.lastChange, FIELD_MAX),
         nextGoal: clean(item.nextGoal, FIELD_MAX),
         updatedAt: isTime(item.updatedAt) ? item.updatedAt : now,
@@ -181,6 +182,7 @@ export function upsertProject(memory, fields, now = Date.now()) {
   const patch = {};
   if (fields.status != null) patch.status = clean(fields.status, FIELD_MAX);
   if (fields.stack != null) patch.stack = clean(fields.stack, FIELD_MAX);
+  if (fields.repo != null) patch.repo = clean(fields.repo, 100);
   if (fields.lastChange != null) patch.lastChange = clean(fields.lastChange, FIELD_MAX);
   if (fields.nextGoal != null) patch.nextGoal = clean(fields.nextGoal, FIELD_MAX);
   const existing = memory.projects.find((p) => normalizeText(p.name) === normalizeText(name));
@@ -190,7 +192,7 @@ export function upsertProject(memory, fields, now = Date.now()) {
     const next = memory.projects.map((p) => (p.id === existing.id ? { ...p, ...patch, updatedAt: now } : p));
     return { memory: withList(memory, 'projects', next), changed: true, label: `Proyecto ${existing.name} actualizado` };
   }
-  const project = { id: memoryId(), name, status: '', stack: '', lastChange: '', nextGoal: '', ...patch, updatedAt: now };
+  const project = { id: memoryId(), name, status: '', stack: '', repo: '', lastChange: '', nextGoal: '', ...patch, updatedAt: now };
   return { memory: withList(memory, 'projects', [...memory.projects, project]), changed: true, label: `Proyecto ${name} guardado` };
 }
 
@@ -245,6 +247,8 @@ export function mergeMemory(a, b, now = Date.now()) {
 
 export function describeProject(p) {
   const parts = [p.name];
+  // Right after the name so the 220-character cut in memoryForContext never drops it.
+  if (p.repo) parts.push(`repo: ${p.repo}`);
   if (p.status) parts.push(`estado: ${p.status}`);
   if (p.stack) parts.push(`stack: ${p.stack}`);
   if (p.lastChange) parts.push(`último cambio: ${p.lastChange}`);

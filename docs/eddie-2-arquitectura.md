@@ -119,6 +119,10 @@ Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, po
 
 La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`): perfil, preferencias, proyectos (estado, stack, último cambio, próximo objetivo), decisiones, conocimientos y contexto temporal con vencimiento. Sigue guardándose como un solo `jsonb` en la tabla `memory` (sin migración de base de datos; el PUT rechaza más de 200 KB) y el mapa antiguo se migra al leerlo. Flujo: el navegador manda el mensaje y una lista plana `context.memory`; el system prompt lleva solo lo relevante para ese mensaje (presupuesto de 1400 caracteres); Eddie guarda lo nuevo con `remember`/`update_project` (acciones que aplica la app y que aparecen bajo la respuesta como "Recordé: …"), consulta con `recall` y olvida con `forget` (con tarjeta). Tareas y conversaciones siguen en sus módulos; los resúmenes de conversaciones y la búsqueda vectorial llegan con pgvector (sesiones 20–21).
 
+### Conector de GitHub
+
+Seis herramientas en `api/_lib/connectors/github/`: `github_list_repos`, `github_repo_activity` (commits, PR, issues y estado del CI de la rama principal), `github_list_issues`, `github_get_issue` (con detalles de PR y últimos comentarios) y, con tarjeta, `github_create_issue` y `github_comment`; al confirmar, releen lo que GitHub devolvió y marcan `verified`. No fusiona, cierra ni borra nada. Como Eddie es un asistente personal, usa **un solo token en `GITHUB_TOKEN`** (variable de Vercel: nunca llega al navegador ni a la base de datos) y, como ese token abre repositorios privados, cada herramienta exige una sesión cuyo correo esté en `EDDIE_OWNER_EMAIL`; sin sesión o con otro correo no se hace ninguna llamada a GitHub (tampoco al confirmar una tarjeta). Un token por usuario, cifrado en la base de datos, queda como opción si algún día Eddie lo usan más personas. Enlace con la memoria: un proyecto guardado con `repo: "dueño/nombre"` (`update_project`) aparece en el prompt con ese repo, y nombrarlo en la conversación ofrece las herramientas de GitHub aunque no se diga "GitHub" (`intentFromMessages(messages, memory)`).
+
 ### Flujo de acción: entiende → planifica → pide permiso → ejecuta → comprueba → informa
 
 - **Planifica**: para pedidos de 3 o más acciones, o delicados, Eddie llama primero a `make_plan({ goal, steps })` (herramienta oculta del conector `agent`, no cambia nada) y el plan aparece numerado en el recibo.
@@ -132,6 +136,7 @@ La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`
 |---|---|---|
 | `GROQ_API_KEY` | 6 | Respaldo automático cuando Gemini alcanza su límite |
 | `CONNECTOR_SECRET` | 9 | Clave para cifrar los tokens guardados; necesaria para conectar Gmail |
+| `GITHUB_TOKEN` / `EDDIE_OWNER_EMAIL` | Eval 4 | Conector de GitHub: token fine-grained del dueño y correo(s) de Google autorizados a usarlo |
 | `TELEGRAM_BOT_TOKEN` | 17 | Bot de Telegram |
 | `TELEGRAM_WEBHOOK_SECRET` | 17 | Verifica que los mensajes vienen de Telegram |
 | `TAVILY_API_KEY` | 13 | Búsqueda web con Tavily (opcional: funciona sin clave con un límite bajo) |

@@ -60,7 +60,8 @@ function remember(args, context) {
   return { saved: true, summary: keyed ? `Guardado en ${where}: ${key} = ${text}` : `Guardado en ${where}: ${text}`, note: 'Se guarda al terminar tu respuesta; avisa al usuario en una frase corta ("Lo recordaré").' };
 }
 
-const PROJECT_FIELDS = { status: 'status', stack: 'stack', last_change: 'lastChange', next_goal: 'nextGoal' };
+const PROJECT_FIELDS = { status: 'status', stack: 'stack', repo: 'repo', last_change: 'lastChange', next_goal: 'nextGoal' };
+const REPO_NAME_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 function updateProject(args, context) {
   const name = String(args.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -69,7 +70,8 @@ function updateProject(args, context) {
   for (const [arg, field] of Object.entries(PROJECT_FIELDS)) {
     if (typeof args[arg] === 'string' && args[arg].trim()) project[field] = args[arg].trim().slice(0, 160);
   }
-  if (Object.keys(project).length < 2) return { error: 'Indica al menos un dato del proyecto: estado, stack, último cambio o próximo objetivo.' };
+  if (project.repo && !REPO_NAME_RE.test(project.repo)) return { error: 'El repo debe tener la forma "dueño/nombre", por ejemplo "socra375/EDDIE-Asistent".' };
+  if (Object.keys(project).length < 2) return { error: 'Indica al menos un dato del proyecto: estado, stack, repo, último cambio o próximo objetivo.' };
   const text = Object.values(project).join(' ');
   if (SECRET_RE.test(text)) return { error: 'No guardo contraseñas, claves ni tokens en la memoria.' };
   context.emit?.({ type: 'memory_project', project });
@@ -157,6 +159,7 @@ export default {
             name: { type: 'STRING', description: 'Nombre del proyecto.' },
             status: { type: 'STRING', description: 'Estado (idea, desarrollo, producción…).' },
             stack: { type: 'STRING', description: 'Tecnologías.' },
+            repo: { type: 'STRING', description: 'Repositorio de GitHub: "dueño/nombre".' },
             last_change: { type: 'STRING', description: 'Lo último que se cambió o terminó.' },
             next_goal: { type: 'STRING', description: 'El próximo objetivo.' },
           },

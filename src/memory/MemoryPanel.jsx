@@ -4,7 +4,7 @@ import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import './Memory.css';
 
-const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', lastChange: '', nextGoal: '' };
+const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', repo: '', lastChange: '', nextGoal: '' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short' });
 
 function ItemBody({ category, item }) {
@@ -12,6 +12,7 @@ function ItemBody({ category, item }) {
     const rows = [
       ['Estado', item.status],
       ['Stack', item.stack],
+      ['Repo', item.repo],
       ['Último cambio', item.lastChange],
       ['Próximo objetivo', item.nextGoal],
     ].filter(([, v]) => v);
@@ -61,7 +62,7 @@ export default function MemoryPanel() {
     e.preventDefault();
     let saved = false;
     if (category === 'projects') {
-      saved = saveProject({ name: form.name, status: form.status, stack: form.stack, lastChange: form.lastChange, nextGoal: form.nextGoal });
+      saved = saveProject({ name: form.name, status: form.status, stack: form.stack, repo: form.repo, lastChange: form.lastChange, nextGoal: form.nextGoal });
     } else {
       saved = rememberFact({ category, key: form.key, text: form.text, project: form.project, days: Number(form.days) });
     }
@@ -71,7 +72,7 @@ export default function MemoryPanel() {
 
   function edit(project) {
     setCategory('projects');
-    setForm({ ...EMPTY_FORM, name: project.name, status: project.status, stack: project.stack, lastChange: project.lastChange, nextGoal: project.nextGoal });
+    setForm({ ...EMPTY_FORM, name: project.name, status: project.status, stack: project.stack, repo: project.repo, lastChange: project.lastChange, nextGoal: project.nextGoal });
     setNotice('');
   }
 
@@ -156,6 +157,10 @@ export default function MemoryPanel() {
               <label className="memory__field">
                 <span>Stack</span>
                 <input className="input" value={form.stack} onChange={set('stack')} placeholder="React, Node, Postgres" maxLength={160} />
+              </label>
+              <label className="memory__field">
+                <span>Repo de GitHub</span>
+                <input className="input" value={form.repo} onChange={set('repo')} placeholder="dueño/nombre" maxLength={100} />
               </label>
               <label className="memory__field">
                 <span>Último cambio</span>

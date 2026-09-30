@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, internet, noticias, Wikipedia, monedas…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -114,6 +114,19 @@ exclusivamente desde variables de entorno del backend:
   un límite bajo; una clave gratis de https://app.tavily.com (1.000
   búsquedas al mes) lo amplía. Noticias, Wikipedia, monedas y tareas no
   necesitan ninguna clave.
+- `GITHUB_TOKEN` y `EDDIE_OWNER_EMAIL` — (opcionales, van juntas) activan el
+  conector de **GitHub** (ver repositorios, actividad, issues y PR; crear
+  issues y comentarios con confirmación). `GITHUB_TOKEN` es un token de
+  acceso personal *fine-grained* (GitHub → Settings → Developer settings →
+  Fine-grained tokens) con permisos de solo lectura en *Contents*, *Issues*,
+  *Pull requests* y *Metadata* y, si quieres que Eddie cree issues y
+  comentarios, *Issues: Read and write*; elige solo los repositorios que
+  quieras. `EDDIE_OWNER_EMAIL` es tu correo de Google (varios, separados por
+  comas): como el token abre tus repositorios privados, las herramientas
+  solo responden a quien haya iniciado sesión con ese correo. La clave vive
+  solo en Vercel (nunca en el navegador ni en la base de datos); pégala en
+  Vercel → Settings → Environment Variables y vuelve a desplegar, y nunca en
+  un chat.
 - `ELEVENLABS_API_KEY` — (opcional) la **voz propia de Eddie**: las
   respuestas se leen con ElevenLabs usando la voz `bUQeiO7gn4ehGuSnZf26`
   y el modelo `eleven_flash_v2_5` (en español, rápido y a mitad de

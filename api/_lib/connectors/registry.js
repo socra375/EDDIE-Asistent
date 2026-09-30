@@ -13,12 +13,13 @@ import currency from './currency/index.js';
 import tasks from './tasks/index.js';
 import memory from './memory/index.js';
 import agent from './agent/index.js';
+import github from './github/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, memory, websearch, news, wikipedia, currency, gmail, google];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, memory, websearch, news, wikipedia, currency, gmail, google, github];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -40,12 +41,24 @@ export function toolRisk(tool) {
 // (the Hoy summary, tests) every active connector is offered.
 const INTENT_MAX = 600;
 
-export function intentFromMessages(messages = []) {
+export function intentFromMessages(messages = [], memory = []) {
   const text = (m) => (typeof m?.content === 'string' ? m.content : '');
   const users = messages.filter((m) => m?.role === 'user').slice(-2);
   const assistant = messages.filter((m) => m?.role === 'assistant').slice(-1);
   // The last answer counts too, so a bare "sí, mándalo" still points at email.
-  return [...assistant, ...users].map((m) => text(m).slice(0, INTENT_MAX)).join('\n');
+  const intent = [...assistant, ...users].map((m) => text(m).slice(0, INTENT_MAX)).join('\n');
+  // A project saved in memory with a repo brings GitHub along when it is named
+  // ("¿cómo va Gestor Empresarial?") even without the word "GitHub".
+  const plain = normalizeIntent(intent);
+  const names = (Array.isArray(memory) ? memory : [])
+    .filter((m) => m?.c === 'projects' && / · repo: /.test(m.t || ''))
+    .map((m) => normalizeIntent(String(m.t).split(' · ')[0]))
+    .filter((n) => n.length > 2);
+  return names.some((n) => plain.includes(n)) ? `${intent}\nGitHub` : intent;
+}
+
+function normalizeIntent(s) {
+  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
 function matchesIntent(connector, intent) {

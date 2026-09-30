@@ -192,6 +192,16 @@ detalle del protocolo.
     enrutado por intención (`route` de cada conector, ver
     `docs/eddie-2-arquitectura.md`); `callProvider` calcula el `intent`
     con los últimos mensajes y se lo pasa a `createToolset`.
+  - `github/`: `github_list_repos`, `github_repo_activity`,
+    `github_list_issues`, `github_get_issue` y, sensibles,
+    `github_create_issue` y `github_comment` (la app las muestra en una
+    tarjeta editable; al confirmar se relee la respuesta de GitHub y se
+    marca `verified`). Token en `GITHUB_TOKEN`, solo para el correo de
+    `EDDIE_OWNER_EMAIL` (`isOwner`); acepta "dueño/nombre", una URL de
+    GitHub o solo el nombre (se completa con tu usuario, `/user`).
+    Los errores (401 token inválido, 403 límite o permisos, 404, 410, 422)
+    vuelven como `{ error }` legible. Sale por tema (`route`) o cuando se
+    nombra un proyecto de la memoria con repo.
   - `memory/`: `remember` (perfil, preferencia, decisión, conocimiento o
     contexto temporal), `update_project`, `recall` y `forget` (sensible: pasa
     por tarjeta). Como Tareas, no escriben: validan contra `context.memory`
