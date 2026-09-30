@@ -49,7 +49,7 @@ function sanitizeRequest(body) {
 
 // Connectors the user switched off in the hub. Unknown ids are harmless (the
 // registry just never matches them), but shape and size are still checked.
-function sanitizeConnectorIds(value) {
+export function sanitizeConnectorIds(value) {
   if (!Array.isArray(value)) return [];
   return value.filter((id) => typeof id === 'string' && /^[a-z0-9_-]{1,40}$/.test(id)).slice(0, 50);
 }
@@ -57,7 +57,7 @@ function sanitizeConnectorIds(value) {
 // Optional context (the user's timezone, coordinates and tasks) used by the
 // connector tools (current time, weather, tasks) — never trusted blindly, since
 // it comes straight from the browser.
-function sanitizeContext(context) {
+export function sanitizeContext(context) {
   if (!context || typeof context !== 'object') return {};
 
   const result = {};
@@ -85,9 +85,9 @@ function sanitizeContext(context) {
   return result;
 }
 
-export async function handleChatRequest(body, onChunk) {
+export async function handleChatRequest(body, onChunk, onActivity) {
   const request = sanitizeRequest(body);
-  return callProvider({ ...request, onChunk });
+  return callProvider({ ...request, onChunk, onActivity });
 }
 
 export function errorToResponse(err) {

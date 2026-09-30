@@ -1,0 +1,108 @@
+/* ---- Confirmation card (actions that need the user's OK) ---- */
+.confirm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  box-shadow: var(--glow);
+}
+
+.confirm-card--danger {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  box-shadow: none;
+}
+
+.confirm-card--done,
+.confirm-card--cancelled,
+.confirm-card--error {
+  opacity: 0.75;
+  box-shadow: none;
+}
+
+.confirm-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.confirm-card--danger .confirm-card__head {
+  color: var(--danger);
+}
+
+.confirm-card__hint {
+  margin-left: auto;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: var(--warning);
+}
+
+.confirm-card__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.confirm-card__field {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.confirm-card__field dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.confirm-card__field dd {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confirm-card__field .input {
+  width: 100%;
+}
+
+.confirm-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.confirm-card__status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.confirm-card__status--done {
+  color: var(--success);
+}
+
+.confirm-card__status--error {
+  color: var(--danger);
+}
+
+.confirm-card--compact {
+  width: min(100%, 460px);
+  margin: 0.4rem auto 0;
+  text-align: left;
+}

@@ -128,11 +128,16 @@ async function* iterateSSE(res, onActivity) {
 // Gemini can ask to call one of the active connectors' tools (real time, weather…)
 // instead of answering directly. When it does, we run the tool ourselves,
 // hand the result back as a "function" turn, and let it try again — up to
-// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Three
-// covers a real chain (search the web, then look something up on Wikipedia,
-// then create a task) while keeping each extra network round-trip inside
-// the function's time budget; tools asked for together run in parallel.
-const MAX_TOOL_ROUNDS = 3;
+// MAX_TOOL_ROUNDS times, so a chain of tool calls can't loop forever. Five
+// lets Eddie work through a real multi-step request (look up the weather,
+// search the web, then create a task…); tools asked for together run in
+// parallel. Past TOOLS_CUTOFF_MS the tools are withdrawn anyway so the
+// final answer still fits in the function's time budget. Groq's free tier
+// counts every round's full prompt against 8K tokens a minute, so it gets
+// fewer rounds.
+const MAX_TOOL_ROUNDS = 5;
+const GROQ_MAX_TOOL_ROUNDS = 3;
+const TOOLS_CUTOFF_MS = 30000;
 
 // Google's own quota-exceeded message is accurate but in English and full
 // of jargon (RESOURCE_EXHAUSTED, links to rate-limit docs) — translate the
@@ -197,7 +202,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
     // Omitting `tools` here forces a plain-text answer using whatever the
     // tool results already in `contents` gave it. Same when the user switched
     // every connector off: Gemini rejects an empty functionDeclarations list.
-    const forceTextOnly = round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0;
+    const forceTextOnly = round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0 || Date.now() - startedAt > TOOLS_CUTOFF_MS;
     const body = forceTextOnly
       ? { systemInstruction, generationConfig, contents }
       : { systemInstruction, generationConfig, tools: [{ functionDeclarations: toolset.declarations }], contents };
@@ -516,10 +521,11 @@ export async function callGroq({ apiKey, model, system, messages, toolset = NO_T
   ];
   let activeModel = groqReplacements.get(model) || model;
   let modelRecovered = false;
+  const startedAt = Date.now();
   const tools = toOpenAITools(toolset.declarations);
 
   for (let round = 0; ; round += 1) {
-    const forceTextOnly = round >= MAX_TOOL_ROUNDS;
+    const forceTextOnly = round >= GROQ_MAX_TOOL_ROUNDS || Date.now() - startedAt > TOOLS_CUTOFF_MS;
     const body = groqRequestBody(activeModel, chat, forceTextOnly ? null : tools);
 
     const streamAbort = createStreamAbort();
@@ -637,9 +643,11 @@ const FALLBACK_DEADLINE_MS = 40000;
 // mix two answers, so a mid-stream failure is reported as-is.
 // `disabledConnectors` lists the connectors the user switched off in the hub;
 // their tools are never offered to the model.
-export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk }) {
+// `onActivity` hears each tool as it starts ("Buscando en internet…").
+export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onActivity }) {
   const startedAt = Date.now();
-  const toolset = createToolset({ disabled: disabledConnectors, context });
+  const toolset = createToolset({ disabled: disabledConnectors, context, onActivity });
+  const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations });
   let started = false;
   const trackedChunk = (text) => {
     started = true;
@@ -647,8 +655,7 @@ export async function callProvider({ provider, model, system, messages, context 
   };
 
   try {
-    const result = await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk });
-    return { ...result, actions: toolset.actions };
+    return withToolOutput(await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk }));
   } catch (err) {
     const canFallBack =
       provider !== 'groq' &&
@@ -660,11 +667,12 @@ export async function callProvider({ provider, model, system, messages, context 
 
     console.error(`[callProvider] ${provider} failed (${err.code || 'error'} ${err.status || ''}): ${err.message} — falling back to Groq`);
     // Groq starts over, so whatever the failed attempt's tools queued (a task
-    // it created) is dropped; Groq's own calls queue it again if needed.
-    toolset.actions.length = 0;
+    // it created, a card to confirm) is dropped; Groq's own calls queue it
+    // again if needed.
+    toolset.reset();
     try {
       const result = await callSingleProvider({ provider: 'groq', system, messages, toolset, onChunk });
-      return { ...result, fallbackFrom: provider, actions: toolset.actions };
+      return { ...withToolOutput(result), fallbackFrom: provider };
     } catch (groqErr) {
       groqErr.message = `${err.message} (El respaldo Groq también falló: ${groqErr.message})`;
       throw groqErr;

@@ -8,6 +8,7 @@ import EddieCore from '../Core/EddieCore';
 import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
 import MessageActions from './MessageActions';
+import ConfirmCard from './ConfirmCard';
 import './Chat.css';
 
 // Quick starts on an empty chat: some ask right away, others open a skill.
@@ -20,7 +21,7 @@ const QUICK_STARTS = [
 ];
 
 export default function ChatPanel({ showCore = true }) {
-  const { messages, status, sendMessage, resetConversation } = useChat();
+  const { messages, status, sendMessage, resetConversation, activity, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -224,6 +225,9 @@ export default function ChatPanel({ showCore = true }) {
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
               </div>
+              {m.confirmations?.map((card) => (
+                <ConfirmCard key={card.id} card={card} onResolve={(decision, args) => resolveConfirmation(m.id, card.id, decision, args)} />
+              ))}
               {m.taskChanges?.length > 0 && (
                 <ul className="bubble__changes" aria-label="Cambios en tus tareas">
                   {m.taskChanges.map((change) => (
@@ -240,7 +244,7 @@ export default function ChatPanel({ showCore = true }) {
           {status === 'processing' && (
             <div className="bubble bubble--assistant bubble--pending">
               <span className="bubble__author">Eddie</span>
-              <p className="bubble__text">Analizando tu solicitud…</p>
+              <p className="bubble__text">{activity || 'Analizando tu solicitud…'}</p>
             </div>
           )}
         </div>

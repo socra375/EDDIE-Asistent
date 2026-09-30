@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
+import ConfirmCard from '../components/Chat/ConfirmCard';
 import EddieRing from './EddieRing';
 import { LocationAndWeather, SystemPanel, TasksSummary, TimePanel } from './InfoPanels';
 import './Home.css';
@@ -25,7 +26,7 @@ const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
 const PREVIEW_CHARS = 220;
 
 export default function HomePanel({ onOpenTasks }) {
-  const { status, sendMessage, lastReply, errorMessage } = useChat();
+  const { status, sendMessage, lastReply, errorMessage, messages, activity, resolveConfirmation } = useChat();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
@@ -94,6 +95,9 @@ export default function HomePanel({ onOpenTasks }) {
 
   const live = listening ? `${transcript} ${interimTranscript}`.trim() : '';
   const reply = lastReply?.content || '';
+  // A card waiting for "sí"/"no" on Eddie's latest reply, shown under it.
+  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+  const pendingCards = (lastAssistant?.confirmations || []).filter((c) => c.state === 'pending' || c.state === 'running');
   const replyPreview = expanded || reply.length <= PREVIEW_CHARS ? reply : `${reply.slice(0, PREVIEW_CHARS)}…`;
 
   return (
@@ -108,6 +112,8 @@ export default function HomePanel({ onOpenTasks }) {
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
+          ) : status === 'processing' && activity ? (
+            <p className="home__activity">{activity}</p>
           ) : reply ? (
             <>
               <p className="home__reply">{replyPreview}</p>
@@ -116,6 +122,14 @@ export default function HomePanel({ onOpenTasks }) {
                   {expanded ? 'Ver menos' : 'Ver más'}
                 </button>
               )}
+              {pendingCards.map((card) => (
+                <ConfirmCard
+                  key={card.id}
+                  card={card}
+                  compact
+                  onResolve={(decision, args) => resolveConfirmation(lastAssistant.id, card.id, decision, args)}
+                />
+              ))}
             </>
           ) : visual === 'processing' ? null : (
             <p className="home__hint">{sttSupported ? 'TOCA EL ANILLO PARA HABLAR' : 'ABRE EL CHAT PARA ESCRIBIRLE A EDDIE'}</p>

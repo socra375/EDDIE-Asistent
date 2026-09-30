@@ -23,6 +23,7 @@ export default {
   tools: [
     {
       label: 'Consultar la hora y la fecha',
+      activity: 'Consultando la hora…',
       sensitive: false,
       declaration: {
         name: 'get_current_datetime',

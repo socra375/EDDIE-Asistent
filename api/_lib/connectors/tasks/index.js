@@ -55,9 +55,9 @@ export function resolveDueDate(value, timezone) {
 
 // Best pending task for a spoken description: exact match, then containment
 // either way, then shared words. Ambiguous or empty → null plus candidates.
-export function findTask(tasks, description) {
+export function findTask(tasks, description, { includeDone = false } = {}) {
   const wanted = normalize(description);
-  const pending = (tasks || []).filter((t) => !t.done && t.title);
+  const pending = (tasks || []).filter((t) => (includeDone || !t.done) && t.title);
   if (!wanted || !pending.length) return { task: null, candidates: [] };
   const wantedWords = new Set(wanted.split(' ').filter((w) => w.length > 2));
   const scored = pending
@@ -94,13 +94,35 @@ function createTask(args, context) {
   return { created: true, task, note: 'La tarea aparecerá en el módulo Tareas al terminar tu respuesta.' };
 }
 
+function describeMatchError(description, candidates) {
+  return candidates.length
+    ? { error: `Hay varias tareas parecidas: ${candidates.join('; ')}. Pregunta cuál.` }
+    : { error: `No encontré una tarea que coincida con "${description}".` };
+}
+
+// Deleting can't be undone, so it goes through the confirmation card: prepare
+// finds the exact task (pending or done) and describes it; run deletes it.
+function prepareDelete(args, context) {
+  const { task, candidates } = findTask(context.tasks, args.title, { includeDone: true });
+  if (!task) return describeMatchError(args.title, candidates);
+  const fields = [{ key: 'title', label: 'Tarea', value: task.title }];
+  if (task.done) fields.push({ key: 'state', label: 'Estado', value: 'Completada' });
+  return {
+    args: { title: task.title },
+    preview: { title: 'Borrar tarea', confirmLabel: 'Borrar', danger: true, fields },
+  };
+}
+
+function deleteTask(args, context) {
+  const { task } = findTask(context.tasks, args.title, { includeDone: true });
+  if (!task) return { error: `La tarea "${args.title}" ya no existe.` };
+  context.emit?.({ type: 'delete_task', id: task.id, title: task.title });
+  return { deleted: true, title: task.title, summary: `Borré la tarea "${task.title}".` };
+}
+
 function completeTask(args, context) {
   const { task, candidates } = findTask(context.tasks, args.title);
-  if (!task) {
-    return candidates.length
-      ? { error: `Hay varias tareas parecidas: ${candidates.join('; ')}. Pregunta cuál.` }
-      : { error: `No encontré una tarea pendiente que coincida con "${args.title}".` };
-  }
+  if (!task) return describeMatchError(args.title, candidates);
   context.emit?.({ type: 'complete_task', id: task.id, title: task.title });
   return { completed: true, title: task.title };
 }
@@ -108,13 +130,14 @@ function completeTask(args, context) {
 export default {
   id: 'tasks',
   name: 'Tareas',
-  description: 'Eddie crea tareas y las marca como hechas por ti desde el chat o por voz.',
+  description: 'Eddie crea tareas, las marca como hechas y, con tu confirmación, las borra, desde el chat o por voz.',
   icon: 'check',
   auth: null,
   requiredEnv: [],
   tools: [
     {
       label: 'Crear tareas',
+      activity: 'Anotando la tarea…',
       sensitive: false,
       declaration: {
         name: 'create_task',
@@ -134,6 +157,7 @@ export default {
     },
     {
       label: 'Marcar tareas como hechas',
+      activity: 'Marcando la tarea…',
       sensitive: false,
       declaration: {
         name: 'complete_task',
@@ -147,6 +171,25 @@ export default {
         },
       },
       run: (args, context) => completeTask(args, context),
+    },
+    {
+      label: 'Borrar tareas',
+      activity: 'Preparando la confirmación…',
+      sensitive: true,
+      declaration: {
+        name: 'delete_task',
+        description:
+          'Borra una tarea de la lista del usuario (pendiente o hecha). Siempre pide confirmación al usuario con una tarjeta antes de borrarla; tú solo la propones.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING', description: 'El título de la tarea o una descripción parecida.' },
+          },
+          required: ['title'],
+        },
+      },
+      prepare: (args, context) => prepareDelete(args, context),
+      run: (args, context) => deleteTask(args, context),
     },
   ],
   webhook: null,

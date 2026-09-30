@@ -104,6 +104,7 @@ export default {
   tools: [
     {
       label: 'Consultar el clima actual',
+      activity: 'Consultando el clima…',
       sensitive: false,
       declaration: {
         name: 'get_current_weather',

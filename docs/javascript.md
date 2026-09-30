@@ -146,7 +146,8 @@ detalle del protocolo.
     coordenadas de `context.location` si no). Sus llamadas usan el
     `fetchWithRetry` compartido para reintentar una vez ante un fallo de
     red transitorio.
-  - `tasks/`: `create_task` y `complete_task`. No escriben nada: validan
+  - `tasks/`: `create_task`, `complete_task` y `delete_task` (sensible:
+    pasa por la tarjeta de confirmación). No escriben nada: validan
     contra las tareas que el navegador manda en `context.tasks` (búsqueda
     aproximada sin acentos, aviso si hay varias parecidas o si ya existe),
     entienden fechas como "mañana" o "el viernes" en la zona horaria del
@@ -180,8 +181,13 @@ detalle del protocolo.
     `validate.js` contra los `parameters` declarados: tipos, requeridos,
     sin argumentos desconocidos, valores de `enum`) o un fallo interno se convierten en un
     `{ error }` que vuelve al modelo como cualquier resultado. Las
-    herramientas `sensitive` (enviar, borrar…) nunca se ejecutan hasta que
-    exista la confirmación en el chat (sesión 8).
+    herramientas `sensitive` (enviar, borrar…) nunca se ejecutan desde la
+    IA: su `prepare` arma una tarjeta que queda en `toolset.confirmations`
+    y el usuario la confirma en el chat; `confirmTool` la ejecuta después
+    (ver "Protocolo de confirmación" en `docs/eddie-2-arquitectura.md`).
+    `onActivity` avisa cuando empieza cada herramienta (usa su `activity`,
+    p. ej. "Buscando en internet…") y el stream lo reenvía como evento
+    `activity`.
     Las acciones que emiten las herramientas se juntan en
     `toolset.actions`; `callProvider` las devuelve con la respuesta (y las
     descarta si pasa al respaldo de Groq, que empieza de cero) y
@@ -303,6 +309,10 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   es lo que anima `EddieCore`), y la función
   `sendMessage(texto, { mode, display, tag, skill, title })` que:
   1. añade el mensaje del usuario al historial;
+  1b. si la última respuesta de Eddie tiene una tarjeta de confirmación
+     pendiente y el mensaje es un "sí" o un "no" (también por voz: "dale",
+     "hazlo", "cancela"…), responde a esa tarjeta con
+     `resolveConfirmation` en vez de hacer una petición nueva;
   2. prueba primero `getLocalAnswer` (ver `services/localAnswers.js`
      más abajo) — si el mensaje es small talk o trivia que Eddie puede
      responder por sí mismo, responde al instante y retorna sin tocar la
@@ -312,9 +322,17 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
      la memoria si está activada y las tareas pendientes (`getTasks()`);
   4. llama a `sendChatMessage` (`services/api.js`) con los últimos
      `MAX_HISTORY_SENT` mensajes y un `context` con el `timezone` del
-     navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`) y la
-     `location` de `useLocation()`, si existe — es lo que el backend pasa
-     a las herramientas de Gemini;
+     navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`), la
+     `location` de `useLocation()`, si existe, y las tareas
+     (`tasksForContext()`) — es lo que el backend pasa a las herramientas.
+     Mientras llegan eventos `activity`, `activity` guarda qué está
+     haciendo Eddie ("Buscando en internet…"); las `confirmations` del
+     evento final quedan en el mensaje como tarjetas (`state: pending`) y
+     `resolveConfirmation(mensaje, tarjeta, 'confirm' | 'cancel', args)`
+     las resuelve: llama a `confirmAction` (`POST
+     /api/chat?action=confirm`), aplica las acciones (p. ej. borrar la
+     tarea) y agrega un mensaje corto de Eddie con el resultado, que se lee
+     en voz alta si la voz está activa;
   5. le pasa un `onChunk(textoCompletoHastaAhora)` que, en cuanto llega el
      primer fragmento, agrega el mensaje del asistente al historial y pone
      `status` en `responding`; cada fragmento siguiente actualiza ese mismo

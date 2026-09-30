@@ -535,6 +535,14 @@
   font-style: italic;
 }
 
+.home__activity {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
 .home__hint {
   margin: 0;
   font-size: 0.7rem;
