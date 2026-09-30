@@ -192,6 +192,15 @@ detalle del protocolo.
     enrutado por intención (`route` de cada conector, ver
     `docs/eddie-2-arquitectura.md`); `callProvider` calcula el `intent`
     con los últimos mensajes y se lo pasa a `createToolset`.
+  - `telegram/`: solo la tarjeta del hub (`details` dice si contesta
+    siempre con voz); el bot vive en `api/_lib/telegram/`: `api.js` (cliente
+    de la API de bots: `sendMessage` parte lo largo, `sendVoice`,
+    `downloadFile`, `ensureBotSetup`), `store.js` (códigos de vínculo,
+    chats, historial, deduplicación y confirmaciones pendientes),
+    `serverActions.js` (aplica en la base las acciones de Tareas y Memoria) y
+    `bot.js` (`handleWebhook`: secreto, comandos, notas de voz, el asistente,
+    botones de confirmación); `handlers.js` enruta `link`, `unlink`,
+    `settings` y `webhook`. La app lo controla desde `TelegramControls.jsx`.
   - `github/`: `github_list_repos`, `github_repo_activity`,
     `github_list_issues`, `github_get_issue` y, sensibles,
     `github_create_issue` y `github_comment` (la app las muestra en una

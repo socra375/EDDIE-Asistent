@@ -14,12 +14,13 @@ import tasks from './tasks/index.js';
 import memory from './memory/index.js';
 import agent from './agent/index.js';
 import github from './github/index.js';
+import telegram from './telegram/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, memory, websearch, news, wikipedia, currency, gmail, google, github];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, memory, websearch, news, wikipedia, currency, gmail, google, github, telegram];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -238,6 +239,16 @@ export async function confirmTool({ name, args, disabled = [], context = {}, env
   }
 }
 
+// Card-specific extras (a connector's own `details(user)`), never fatal.
+async function safeDetails(connector, user) {
+  if (!user || !connector.details) return null;
+  try {
+    return await connector.details(user);
+  } catch {
+    return null;
+  }
+}
+
 async function isConnected(connector, user) {
   if (!user || !connector.auth?.isConnected) return false;
   try {
@@ -274,6 +285,7 @@ export async function describeConnectors({ user = null, env = process.env } = {}
         status,
         missingEnv: missing,
         note: (typeof c.note === 'function' ? c.note(env) : c.note) || null,
+        details: (await safeDetails(c, user)) || undefined,
         tools: c.tools.map((t) => ({ name: t.declaration.name, label: t.label, sensitive: Boolean(t.sensitive), risk: toolRisk(t) })),
       };
     }),

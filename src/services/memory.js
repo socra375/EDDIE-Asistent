@@ -243,6 +243,36 @@ export function mergeMemory(a, b, now = Date.now()) {
   return out;
 }
 
+// ---- Applying what Eddie's memory tools asked for ----
+
+const CATEGORY_OF = { perfil: 'profile', preferencia: 'preferences', decision: 'decisions', conocimiento: 'knowledge', contexto: 'context' };
+
+// Applies the `memory_add` / `memory_project` / `memory_forget` actions the
+// connector's tools emit to a memory object and returns { memory, applied },
+// where `applied` are the one-line labels for the chat ("Recordé: …"). Pure,
+// so the app (localStorage) and the Telegram bot (database) share it.
+export function applyActions(memory, actions, now = Date.now()) {
+  let current = memory;
+  const applied = [];
+  for (const action of Array.isArray(actions) ? actions : []) {
+    let result = null;
+    if (action?.type === 'memory_add') {
+      const category = CATEGORY_OF[action.category] || action.category;
+      result = addItem(current, { category, key: action.key, text: action.text, project: action.project, days: action.days }, now);
+      if (result.changed) applied.push(`Recordé: ${result.label}`);
+    } else if (action?.type === 'memory_project') {
+      result = upsertProject(current, action.project || {}, now);
+      if (result.changed) applied.push(result.label);
+    } else if (action?.type === 'memory_forget' && Array.isArray(action.ids)) {
+      const out = removeItems(current, action.ids);
+      result = { memory: out.memory, changed: out.removed > 0 };
+      if (out.removed) applied.push(`Olvidé ${out.removed} ${out.removed === 1 ? 'recuerdo' : 'recuerdos'}`);
+    }
+    if (result?.changed) current = result.memory;
+  }
+  return { memory: current, applied };
+}
+
 // ---- Readable forms ----
 
 export function describeProject(p) {

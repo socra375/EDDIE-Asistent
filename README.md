@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Telegram…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -239,6 +239,43 @@ Google) con protección CSRF por `state` y sesiones propias:
    cookie — el frontend nunca ve ni maneja tokens de Google directamente.
 4. Los tokens de Calendar/Drive se guardan en `google_credentials` y se
    renuevan automáticamente con el `refresh_token` cuando expiran.
+
+## Telegram (hablar con Eddie desde el celular)
+
+Eddie también vive en Telegram: le escribes o le mandas **notas de voz** y te
+contesta con su voz (la de ElevenLabs), con las mismas herramientas, memoria y
+tareas que en la app. Lo delicado (enviar un correo, borrar algo) te llega con
+botones ✅ / ✖. El comando `/llamar` (y el botón de menú "Llamar a Eddie") abre
+su pantalla de voz dentro de Telegram.
+
+> Un bot de Telegram **no puede hacer ni recibir llamadas de teléfono** (la API
+> de bots no lo permite). La "llamada" son notas de voz en los dos sentidos más
+> esa pantalla de voz; si tu teléfono no deja usar el micrófono dentro de
+> Telegram, las notas de voz funcionan igual.
+
+Necesita la cuenta de Google y la base de datos (ver "Cuenta de Google"), porque
+el bot sabe quién eres por el chat que vinculas.
+
+1. **Crear el bot**: en Telegram abre `@BotFather` → `/newbot` → elige un nombre
+   (por ejemplo "Eddie") y un usuario que termine en `bot`. Te da un token.
+2. **Variables en Vercel** (Settings → Environment Variables, luego Redeploy):
+   - `TELEGRAM_BOT_TOKEN` = el token de BotFather (solo en Vercel, nunca en un chat).
+   - `TELEGRAM_WEBHOOK_SECRET` = un texto aleatorio de 20–64 caracteres (letras,
+     números, `_` o `-`). Telegram lo devuelve en cada mensaje para probar que
+     viene de él.
+   - `APP_URL` = tu dominio fijo con `https://` (ya lo tienes para el login).
+3. **Base de datos**: ejecuta `db/migrations/0002_telegram.sql` en el editor SQL de
+   Neon (igual que hiciste con la 0001).
+4. **Vincular**: en Eddie → Conectores → **Telegram** → *Vincular Telegram*. La
+   app registra el webhook, los comandos y el botón de menú por sí sola y te da
+   un enlace: ábrelo y pulsa **Iniciar** (Start) en Telegram. La tarjeta pasa a
+   "Conectado" sola.
+5. Prueba: escríbele "hola", o mándale una nota de voz: "anota comprar pan".
+
+Comandos: `/llamar`, `/voz on|off` (contestar siempre con voz), `/nuevo`
+(conversación nueva), `/ayuda`, `/desvincular`. Si `EDDIE_OWNER_EMAIL` está
+definido, solo esa cuenta puede vincular Telegram. Eddie solo responde en tu
+chat privado vinculado; en grupos no contesta.
 
 ## Voz (Speech-to-Text / Text-to-Speech)
 

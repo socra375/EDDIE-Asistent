@@ -3,7 +3,6 @@
 // built it moves to its own folder with real tools and leaves this list.
 // `due` is the latest planned date; work running ahead can land sooner.
 export const PLANNED_CONNECTORS = [
-  { id: 'telegram', name: 'Telegram', icon: 'send', description: 'Hablar con Eddie y recibir tus avisos desde Telegram.', session: 17, due: '27 oct' },
   { id: 'spotify', name: 'Spotify', icon: 'music', description: 'Reproducir, pausar y buscar música por voz (requiere Spotify Premium).', session: 23, due: '7 nov' },
   { id: 'notion', name: 'Notion', icon: 'doc', description: 'Buscar y leer tus páginas, y crear notas desde el chat.', session: 25, due: '10 nov' },
   { id: 'whatsapp', name: 'WhatsApp', icon: 'phone', description: 'Hablar con Eddie y recibir avisos por WhatsApp.', session: 27, due: '14 nov' },
