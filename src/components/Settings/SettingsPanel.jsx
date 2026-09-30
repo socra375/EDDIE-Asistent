@@ -26,6 +26,14 @@ const PROVIDER_MODELS = {
   ],
 };
 
+// Voices for the chosen language, best-sounding first, for the picker.
+function voicesFor(voices, language) {
+  const base = (language || 'es').toLowerCase();
+  return voices
+    .filter((v) => (v.lang || '').toLowerCase().replace('_', '-').startsWith(base))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 const LANGUAGES = [
   { code: 'es', label: 'Español' },
   { code: 'en', label: 'English' },
@@ -39,7 +47,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, updateVoiceSettings, memory, forgetFact, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
-  const { ttsSupported } = useVoice();
+  const { ttsSupported, voices, sttEngine, whisperAvailable, speakWithSettings } = useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
 
@@ -190,6 +198,45 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Eddie lee sus respuestas en voz alta</span>
         </label>
         {!ttsSupported && <p className="settings-warning">Este navegador no admite síntesis de voz.</p>}
+
+        <div className="settings-row">
+          <label>
+            <span className="field-label">Reconocimiento de voz</span>
+            <select
+              className="select"
+              value={settings.voice.stt === 'browser' ? 'browser' : 'whisper'}
+              onChange={(e) => updateVoiceSettings({ stt: e.target.value })}
+            >
+              <option value="whisper">Whisper de Groq (más preciso)</option>
+              <option value="browser">El del navegador</option>
+            </select>
+          </label>
+          {ttsSupported && (
+            <label>
+              <span className="field-label">Voz de Eddie</span>
+              <select className="select" value={settings.voice.voiceURI || ''} onChange={(e) => updateVoiceSettings({ voiceURI: e.target.value })}>
+                <option value="">Automática (la más natural disponible)</option>
+                {voicesFor(voices, settings.language).map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        <p className="settings-placeholder">
+          {sttEngine === 'whisper'
+            ? 'Eddie graba lo que dices y lo transcribe con Whisper (whisper-large-v3-turbo) en Groq; deja de escuchar solo cuando haces una pausa.'
+            : settings.voice.stt !== 'browser' && !whisperAvailable
+              ? 'Whisper no está disponible: falta GROQ_API_KEY en Vercel o este navegador no puede grabar audio. Se usa el reconocimiento del navegador.'
+              : 'Se usa el reconocimiento de voz del navegador.'}
+        </p>
+        {ttsSupported && (
+          <button type="button" className="btn settings-voice-test" onClick={() => speakWithSettings('Hola, soy Eddie. Así suena mi voz.')}>
+            Probar voz
+          </button>
+        )}
       </div>
 
       <div className="glass-panel settings-card">

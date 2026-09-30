@@ -193,6 +193,17 @@ detalle del protocolo.
   que `callProvider` usa para no ofrecer esas herramientas.
 - **`api/chat.js`** / **`api/health.js`** — funciones serverless de
   Vercel; son wrappers finos sobre `handler.js` con las cabeceras CORS.
+  `api/chat.js` también atiende `POST /api/chat?action=transcribe` (voz a
+  texto) para no gastar otra de las 12 funciones del plan Hobby.
+- **`api/_lib/transcribe.js`** — voz a texto con Whisper en Groq
+  (`/openai/v1/audio/transcriptions`, multipart, `temperature: 0`,
+  `response_format: verbose_json`). Modelo `whisper-large-v3-turbo` (o
+  `GROQ_STT_MODEL`), con `whisper-large-v3` como reserva si Groq retira el
+  configurado. Con los segmentos de `verbose_json` descarta lo que Whisper
+  marca como "probablemente no es voz" y las alucinaciones típicas del
+  silencio ("Gracias por ver el video", "Subtítulos… Amara.org").
+  Acepta hasta 4 MB (Vercel corta en 4,5 MB) y responde
+  `{ text, model, language, duration }`.
 - **`server/dev-server.js`** — un servidor Express que expone las mismas
   rutas (`/api/chat`, `/api/health`) usando la misma lógica de
   `api/_lib/`, para poder desarrollar con `npm run dev:full` sin instalar
@@ -235,10 +246,16 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   `{ location, status, requestLocation }`. Si el usuario lo deniega o el
   navegador no lo soporta, `location` queda en `null` y Eddie simplemente
   le pregunta la ciudad en vez de asumir una (ver `personality.js`).
-- **`VoiceContext.jsx`** — envuelve los hooks `useSpeechRecognition` (STT,
-  usado por el micrófono del Chat) y `useSpeechSynthesis` (TTS), y añade
-  `speakWithSettings(texto)` que llama a `synthesis.speak` con el idioma
-  activo. Los valores del contexto se nombran explícitamente
+- **`VoiceContext.jsx`** — elige el motor de reconocimiento
+  (`sttEngine`): `useWhisperRecognition` (Whisper en Groq) cuando el
+  servidor tiene `GROQ_API_KEY` (`/api/health` → `groq`) y el navegador
+  puede grabar, salvo que el usuario elija "El del navegador"
+  (`settings.voice.stt`); si no, `useSpeechRecognition`. Expone la misma
+  interfaz para ambos: `listening` sigue en `true` hasta que llega el texto
+  final (con Whisper incluye la subida), y `recording`/`transcribing`
+  separan las dos fases (el anillo muestra "TRANSCRIBIENDO"). También
+  envuelve `useSpeechSynthesis` (TTS) y añade `speakWithSettings(texto)`,
+  que usa el idioma activo y la voz elegida (`settings.voice.voiceURI`). Los valores del contexto se nombran explícitamente
   (`sttSupported`/`ttsSupported`, `stop`/`stopSpeaking`, etc.) en vez de
   hacer `{ ...recognition, ...synthesis }` — ambos hooks devuelven una
   clave `supported` (y `synthesis` también `stop`), así que un spread
@@ -290,15 +307,28 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
 
 ### Hooks (`src/hooks/`)
 
+- **`useWhisperRecognition.js`** — graba con `MediaRecorder` (Opus/WebM)
+  y detecta el final de la frase por volumen (`AnalyserNode`): mide el
+  ruido del cuarto 300 ms, marca como voz lo que lo supera claramente y
+  corta tras 1,4 s de silencio (8 s sin hablar = "no se detectó voz",
+  máximo 60 s). Sube el audio a `POST /api/chat?action=transcribe` como
+  `application/octet-stream` con el tipo real en `X-Audio-Type`, y deja el
+  texto en `transcript`. No hay texto en vivo: Whisper transcribe el clip
+  completo.
 - **`useSpeechRecognition.js`** — envuelve la Web Speech API
   (`SpeechRecognition`/`webkitSpeechRecognition`). Expone
   `listening`, `transcript`, `interimTranscript` (lo que se está
   transcribiendo en vivo), `start`, `stop`, `error`. Detecta si el
   navegador no soporta la API y lo señala en vez de fallar en silencio.
 - **`useSpeechSynthesis.js`** — envuelve `window.speechSynthesis` con
-  `speak(texto, { lang, onEnd })` / `stop()`. Sin selector de voz: siempre
-  usa la voz por defecto del navegador para ese idioma, a
-  velocidad/tono/volumen normales.
+  `speak(texto, { lang, voiceURI, onEnd })` / `stop()`. Elige la voz más
+  natural disponible para el idioma (prefiere las "Natural"/"Online" y las
+  de Google sobre las locales tipo eSpeak) o la que el usuario eligió en
+  Configuración; quita el Markdown (`speakableText`) y lee las respuestas
+  largas por frases de hasta 220 caracteres (`splitForSpeech`), porque
+  Chrome corta las locuciones de más de ~15 s. Groq no ofrece voces en
+  español (su TTS solo tiene inglés y árabe), así que la voz sigue siendo
+  la del navegador.
 - **`useProviderHealth.js`** — hace `fetch('/api/health')` una vez al
   montar y devuelve `{ gemini: bool, claude: bool }`, usado en
   Configuración para mostrar si cada proveedor tiene su clave puesta en

@@ -11,6 +11,7 @@ import './Home.css';
 const LABELS = {
   idle: 'EN ESPERA',
   listening: 'ESCUCHANDO',
+  transcribing: 'TRANSCRIBIENDO',
   processing: 'PROCESANDO',
   responding: 'RESPONDIENDO',
   speaking: 'HABLANDO',
@@ -18,12 +19,16 @@ const LABELS = {
   error: 'ERROR',
 };
 
+// Visual states that reuse another state's ring animation.
+const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
+
 const PREVIEW_CHARS = 220;
 
 export default function HomePanel({ onOpenTasks }) {
   const { status, sendMessage, lastReply, errorMessage } = useChat();
   const { settings, updateVoiceSettings } = useSettings();
-  const { sttSupported, listening, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } = useVoice();
+  const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
+    useVoice();
   const [chatOpen, setChatOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const voiceOn = settings.voice.autoRead;
@@ -44,7 +49,8 @@ export default function HomePanel({ onOpenTasks }) {
   }, [listening, transcript, interimTranscript, sendMessage, reset]);
 
   let visual = 'idle';
-  if (listening) visual = 'listening';
+  if (transcribing) visual = 'transcribing';
+  else if (listening) visual = 'listening';
   else if (status === 'processing') visual = 'processing';
   else if (status === 'responding') visual = 'responding';
   else if (speaking) visual = 'speaking';
@@ -57,6 +63,7 @@ export default function HomePanel({ onOpenTasks }) {
   const label = visual === 'error' ? `ERROR · ${(errorText || '').toUpperCase()}` : LABELS[visual];
 
   function activate() {
+    if (transcribing) return;
     if (listening) {
       stop();
       return;
@@ -75,13 +82,15 @@ export default function HomePanel({ onOpenTasks }) {
     start();
   }
 
-  const actionLabel = listening
-    ? 'Dejar de escuchar y enviar'
-    : speaking
-      ? 'Detener la voz de Eddie'
-      : sttSupported
-        ? 'Hablar con Eddie'
-        : 'Escribirle a Eddie';
+  const actionLabel = transcribing
+    ? 'Transcribiendo tu voz'
+    : listening
+      ? 'Dejar de escuchar y enviar'
+      : speaking
+        ? 'Detener la voz de Eddie'
+        : sttSupported
+          ? 'Hablar con Eddie'
+          : 'Escribirle a Eddie';
 
   const live = listening ? `${transcript} ${interimTranscript}`.trim() : '';
   const reply = lastReply?.content || '';
@@ -95,7 +104,7 @@ export default function HomePanel({ onOpenTasks }) {
       </div>
 
       <div className="home__center">
-        <EddieRing state={visual === 'responding' ? 'speaking' : visual} label={label} onActivate={activate} actionLabel={actionLabel} />
+        <EddieRing state={RING_STATE[visual] || visual} label={label} onActivate={activate} actionLabel={actionLabel} />
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>

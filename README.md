@@ -94,6 +94,11 @@ exclusivamente desde variables de entorno del backend:
   la etiqueta "vía Groq". `GROQ_MODEL` (opcional) cambia el modelo de Groq
   sin tocar el código; si Groq retira el modelo, Eddie consulta la lista de
   modelos vigentes de Groq y cambia solo.
+  La misma clave activa el **reconocimiento de voz con Whisper**: Eddie
+  graba lo que dices y lo transcribe en Groq con `whisper-large-v3-turbo`
+  (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
+  (opcional) lo cambia, p. ej. a `whisper-large-v3`. Sin la clave, o si
+  eliges "El del navegador" en Configuración → Voz, se usa la Web Speech API.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en
@@ -314,7 +319,7 @@ src/
   layout/              Barra de íconos, Mis chats, encabezado, logo, efectos HUD
   connectors/          Hub de conectores (tarjetas por estado e interruptores)
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext
-  hooks/               useSpeechRecognition, useSpeechSynthesis, useProviderHealth
+  hooks/               useWhisperRecognition, useSpeechRecognition, useSpeechSynthesis, useProviderHealth
   services/            api.js (chat), remote.js (tasks/settings/memory/calendar/drive), personality.js, skills.js, localAnswers.js
   utils/               storage.js (localStorage), export.js (TXT/DOC/PDF)
 ```

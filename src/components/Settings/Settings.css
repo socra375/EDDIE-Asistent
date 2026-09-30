@@ -76,6 +76,10 @@
   margin: 0;
 }
 
+.settings-voice-test {
+  align-self: flex-start;
+}
+
 .memory-list {
   list-style: none;
   margin: 0;

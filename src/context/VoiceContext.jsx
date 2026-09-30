@@ -1,6 +1,8 @@
 import { createContext, useContext, useMemo } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import { useWhisperRecognition, whisperSupported } from '../hooks/useWhisperRecognition';
+import { useProviderHealth } from '../hooks/useProviderHealth';
 import { useSettings } from './SettingsContext';
 
 const VoiceContext = createContext(null);
@@ -9,37 +11,53 @@ const STT_LANG_MAP = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', de: 'de-DE', it: '
 
 export function VoiceProvider({ children }) {
   const { settings } = useSettings();
-  const sttLang = STT_LANG_MAP[settings.language] || 'es-ES';
+  const health = useProviderHealth();
+  const language = settings.language || 'es';
+  const sttLang = STT_LANG_MAP[language] || 'es-ES';
 
-  const recognition = useSpeechRecognition({ lang: sttLang });
+  const browser = useSpeechRecognition({ lang: sttLang });
+  const whisper = useWhisperRecognition({ language });
   const synthesis = useSpeechSynthesis();
 
+  // Whisper (Groq) is the default whenever the server has GROQ_API_KEY and
+  // the browser can record; the browser's own recognizer is the fallback,
+  // or the user's choice in Configuración.
+  const whisperAvailable = whisperSupported && Boolean(health?.groq);
+  const sttEngine = settings.voice.stt !== 'browser' && whisperAvailable ? 'whisper' : 'browser';
+  const whisperActive = sttEngine === 'whisper';
+
   const speakWithSettings = (text, onEnd) => {
-    synthesis.speak(text, { lang: sttLang, onEnd });
+    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, onEnd });
   };
 
-  // Named explicitly rather than spread — both hooks return a `supported`
-  // key (and synthesis also returns `stop`), so a flat spread silently let
-  // synthesis's values shadow recognition's: useVoice().stop ended up
-  // cancelling speech instead of stopping the microphone.
+  // Named explicitly rather than spread — the hooks share key names
+  // (`supported`, `stop`), and a flat spread once let synthesis's `stop`
+  // shadow recognition's. `listening` stays true until the final transcript
+  // is in (with Whisper that includes the upload), so consumers can act on
+  // its falling edge; `recording`/`transcribing` tell the two phases apart.
   const value = useMemo(
     () => ({
-      sttSupported: recognition.supported,
-      listening: recognition.listening,
-      transcript: recognition.transcript,
-      interimTranscript: recognition.interimTranscript,
-      sttError: recognition.error,
-      start: recognition.start,
-      stop: recognition.stop,
-      reset: recognition.reset,
+      sttEngine,
+      whisperAvailable,
+      sttSupported: whisperActive ? whisper.supported : browser.supported,
+      listening: whisperActive ? whisper.recording || whisper.transcribing : browser.listening,
+      recording: whisperActive ? whisper.recording : browser.listening,
+      transcribing: whisperActive ? whisper.transcribing : false,
+      transcript: whisperActive ? whisper.transcript : browser.transcript,
+      interimTranscript: whisperActive ? '' : browser.interimTranscript,
+      sttError: whisperActive ? whisper.error : browser.error,
+      start: whisperActive ? whisper.start : browser.start,
+      stop: whisperActive ? whisper.stop : browser.stop,
+      reset: whisperActive ? whisper.reset : browser.reset,
       ttsSupported: synthesis.supported,
+      voices: synthesis.voices,
       speaking: synthesis.speaking,
       speak: synthesis.speak,
       stopSpeaking: synthesis.stop,
       speakWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [recognition, synthesis, sttLang],
+    [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI],
   );
 
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
