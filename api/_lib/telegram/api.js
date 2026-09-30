@@ -92,6 +92,25 @@ export async function botUsername() {
   return usernameCache;
 }
 
+// Where Telegram is sending updates and how the last delivery went, for the
+// card in the app: a wrong APP_URL shows up here as a delivery error.
+export async function webhookStatus() {
+  const info = await tg('getWebhookInfo');
+  if (!info.ok) return null;
+  let host = '';
+  try {
+    host = new URL(info.data?.url || '').host;
+  } catch {
+    host = '';
+  }
+  return {
+    host,
+    pending: info.data?.pending_update_count || 0,
+    lastError: info.data?.last_error_message || '',
+    lastErrorAt: info.data?.last_error_date ? info.data.last_error_date * 1000 : null,
+  };
+}
+
 export const COMMANDS = [
   { command: 'llamar', description: 'Llamar a Eddie: abre su pantalla de voz' },
   { command: 'voz', description: 'Que Eddie conteste con su voz (on/off)' },

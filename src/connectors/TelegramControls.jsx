@@ -113,6 +113,12 @@ export default function TelegramControls({ connector, signedIn, onConnect, onCha
             Se abre el chat con @{link.username}: pulsa <strong>Iniciar</strong> (Start). Si no se abre, envíale{' '}
             <code>/start {link.code}</code>. Caduca en {link.minutes} minutos. Esta tarjeta se actualiza sola al vincular.
           </p>
+          {link.webhook?.host && <p className="connector__meta">El bot le escribe a: {link.webhook.host}</p>}
+          {link.webhook?.lastError && (
+            <p className="connectors__warning" role="alert">
+              Telegram no pudo entregar un mensaje a tu sitio: {link.webhook.lastError}. Revisa que APP_URL en Vercel sea tu dominio fijo (con https) y vuelve a desplegar.
+            </p>
+          )}
         </>
       ) : (
         <button type="button" className="btn btn-primary connector__action" disabled={busy} onClick={startLink}>
