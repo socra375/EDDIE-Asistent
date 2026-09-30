@@ -16,10 +16,13 @@ import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 // SettingsPanel.jsx for the other options a user can pick instead.
 const GEMINI_DEFAULT_MODEL = 'gemini-flash-lite-latest';
 const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-5';
-// Groq's free tier is fast and generous; this model supports tool calling.
-// GROQ_MODEL lets the model be swapped from Vercel without a code change if
-// Groq retires it.
-const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+// Groq retires models every few months (llama-3.3-70b-versatile stopped
+// working on its free tier on 2026-08-16). The default is Groq's own
+// recommended replacement, which supports tool calling; GROQ_MODEL overrides
+// it from Vercel, and if Groq still answers "model not found", callGroq asks
+// Groq for its live model list and switches on its own (see
+// findAvailableGroqModel).
+const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 export function defaultModelFor(provider) {
   if (provider === 'claude') return CLAUDE_DEFAULT_MODEL;
@@ -380,6 +383,106 @@ const OPENAI_TOOLS = TOOL_DECLARATIONS.map((t) => ({
   function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
 }));
 
+// Groq's free tier allows 8K tokens per minute per model and counts the
+// whole request (prompt + max_tokens) against it, so a long conversation is
+// rejected outright (413). The oldest turns are dropped to fit; the system
+// prompt and the latest message always stay. ~3.5 characters per token is a
+// deliberately pessimistic estimate for Spanish text.
+const GROQ_MAX_OUTPUT_TOKENS = 3000;
+const GROQ_REQUEST_TOKEN_BUDGET = 7500;
+
+function estimateTokens(message) {
+  return Math.ceil(JSON.stringify(message).length / 3.5);
+}
+
+function fitToGroqBudget(chat) {
+  const [system, ...rest] = chat;
+  const budget = GROQ_REQUEST_TOKEN_BUDGET - GROQ_MAX_OUTPUT_TOKENS;
+  let total = estimateTokens(system);
+  const kept = [];
+  for (let i = rest.length - 1; i >= 0; i -= 1) {
+    const cost = estimateTokens(rest[i]);
+    if (kept.length > 0 && total + cost > budget) break;
+    kept.unshift(rest[i]);
+    total += cost;
+  }
+  // A tool result is only valid right after the assistant turn that asked
+  // for it; never start the kept history with an orphaned one.
+  while (kept.length > 1 && kept[0].role === 'tool') kept.shift();
+  return [system, ...kept];
+}
+
+function groqRequestBody(model, chat, withTools) {
+  const body = { model, messages: fitToGroqBudget(chat), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS };
+  // gpt-oss models reason before answering; "low" keeps replies fast and
+  // leaves more of the per-minute token budget for the answer itself. Other
+  // model families reject this parameter, so it's only sent to gpt-oss.
+  if (model.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low';
+  if (withTools) body.tools = OPENAI_TOOLS;
+  return body;
+}
+
+// Preference order when the configured model is gone: exact ids first, then
+// whole families (their exact names change between releases).
+const GROQ_MODEL_PREFERENCES = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', /^qwen\//, /^meta-llama\/llama-4/, /^moonshotai\//];
+const GROQ_NON_CHAT_MODELS = /whisper|tts|guard|embed|playai|orpheus|compound|distil/i;
+
+// Remembers a replacement for the rest of this function instance's life, so
+// only the first request after a retirement pays for the extra lookup.
+const groqReplacements = new Map();
+
+function isMissingGroqModel(status, data) {
+  const code = data?.error?.code;
+  return (
+    status === 404 ||
+    code === 'model_not_found' ||
+    code === 'model_decommissioned' ||
+    /does not exist|decommissioned|no longer supported/i.test(data?.error?.message || '')
+  );
+}
+
+async function findAvailableGroqModel(apiKey, failedModel) {
+  let res;
+  try {
+    res = await sharedFetchWithRetry(
+      'https://api.groq.com/openai/v1/models',
+      () => ({ headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(6000) }),
+      { retries: 0 },
+    );
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  const ids = (data?.data || [])
+    .filter((m) => m?.id && m.active !== false && m.id !== failedModel && !GROQ_NON_CHAT_MODELS.test(m.id))
+    .map((m) => m.id);
+  for (const preference of GROQ_MODEL_PREFERENCES) {
+    const match = ids.find((id) => (preference instanceof RegExp ? preference.test(id) : id === preference));
+    if (match) return match;
+  }
+  return ids[0] || null;
+}
+
+function groqError(status, data, model) {
+  let message;
+  if (status === 429) {
+    message = 'Se alcanzó el límite gratuito de Groq por ahora. Espera un momento y vuelve a intentarlo.';
+  } else if (status === 413) {
+    message = 'La conversación es demasiado larga para el límite gratuito de Groq. Empieza una conversación nueva o acorta el mensaje.';
+  } else if (status === 401) {
+    message = 'Groq rechazó la clave: GROQ_API_KEY no es válida o fue revocada. Revísala en Vercel.';
+  } else if (isMissingGroqModel(status, data)) {
+    message = `Groq ya no ofrece el modelo "${model}" y no se encontró otro disponible. Configura GROQ_MODEL en Vercel con un modelo vigente.`;
+  } else {
+    message = data?.error?.message || `Groq respondió con estado ${status}.`;
+  }
+  const err = new Error(message);
+  err.code = 'PROVIDER_ERROR';
+  err.status = status;
+  return err;
+}
+
 // Groq speaks the OpenAI Chat Completions protocol. Tool calls stream in as
 // fragments (name first, then the JSON arguments piece by piece), so they're
 // stitched back together by index before running them — same round limits
@@ -396,11 +499,12 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
     { role: 'system', content: system },
     ...messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
   ];
+  let activeModel = groqReplacements.get(model) || model;
+  let modelRecovered = false;
 
   for (let round = 0; ; round += 1) {
     const forceTextOnly = round >= MAX_TOOL_ROUNDS;
-    const body = { model, messages: chat, stream: true, temperature: 0.7, max_tokens: 4096 };
-    if (!forceTextOnly) body.tools = OPENAI_TOOLS;
+    const body = groqRequestBody(activeModel, chat, !forceTextOnly);
 
     const streamAbort = createStreamAbort();
     try {
@@ -413,14 +517,18 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        const message =
-          res.status === 429
-            ? 'Se alcanzó el límite gratuito de Groq por ahora. Espera un momento y vuelve a intentarlo.'
-            : data?.error?.message || `Groq respondió con estado ${res.status}.`;
-        const err = new Error(message);
-        err.code = 'PROVIDER_ERROR';
-        err.status = res.status;
-        throw err;
+        if (!modelRecovered && isMissingGroqModel(res.status, data)) {
+          modelRecovered = true;
+          const replacement = await findAvailableGroqModel(apiKey, activeModel);
+          if (replacement) {
+            console.error(`[callGroq] model ${activeModel} unavailable — switching to ${replacement}`);
+            groqReplacements.set(model, replacement);
+            activeModel = replacement;
+            round -= 1; // the retry replays this same round
+            continue;
+          }
+        }
+        throw groqError(res.status, data, activeModel);
       }
 
       let text = '';
@@ -457,7 +565,7 @@ export async function callGroq({ apiKey, model, system, messages, context = {}, 
           err.code = 'PROVIDER_EMPTY';
           throw err;
         }
-        return { provider: 'groq', model };
+        return { provider: 'groq', model: activeModel };
       }
 
       const results = [];

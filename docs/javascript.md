@@ -55,7 +55,16 @@ detalle del protocolo.
   `callGroq` usa la API compatible con OpenAI de Groq y las mismas
   herramientas de hora y clima: convierte el esquema de Gemini a JSON
   Schema estándar (`toJsonSchema`) y junta las llamadas a herramientas que
-  llegan en fragmentos por el stream antes de ejecutarlas.
+  llegan en fragmentos por el stream antes de ejecutarlas. Su modelo
+  predeterminado es `openai/gpt-oss-120b` (Groq retiró
+  `llama-3.3-70b-versatile` de su plan gratuito el 16 de agosto de 2026),
+  con `reasoning_effort: 'low'` solo para modelos gpt-oss. Si Groq responde
+  que el modelo no existe, `findAvailableGroqModel` pide la lista de modelos
+  vigentes (`/openai/v1/models`), elige el mejor según
+  `GROQ_MODEL_PREFERENCES`, reintenta una vez y recuerda el reemplazo.
+  `fitToGroqBudget` recorta los mensajes más antiguos para que la petición
+  (prompt + `max_tokens`) quepa en los 8K tokens por minuto del plan
+  gratuito.
   `callGemini` además declara `tools` (ver `api/_lib/tools.js`) y corre un
   bucle de hasta `MAX_TOOL_ROUNDS` rondas: si Gemini responde con una
   `functionCall` en vez de texto, ejecuta la herramienta localmente y le
