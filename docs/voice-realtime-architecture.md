@@ -158,7 +158,8 @@ Piezas nuevas, en orden de dependencia:
   tal cual desde el orquestador de voz — la única diferencia es que
   `onChunk` ahora alimenta un segmentador de frases + TTS en vez de NDJSON
   hacia el navegador.
-- `api/_lib/tools.js` (con el hardening de este mismo PR: validación de
+- Las herramientas (antes `api/_lib/tools.js`, hoy los conectores de
+  `api/_lib/connectors/`, con el hardening de este mismo PR: validación de
   esquema, aislamiento de fallos) se reutiliza igual — las herramientas de
   clima/hora funcionan igual de bien en una conversación por voz.
 - El `ChatContext` actual sigue existiendo para el modo texto; el modo voz

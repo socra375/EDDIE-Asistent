@@ -14,15 +14,18 @@ Guía de referencia para las 35 sesiones del plan de Eddie 2.0 (asistente person
 ```
 api/
   chat.js                      ← sin cambios: entrada del chat (streaming NDJSON)
-  connectors/[[...path]].js    ← NUEVO, una sola función para OAuth y webhooks de todos los conectores
+  connectors/[[...path]].js    ← (sesión 7) lista para el hub; luego OAuth y webhooks de todos los conectores
   cron/[[...job]].js           ← NUEVO: tareas programadas (resumen matutino, recordatorios)
   _lib/
     providers.js               ← Gemini + Claude + Groq (respaldo automático)
     agent.js                   ← NUEVO: bucle de varios pasos + protocolo de confirmación
     connectors/
-      registry.js              ← NUEVO: lista de conectores y sus herramientas activas
-      core/                    ← hora y clima (hoy en tools.js)
-      google/                  ← Gmail + Calendario + Drive (reutiliza google.js y googleCredentials.js)
+      registry.js              ← (sesión 7) lista de conectores, herramientas activas por petición y estados del hub
+      validate.js              ← (sesión 7) validación de argumentos compartida
+      planned.js               ← (sesión 7) metadatos de los conectores que vienen, para el hub
+      clock/                   ← (sesión 7) hora y fecha (antes en tools.js)
+      weather/                 ← (sesión 7) clima con Open-Meteo (antes en tools.js)
+      google/                  ← (sesión 7, sin herramientas aún) Gmail + Calendario + Drive (reutiliza google.js y googleCredentials.js)
       websearch/
       telegram/
       whatsapp/
@@ -34,39 +37,48 @@ src/
   core/                        ← Orbe central con estados + botones flotantes
   chat/                        ← panel de chat lateral + tarjetas de confirmación
   today/                       ← panel "Hoy"
-  connectors/                  ← hub de conectores (tarjetas conectar/desconectar)
+  connectors/                  ← (sesión 7) hub de conectores (tarjetas por estado e interruptores)
   skills/                      ← Estudio, Código, Documentos como habilidades del chat
 desktop/                       ← NUEVO (semana 8): app Tauri que envuelve la web
 ```
 
-**Límite de Vercel Hobby (12 funciones):** hoy hay 10 archivos en `api/`. Por eso todos los conectores comparten `api/connectors/[[...path]].js` y todas las tareas programadas comparten `api/cron/[[...job]].js`, con el mismo patrón de ruta comodín que ya usa `api/tasks/[[...id]].js`. Eso deja el total en 12.
+**Límite de Vercel Hobby (12 funciones):** con `api/connectors/[[...path]].js` (sesión 7) hay 11 archivos en `api/`. Todos los conectores comparten esa función y todas las tareas programadas compartirán `api/cron/[[...job]].js`, con el mismo patrón de ruta comodín que ya usa `api/tasks/[[...id]].js`. Eso deja el total en 12.
 
 ## Contrato de un conector
 
-Cada carpeta en `api/_lib/connectors/<id>/` exporta un objeto con esta forma:
+Cada carpeta en `api/_lib/connectors/<id>/` exporta un objeto con esta forma (los de `clock/`, `weather/` y `google/` son ejemplos reales):
 
 ```js
 export default {
   id: 'gmail',
   name: 'Gmail',
+  description: 'Buscar, leer y resumir tus correos…',   // lo que ve el usuario en el hub
+  icon: 'mail',                // nombre de ícono de src/layout/Icon.jsx
+  requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'], // sin ellas: "falta configurar"
   auth: {                      // null si no necesita cuenta (ej. búsqueda web)
     type: 'oauth2',
+    isConnected: async (user) => { … },  // ¿este usuario ya lo conectó?
     start(state) {},           // URL de autorización
     callback(query) {},        // intercambia el código y guarda tokens cifrados
   },
+  note: null,                  // aviso opcional para el hub
   tools: [
     {
+      label: 'Buscar correos',  // cómo se muestra en el hub
       declaration: { name: 'gmail_search', description: '…', parameters: { … } },
       sensitive: false,        // true → requiere confirmación antes de ejecutarse
-      run: async (args, ctx) => { … },
+      run: async (args, ctx) => { … },  // ctx: timezone y ubicación del usuario
     },
   ],
   webhook: null,               // Telegram/WhatsApp: handler de mensajes entrantes
 };
 ```
 
-- La validación de argumentos, el aislamiento de fallos y los reintentos ya existen en `api/_lib/tools.js` y `api/_lib/fetchWithRetry.js`; el registro los reutiliza para todas las herramientas.
-- Solo se ofrecen a la IA las herramientas de los conectores que el usuario tiene activos.
+- Para agregar un conector: crear su carpeta e importarlo en `registry.js`. Si estaba en `planned.js`, se quita de ahí.
+- `registry.js` reutiliza para todas las herramientas la validación de argumentos (`validate.js`), el aislamiento de fallos (todo error vuelve al modelo como `{ error }`) y los reintentos de `api/_lib/fetchWithRetry.js`.
+- Solo se ofrecen a la IA las herramientas de los conectores configurados en el servidor y que el usuario no apagó en el hub (`settings.disabledConnectors`, que el chat envía como `disabledConnectors`).
+- Estados que muestra el hub: `ready`, `connected`, `needs_account`, `needs_setup` y `planned`; "apagado" es la decisión del usuario y vive en sus ajustes.
+- Hasta que exista el protocolo de confirmación (sesión 8), una herramienta `sensitive` nunca se ejecuta.
 - Los tokens de cada conector se guardan cifrados en Postgres (tabla `connector_credentials`, AES-256-GCM con una clave en `CONNECTOR_SECRET`), igual que hoy se guardan los de Google en `googleCredentials.js`.
 
 ## Protocolo de confirmación

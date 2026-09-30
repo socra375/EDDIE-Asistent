@@ -42,8 +42,16 @@ function sanitizeRequest(body) {
   const system = typeof body.system === 'string' ? body.system.slice(0, MAX_SYSTEM_LENGTH) : '';
   const model = typeof body.model === 'string' && body.model.length < 100 ? body.model : undefined;
   const context = sanitizeContext(body.context);
+  const disabledConnectors = sanitizeConnectorIds(body.disabledConnectors);
 
-  return { provider, model, system, messages, context };
+  return { provider, model, system, messages, context, disabledConnectors };
+}
+
+// Connectors the user switched off in the hub. Unknown ids are harmless (the
+// registry just never matches them), but shape and size are still checked.
+function sanitizeConnectorIds(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((id) => typeof id === 'string' && /^[a-z0-9_-]{1,40}$/.test(id)).slice(0, 50);
 }
 
 // Optional real-time context (the user's timezone/coordinates) used by

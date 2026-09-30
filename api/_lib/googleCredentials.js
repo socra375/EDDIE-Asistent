@@ -18,6 +18,14 @@ export async function saveCredentials(userId, tokens) {
   `;
 }
 
+// Whether this user ever connected Google (and hasn't removed it) — used by
+// the connectors hub to show "Conectado" without touching the tokens.
+export async function hasGoogleCredentials(userId) {
+  const sql = getDb();
+  const rows = await sql`select 1 from google_credentials where user_id = ${userId}`;
+  return rows.length > 0;
+}
+
 // Returns a currently-valid access token, transparently refreshing it if
 // it's expired (or about to expire) and a refresh token is on file.
 export async function getValidAccessToken(userId) {

@@ -13,6 +13,7 @@ import { saveToDrive } from '../api/_lib/driveHandlers.js';
 import { listTasks, createTask, updateTask, removeTask } from '../api/_lib/tasksHandlers.js';
 import { getSettings, putSettings } from '../api/_lib/settingsHandlers.js';
 import { getMemory, putMemory } from '../api/_lib/memoryHandlers.js';
+import { handleConnectorsRequest } from '../api/_lib/connectorsHandlers.js';
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -37,6 +38,17 @@ app.get('/api/health', (_req, res) => {
     database: Boolean(process.env.DATABASE_URL),
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
   });
+});
+
+// ---- Connectors hub (and, later, their OAuth and webhooks) ----
+
+app.all(['/api/connectors', '/api/connectors/*'], async (req, res) => {
+  try {
+    const path = (req.params[0] || '').split('/').filter(Boolean);
+    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: cookiesOf(req) }));
+  } catch (err) {
+    respondError(res, err);
+  }
 });
 
 // ---- Auth (Google login) ----

@@ -57,11 +57,15 @@ Cómo te comportas:
 4. Honesto: si no sabes algo o no puedes hacerlo, dilo y ofrece una alternativa. Nunca inventes datos, fuentes, APIs ni acciones que no ejecutaste.
 5. Pregunta solo lo indispensable; si falta un detalle menor, asume lo razonable y dilo.
 
-Lo que puedes hacer hoy: conversar y razonar; consultar la hora y el clima reales con tus herramientas (úsalas siempre en vez de adivinar; si no tienes la ubicación y no te dan una ciudad, pregunta cuál); explicar temas y preparar resúmenes, cuestionarios y planes de estudio; revisar y explicar código; redactar documentos, correos y mensajes para que el usuario los copie o exporte. Todavía no puedes enviar correos, crear eventos, poner música ni controlar la computadora: si te lo piden, redacta el contenido o explica los pasos y aclara que esa función está en camino. Las tareas las gestiona el usuario en el módulo Tareas; si tiene pendientes, las ves más abajo.
+Lo que puedes hacer hoy: conversar y razonar; consultar datos reales con las herramientas de tus conectores activos, como la hora y el clima (úsalas siempre en vez de adivinar; si no tienes la ubicación y no te dan una ciudad, pregunta cuál; si no tienes la herramienta para algo, dilo en vez de inventar); explicar temas y preparar resúmenes, cuestionarios y planes de estudio; revisar y explicar código; redactar documentos, correos y mensajes para que el usuario los copie o exporte. Todavía no puedes enviar correos, crear eventos, poner música ni controlar la computadora: si te lo piden, redacta el contenido o explica los pasos y aclara que esa función está en camino. Las tareas las gestiona el usuario en el módulo Tareas; si tiene pendientes, las ves más abajo.
 
 Cuando enseñes, prioriza que entienda el proceso. Cuando generes código, entrégalo limpio y explica en breve qué hace y cómo usarlo.
 
 Formato: la interfaz muestra tu texto tal cual, sin interpretar Markdown, así que nunca uses asteriscos, guiones de viñeta ni almohadillas (**, *, -, #). Para enumerar usa números con punto (1. 2. 3.) o prosa. Separa ideas distintas con una línea en blanco. Usa bloques \`\`\` solo para código real.`;
+
+// Friendly names for the connectors a user can switch off in the hub
+// (ids match api/_lib/connectors/); unknown ids fall back to the id itself.
+const CONNECTOR_NAMES = { clock: 'Hora y fecha', weather: 'Clima', google: 'Google Calendar y Drive' };
 
 const MAX_MEMORY_CHARS = 1200;
 const MAX_TASKS = 8;
@@ -76,7 +80,7 @@ function describeTasks(tasks) {
     .join('\n');
 }
 
-export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = {}, tasks = [] }) {
+export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = {}, tasks = [], disabledConnectors = [] }) {
   const modeConfig = MODES[mode] || MODES[DEFAULT_MODE];
   const languageName = LANGUAGE_NAMES[language] || language;
 
@@ -98,6 +102,10 @@ export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory
   }
   if (taskLines) {
     parts.push(`Tareas pendientes del usuario (menciónalas solo si vienen al caso):\n${taskLines}`);
+  }
+  if (disabledConnectors.length) {
+    const names = disabledConnectors.slice(0, 10).map((id) => CONNECTOR_NAMES[id] || id).join(', ');
+    parts.push(`Conectores que el usuario apagó: ${names}. Si te pide algo que depende de ellos, dile que puede encenderlos en el módulo Conectores.`);
   }
 
   return parts.join('\n\n');
