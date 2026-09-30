@@ -5,9 +5,10 @@ import {
   saveSettings,
   getMemory,
   saveMemory,
-  deleteMemoryField,
   clearMemory,
 } from '../utils/storage';
+import { addItem, upsertProject, removeItems, emptyMemory, normalizeMemory } from '../services/memory';
+import { MEMORY_CHANGED_EVENT } from '../services/memoryActions';
 
 const SettingsContext = createContext(null);
 
@@ -18,6 +19,13 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
+
+  // Eddie changed the memory from the chat (memory tools).
+  useEffect(() => {
+    const reload = () => setMemory(getMemory());
+    window.addEventListener(MEMORY_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(MEMORY_CHANGED_EVENT, reload);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -40,24 +48,33 @@ export function SettingsProvider({ children }) {
     });
   }
 
-  function rememberFact(key, value) {
-    if (!settings.memoryEnabled) return;
-    setMemory(saveMemoryAndReturn(key, value));
+  // Memory edits the user makes by hand (Memoria module) or the app makes
+  // itself (the study level). Eddie's own edits from the chat arrive through
+  // applyMemoryActions and the change event below.
+  function commitMemory(result) {
+    if (!result.changed) return false;
+    saveMemory(result.memory);
+    setMemory(result.memory);
+    return true;
   }
 
-  function saveMemoryAndReturn(key, value) {
-    const next = { ...getMemory(), [key]: value };
-    saveMemory(next);
-    return next;
+  function rememberFact(item) {
+    if (!settings.memoryEnabled) return false;
+    return commitMemory(addItem(getMemory(), item));
   }
 
-  function forgetFact(key) {
-    setMemory(deleteMemoryField(key));
+  function saveProject(fields) {
+    return commitMemory(upsertProject(getMemory(), fields));
+  }
+
+  function forgetItem(id) {
+    const out = removeItems(getMemory(), [id]);
+    return commitMemory({ memory: out.memory, changed: out.removed > 0 });
   }
 
   function forgetEverything() {
     clearMemory();
-    setMemory({});
+    setMemory(emptyMemory());
   }
 
   // Used by the auth sync bridge to adopt settings/memory pulled from the
@@ -67,8 +84,9 @@ export function SettingsProvider({ children }) {
   }
 
   function replaceMemory(next) {
-    saveMemory(next);
-    setMemory(next);
+    const clean = normalizeMemory(next);
+    saveMemory(clean);
+    setMemory(clean);
   }
 
   const value = useMemo(
@@ -79,7 +97,8 @@ export function SettingsProvider({ children }) {
       setConnectorEnabled,
       memory,
       rememberFact,
-      forgetFact,
+      saveProject,
+      forgetItem,
       forgetEverything,
       replaceSettings,
       replaceMemory,

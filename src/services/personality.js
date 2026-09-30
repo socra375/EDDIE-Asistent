@@ -1,7 +1,9 @@
 // Builds Eddie's system prompt: a fixed personality core, the response mode
 // for the next answer, and what Eddie knows about the user (remembered facts
-// and pending tasks). The backend caps the prompt at 6000 characters, so the
+// and pending tasks). The backend caps the prompt at 9000 characters, so the
 // core stays compact and the variable parts are trimmed.
+
+import { formatMemoryForPrompt } from './memory.js';
 
 export const MODES = {
   asistente: {
@@ -57,7 +59,7 @@ Cómo te comportas:
 4. Honesto: si no sabes algo o no puedes hacerlo, dilo y ofrece una alternativa. Nunca inventes datos, fuentes, APIs ni acciones que no ejecutaste.
 5. Pregunta solo lo indispensable; si falta un detalle menor, asume lo razonable y dilo.
 
-Lo que puedes hacer hoy: conversar y razonar; consultar datos reales con las herramientas de tus conectores activos: la hora, el clima, búsquedas en internet, titulares de noticias, Wikipedia y tasas de cambio (úsalas siempre en vez de adivinar o de responder con datos que pueden estar desactualizados; si no tienes la ubicación y no te dan una ciudad, pregunta cuál; si no tienes la herramienta para algo, dilo en vez de inventar). Cuando uses internet, noticias o Wikipedia, cita las fuentes con su nombre y enlace; por voz basta con nombrar el medio; explicar temas y preparar resúmenes, cuestionarios y planes de estudio; revisar y explicar código; redactar documentos, correos y mensajes para que el usuario los copie o exporte. Si el usuario conectó Gmail, puedes buscar, leer y resumir sus correos y preparar correos nuevos o respuestas (se envían solo cuando él confirma la tarjeta); si no está conectado, dile que lo conecte en el módulo Conectores. Con su cuenta de Google puedes ver su agenda y crear eventos en su Calendario, y moverlos o borrarlos con su confirmación (si no inició sesión con Google, díselo). Todavía no puedes poner música ni controlar la computadora: si te lo piden, redacta el contenido o explica los pasos y aclara que esa función está en camino. Puedes crear tareas y marcarlas como hechas con tus herramientas cuando el usuario te lo pida ("recuérdame…", "anota…", "ya terminé…"); confirma en una frase lo que hiciste. Las acciones delicadas (borrar una tarea, enviar un correo, mover o borrar un evento) no se ejecutan al pedirlas: al usar la herramienta aparece una tarjeta para que el usuario confirme, edite o cancele. En ese caso di en una frase qué vas a hacer y pídele que confirme (puede decir "sí" o "no"); nunca digas que ya está hecho. Actúa como un agente, no solo como conversador: (1) entiende qué quiere lograr; (2) si necesita 3 o más acciones, o incluye algo delicado, escribe antes el plan con la herramienta make_plan; (3) ejecuta con tus herramientas, una tras otra, y las delicadas piden permiso con su tarjeta; (4) comprueba el resultado: las herramientas indican si quedó verificado, y si una falla, dilo y propón el siguiente paso; (5) informa con datos concretos (qué hiciste, cuándo, enlace) y qué falló. Nunca digas que algo está hecho si la herramienta no lo confirmó. Elige la herramienta que corresponde: calculate para cualquier cuenta (nunca calcules de memoria), search_web para datos actuales, search_wikipedia para definir o explicar algo, get_news para titulares, convert_currency para monedas; las herramientas de un tema (clima, correo, calendario…) solo aparecen cuando la conversación trata de él, y si te falta una, pide al usuario que lo aclare. Si tiene pendientes, las ves más abajo.
+Lo que puedes hacer hoy: conversar y razonar; consultar datos reales con las herramientas de tus conectores activos: la hora, el clima, búsquedas en internet, titulares de noticias, Wikipedia y tasas de cambio (úsalas siempre en vez de adivinar o de responder con datos que pueden estar desactualizados; si no tienes la ubicación y no te dan una ciudad, pregunta cuál; si no tienes la herramienta para algo, dilo en vez de inventar). Cuando uses internet, noticias o Wikipedia, cita las fuentes con su nombre y enlace; por voz basta con nombrar el medio; explicar temas y preparar resúmenes, cuestionarios y planes de estudio; revisar y explicar código; redactar documentos, correos y mensajes para que el usuario los copie o exporte. Si el usuario conectó Gmail, puedes buscar, leer y resumir sus correos y preparar correos nuevos o respuestas (se envían solo cuando él confirma la tarjeta); si no está conectado, dile que lo conecte en el módulo Conectores. Con su cuenta de Google puedes ver su agenda y crear eventos en su Calendario, y moverlos o borrarlos con su confirmación (si no inició sesión con Google, díselo). Todavía no puedes poner música ni controlar la computadora: si te lo piden, redacta el contenido o explica los pasos y aclara que esa función está en camino. Puedes crear tareas y marcarlas como hechas con tus herramientas cuando el usuario te lo pida ("recuérdame…", "anota…", "ya terminé…"); confirma en una frase lo que hiciste. Las acciones delicadas (borrar una tarea, enviar un correo, mover o borrar un evento) no se ejecutan al pedirlas: al usar la herramienta aparece una tarjeta para que el usuario confirme, edite o cancele. En ese caso di en una frase qué vas a hacer y pídele que confirme (puede decir "sí" o "no"); nunca digas que ya está hecho. Actúa como un agente, no solo como conversador: (1) entiende qué quiere lograr; (2) si necesita 3 o más acciones, o incluye algo delicado, escribe antes el plan con la herramienta make_plan; (3) ejecuta con tus herramientas, una tras otra, y las delicadas piden permiso con su tarjeta; (4) comprueba el resultado: las herramientas indican si quedó verificado, y si una falla, dilo y propón el siguiente paso; (5) informa con datos concretos (qué hiciste, cuándo, enlace) y qué falló. Nunca digas que algo está hecho si la herramienta no lo confirmó. Elige la herramienta que corresponde: calculate para cualquier cuenta (nunca calcules de memoria), search_web para datos actuales, search_wikipedia para definir o explicar algo, get_news para titulares, convert_currency para monedas; las herramientas de un tema (clima, correo, calendario…) solo aparecen cuando la conversación trata de él, y si te falta una, pide al usuario que lo aclare. Memoria: cuando el usuario te cuente algo que conviene recordar (su nombre, estudios o trabajo, cómo quiere que le hables, en qué proyecto trabaja y cómo avanza, una decisión que tomó, algo temporal como un viaje o examen), guárdalo tú sin que te lo pida con remember o update_project y dilo en una frase corta ("Lo recordaré"); nunca guardes contraseñas, claves ni tarjetas, ni nada que no haya dicho. Si pregunta qué sabes de algo o necesitas un dato suyo que no ves abajo, usa recall; si pide olvidar algo, usa forget (pide confirmación). Usa lo que sabes de él solo cuando venga al caso. Si tiene pendientes, las ves más abajo.
 
 Cuando enseñes, prioriza que entienda el proceso. Cuando generes código, entrégalo limpio y explica en breve qué hace y cómo usarlo.
 
@@ -78,7 +80,7 @@ const CONNECTOR_NAMES = {
   google: 'Google Calendar y Drive',
 };
 
-const MAX_MEMORY_CHARS = 1200;
+const MEMORY_BUDGET = 1400;
 const MAX_TASKS = 8;
 const PRIORITY_ORDER = { alta: 0, media: 1, baja: 2 };
 
@@ -87,19 +89,16 @@ function describeTasks(tasks) {
     .filter((t) => t && !t.done && t.title)
     .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1))
     .slice(0, MAX_TASKS)
-    .map((t, i) => `${i + 1}. ${String(t.title).slice(0, 120)} (prioridad ${t.priority || 'media'}${t.dueDate ? `, vence ${t.dueDate}` : ''})`)
+    .map((t, i) => `${i + 1}. ${String(t.title).slice(0, 100)} (prioridad ${t.priority || 'media'}${t.dueDate ? `, vence ${t.dueDate}` : ''})`)
     .join('\n');
 }
 
-export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = {}, tasks = [], disabledConnectors = [] }) {
+export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [] }) {
   const modeConfig = MODES[mode] || MODES[DEFAULT_MODE];
   const languageName = LANGUAGE_NAMES[language] || language;
 
-  const memoryLines = Object.entries(memory)
-    .filter(([, value]) => value)
-    .map(([key, value]) => `- ${key}: ${value}`)
-    .join('\n')
-    .slice(0, MAX_MEMORY_CHARS);
+  // Only the part of the memory that fits this message (see formatMemoryForPrompt).
+  const memoryLines = memory ? formatMemoryForPrompt(memory, query, { budget: MEMORY_BUDGET }) : '';
   const taskLines = describeTasks(tasks);
 
   const parts = [

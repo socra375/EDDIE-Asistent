@@ -192,6 +192,15 @@ detalle del protocolo.
     enrutado por intención (`route` de cada conector, ver
     `docs/eddie-2-arquitectura.md`); `callProvider` calcula el `intent`
     con los últimos mensajes y se lo pasa a `createToolset`.
+  - `memory/`: `remember` (perfil, preferencia, decisión, conocimiento o
+    contexto temporal), `update_project`, `recall` y `forget` (sensible: pasa
+    por tarjeta). Como Tareas, no escriben: validan contra `context.memory`
+    (lo que el navegador manda, saneado en `sanitizeContext`) y emiten
+    acciones que la app aplica. `remember` y `update_project` rechazan
+    contraseñas, claves, tokens y números de tarjeta. Siempre ofrecido; se
+    apaga desde Conectores o, sin avisar al servidor, con "Permitir que Eddie
+    recuerde" en Memoria/Configuración (la app añade `memory` a
+    `disabledConnectors` y no manda la memoria).
   - `http.js`: `fetchJson`/`fetchText` para las herramientas (un reintento,
     timeout corto, nunca lanza) y `clip` para acortar lo que vuelve al
     modelo (cuenta contra el límite de tokens de Groq).
@@ -349,10 +358,12 @@ Los tres contextos son el "estado global" de la app — no hay Redux ni
 otra librería de estado, solo React Context + `useState`/`useMemo`.
 
 - **`SettingsContext.jsx`** — proveedor de IA, modelo, idioma, tema,
-  configuración de voz y la "memoria" (hechos que Eddie recuerda entre
-  sesiones). Persiste todo en `localStorage` a través de `utils/storage.js`
-  cada vez que cambia. Expone `updateSettings`, `updateVoiceSettings`,
-  `rememberFact`, `forgetFact`, `forgetEverything`.
+  configuración de voz y la memoria estructurada (abajo). Persiste todo en
+  `localStorage` a través de `utils/storage.js` cada vez que cambia. Expone
+  `updateSettings`, `updateVoiceSettings`, `rememberFact({ category, key,
+  text, … })`, `saveProject`, `forgetItem(id)`, `forgetEverything`, y vuelve
+  a leer la memoria cuando llega el evento `eddie:memory-changed` (cambios
+  que Eddie hace desde el chat).
 - **`LocationContext.jsx`** — pide el permiso de geolocalización del
   navegador (`navigator.geolocation`) una vez al montar la app y expone
   `{ location, status, requestLocation }`. Si el usuario lo deniega o el
@@ -484,6 +495,27 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   mostrar en la interfaz si algo falla (red caída, backend con error,
   proveedor sin configurar, o un `{"type":"error",...}` a mitad de la
   transmisión).
+- **`memory.js`** — la memoria estructurada, funciones puras sobre un objeto
+  `{ v: 2, profile, preferences, projects, decisions, knowledge, context }`
+  (listas de ítems con `id`): `normalizeMemory` (migra el mapa plano
+  antiguo: el nivel de estudio pasa al perfil, el último tema a contexto
+  temporal de 14 días; limpia y acota lo guardado), `addItem` (perfil y
+  preferencias por clave: repetir reemplaza; el resto no repite; tope por
+  categoría, conserva lo más nuevo; el contexto temporal vence en 1 a 60
+  días), `upsertProject` (solo cambian los campos dados), `removeItems`,
+  `mergeMemory` (unión al iniciar sesión: gana la copia más nueva),
+  `memoryForContext` (lista plana de hasta 80 ítems para las herramientas
+  del servidor) y `formatMemoryForPrompt` (perfil y preferencias siempre;
+  proyectos mencionados o los 3 recientes; decisiones y conocimientos que
+  comparten palabras con el mensaje; contexto vigente; todo dentro del
+  presupuesto de caracteres, por líneas completas).
+- **`memoryActions.js`** — `applyMemoryActions(actions)` aplica las acciones
+  `memory_add`, `memory_project` y `memory_forget` de las herramientas del
+  conector `memory` (no guarda nada si la memoria está apagada) y avisa con
+  `eddie:memory-changed`; devuelve las etiquetas "Recordé: …" que el chat
+  muestra bajo la respuesta (`message.memoryChanges`). El módulo Memoria
+  (`src/memory/MemoryPanel.jsx`) lista cada categoría con botón de olvidar,
+  edita proyectos y tiene un formulario para añadir a mano.
 - **`localAnswers.js`** — la "memoria propia" de Eddie: `getLocalAnswer(texto, { timezone, language })`
   reconoce small talk y trivia autorreferencial (cómo estás, qué día/hora
   es, quién eres, gracias) por patrones de texto normalizado (sin
@@ -500,10 +532,11 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   voz alta) y los siete modos de respuesta (`MODES`: asistente, el modo
   por defecto `DEFAULT_MODE`, más rápido, explicativo, tutor, técnico,
   investigación y creativo).
-  `buildSystemPrompt({ mode, language, memory, tasks })` combina todo eso
-  en el texto que se envía como `system` a la API, con hasta 1200
-  caracteres de memoria y las 8 tareas pendientes más prioritarias. En el
-  peor caso queda por debajo de los 8000 caracteres que acepta el backend
+  `buildSystemPrompt({ mode, language, memory, query, tasks })` combina todo
+  eso en el texto que se envía como `system` a la API, con hasta 1400
+  caracteres de memoria (solo lo relevante para `query`, el mensaje actual,
+  ver `formatMemoryForPrompt`) y las 8 tareas pendientes más prioritarias. En el
+  peor caso queda por debajo de los 9000 caracteres que acepta el backend
   (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`). `CORE_PERSONALITY` incluye
   una instrucción de formato explícita: nada de asteriscos, guiones de
   viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se

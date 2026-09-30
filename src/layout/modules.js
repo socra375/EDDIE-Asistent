@@ -7,6 +7,7 @@ export const MODULES = [
   { id: 'today', label: 'Hoy', icon: 'sun', color: '#b48cff' },
   { id: 'chat', label: 'Chat', icon: 'chat', color: '#b9f7ff' },
   { id: 'tasks', label: 'Tareas', icon: 'check', color: '#4dffa6' },
+  { id: 'memory', label: 'Memoria', icon: 'memory', color: '#ff7ad9' },
   { id: 'connectors', label: 'Conectores', icon: 'plug', color: '#ffb020' },
 ];
 

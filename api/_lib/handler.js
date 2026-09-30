@@ -3,7 +3,8 @@ import { callProvider } from './providers.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 8000;
+const MAX_SYSTEM_LENGTH = 9000;
+const MEMORY_CATEGORIES = new Set(['profile', 'preferences', 'projects', 'decisions', 'knowledge', 'context']);
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
 class ValidationError extends Error {}
@@ -82,6 +83,14 @@ export function sanitizeContext(context) {
       .filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string')
       .slice(0, 50)
       .map((t) => ({ id: t.id.slice(0, 80), title: t.title.slice(0, 200), done: Boolean(t.done) }));
+  }
+  // What the user has saved in Memoria, flat and capped, so the memory tools
+  // (recall, forget) can search it.
+  if (Array.isArray(context.memory)) {
+    result.memory = context.memory
+      .filter((m) => m && typeof m.id === 'string' && MEMORY_CATEGORIES.has(m.c) && typeof m.t === 'string')
+      .slice(0, 80)
+      .map((m) => ({ id: m.id.slice(0, 40), c: m.c, t: m.t.slice(0, 220) }));
   }
   return result;
 }

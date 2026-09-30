@@ -1,5 +1,6 @@
 // Small localStorage wrapper. Every read/write is guarded so a disabled or
 // full storage never crashes the app — it just behaves as if memory is empty.
+import { normalizeMemory, emptyMemory } from '../services/memory';
 
 const KEYS = {
   settings: 'eddie.settings',
@@ -55,30 +56,23 @@ export function saveSettings(settings) {
   write(KEYS.settings, settings);
 }
 
+// Always a clean v2 memory (src/services/memory.js): the old flat
+// { key: value } map is migrated the first time it is read.
 export function getMemory() {
-  return read(KEYS.memory, {});
+  const raw = read(KEYS.memory, null);
+  const memory = normalizeMemory(raw);
+  // Migrated memory is written back once: its items get their ids here, and
+  // they must stay the same on every later read.
+  if (raw && raw.v !== memory.v) write(KEYS.memory, memory);
+  return memory;
 }
 
 export function saveMemory(memory) {
   write(KEYS.memory, memory);
 }
 
-export function updateMemoryField(key, value) {
-  const memory = getMemory();
-  memory[key] = value;
-  saveMemory(memory);
-  return memory;
-}
-
-export function deleteMemoryField(key) {
-  const memory = getMemory();
-  delete memory[key];
-  saveMemory(memory);
-  return memory;
-}
-
 export function clearMemory() {
-  write(KEYS.memory, {});
+  write(KEYS.memory, emptyMemory());
 }
 
 // A short, human-readable label for a conversation: the first thing the

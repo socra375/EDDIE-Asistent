@@ -11,13 +11,14 @@ import news from './news/index.js';
 import wikipedia from './wikipedia/index.js';
 import currency from './currency/index.js';
 import tasks from './tasks/index.js';
+import memory from './memory/index.js';
 import agent from './agent/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, memory, websearch, news, wikipedia, currency, gmail, google];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
