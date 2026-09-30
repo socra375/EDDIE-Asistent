@@ -227,9 +227,15 @@ detalle del protocolo.
     IA: su `prepare` arma una tarjeta que queda en `toolset.confirmations`
     y el usuario la confirma en el chat; `confirmTool` la ejecuta después
     (ver "Protocolo de confirmación" en `docs/eddie-2-arquitectura.md`).
-    `onActivity` avisa cuando empieza cada herramienta (usa su `activity`,
-    p. ej. "Buscando en internet…") y el stream lo reenvía como evento
-    `activity`.
+    `onStep` avisa cada vez que una herramienta empieza o cambia de
+    estado: es su "recibo" `{ id, tool, label, activity, status, summary,
+    verified, detail }` (`status`: `running`, `done`, `error`, `waiting`
+    si espera tu confirmación) y el stream lo reenvía como evento `step`;
+    `toolset.steps` los junta y viajan también en `done.steps`. La
+    herramienta oculta `make_plan` (conector `agent`) le deja a Eddie
+    declarar su plan antes de actuar (su lista sale en `detail`). Las
+    herramientas que escriben (Calendario, Gmail) releen el resultado y
+    devuelven `verified: true | false | null` ("Comprueba").
     Las acciones que emiten las herramientas se juntan en
     `toolset.actions`; `callProvider` las devuelve con la respuesta (y las
     descarta si pasa a un respaldo, que empieza de cero) y
@@ -381,8 +387,13 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
      navegador (`Intl.DateTimeFormat().resolvedOptions().timeZone`), la
      `location` de `useLocation()`, si existe, y las tareas
      (`tasksForContext()`) — es lo que el backend pasa a las herramientas.
-     Mientras llegan eventos `activity`, `activity` guarda qué está
-     haciendo Eddie ("Buscando en internet…"); las `confirmations` del
+     Mientras llegan eventos `step`, `liveSteps` guarda los pasos de la
+     petición en curso (y `activity` el que corre: "Buscando en
+     internet…"); al crearse la burbuja pasan a `message.steps`, y
+     `<StepTrace>` (`components/Chat/StepTrace.jsx`) los dibuja como
+     recibo: icono de estado, resultado, el plan numerado y la etiqueta
+     "verificado". El paso de una tarjeta (`card.stepId`) se actualiza al
+     confirmar o cancelar. Las `confirmations` del
      evento final quedan en el mensaje como tarjetas (`state: pending`) y
      `resolveConfirmation(mensaje, tarjeta, 'confirm' | 'cancel', args)`
      las resuelve: llama a `confirmAction` (`POST

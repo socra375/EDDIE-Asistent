@@ -58,6 +58,7 @@ export default {
     {
       label: 'Convertir monedas',
       activity: 'Consultando la tasa de cambio…',
+      summarize: (result) => `${result.amount} ${result.from} = ${result.result} ${result.to}`,
       sensitive: false,
       declaration: {
         name: 'convert_currency',

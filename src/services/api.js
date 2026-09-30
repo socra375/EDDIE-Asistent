@@ -10,8 +10,10 @@ export class EddieApiError extends Error {}
 // The response streams as newline-delimited JSON — see api/_lib/chatStream.js
 // for the wire format. onChunk(fullTextSoFar) fires as each piece arrives so
 // the caller can render the answer live instead of waiting for it to finish.
-// onActivity(label) fires when Eddie starts using a tool ("Buscando en internet…").
-export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, onChunk, onActivity }) {
+// onStep(step) fires each time a tool call starts or changes state — the
+// "receipt" of what Eddie is doing ({ id, tool, label, activity, status,
+// summary, verified, detail }); the same id arrives again as it finishes.
+export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, onChunk, onStep }) {
   let res;
   try {
     res = await fetch(`${API_BASE}/api/chat`, {
@@ -72,9 +74,10 @@ export async function sendChatMessage({ provider, model, system, messages, conte
           fallbackFrom: event.fallbackFrom,
           actions: event.actions || [],
           confirmations: event.confirmations || [],
+          steps: event.steps || [],
         };
-      } else if (event.type === 'activity') {
-        onActivity?.(event.label);
+      } else if (event.type === 'step') {
+        onStep?.({ ...event, type: undefined });
       } else if (event.type === 'error') {
         throw new EddieApiError(event.message);
       }

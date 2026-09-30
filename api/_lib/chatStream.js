@@ -10,13 +10,17 @@
 //                                       actions are app changes the tools
 //                                       asked for, e.g. create_task;
 //                                       confirmations are sensitive actions
-//                                       waiting for the user's OK)
-//   {"type":"activity","tool":...,"label":"Buscando en internet…"}
-//                                     — a tool started (Eddie is working)
+//                                       waiting for the user's OK; steps is the
+//                                       receipt of every tool call)
+//   {"type":"step","id":"s1","tool":...,"label":...,"activity":...,"status":
+//    "running"|"done"|"error"|"waiting","summary":...,"verified":...}
+//                                     — a tool call started or ended (same id
+//                                       each time); the final list comes again
+//                                       in `done`
 //   {"type":"error","message":"..."} — failed after the stream had already
 //                                       started (see below)
 //
-// The stream only opens once the first chunk or tool activity is ready to
+// The stream only opens once the first chunk or tool step is ready to
 // send. Anything that fails before that (bad request, missing API key,
 // quota exceeded, a fully-failed first attempt) still gets a normal HTTP
 // status + JSON body, exactly like before streaming existed — a failure
@@ -45,9 +49,9 @@ export async function runChatStream(req, res) {
         ensureStream();
         res.write(`${JSON.stringify({ type: 'chunk', text })}\n`);
       },
-      (activity) => {
+      (step) => {
         ensureStream();
-        res.write(`${JSON.stringify({ type: 'activity', ...activity })}\n`);
+        res.write(`${JSON.stringify({ type: 'step', ...step })}\n`);
       },
       { cookies: parseCookies(req.headers?.cookie) },
     );
@@ -55,6 +59,7 @@ export async function runChatStream(req, res) {
     const done = { type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom };
     if (result.actions?.length) done.actions = result.actions;
     if (result.confirmations?.length) done.confirmations = result.confirmations;
+    if (result.steps?.length) done.steps = result.steps;
     res.write(`${JSON.stringify(done)}\n`);
     res.end();
   } catch (err) {

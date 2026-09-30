@@ -45,6 +45,7 @@ export default {
     {
       label: 'Consultar Wikipedia',
       activity: 'Consultando Wikipedia…',
+      summarize: (result) => `Artículo: ${result.title}`,
       sensitive: false,
       declaration: {
         name: 'search_wikipedia',

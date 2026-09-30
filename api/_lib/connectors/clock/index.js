@@ -24,6 +24,7 @@ export default {
     {
       label: 'Consultar la hora y la fecha',
       activity: 'Consultando la hora…',
+      summarize: (result) => result.formatted,
       sensitive: false,
       declaration: {
         name: 'get_current_datetime',

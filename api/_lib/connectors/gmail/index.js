@@ -214,7 +214,16 @@ async function sendEmail(args, context) {
   }
   payload.raw = buildRawEmail({ to: args.to, subject: args.subject, body: args.body, inReplyTo, references });
   const sent = await gmail(token, '/messages/send', { method: 'POST', body: JSON.stringify(payload) });
-  return { sent: true, id: sent?.id, summary: `Envié el correo a ${args.to}.` };
+  // "Comprueba": the message must now be in the Sent folder.
+  let verified = null;
+  try {
+    verified = Boolean((await gmail(token, `/messages/${encodeURIComponent(sent.id)}?format=minimal`))?.labelIds?.includes('SENT'));
+  } catch {
+    // The send went through; only the check failed.
+  }
+  const text = `Envié el correo a ${args.to}.`;
+  const summary = verified === true ? `${text} Comprobado: está en tu carpeta de enviados.` : verified === false ? `${text} No pude comprobarlo en enviados: revísalo.` : text;
+  return { sent: true, id: sent?.id, verified, summary };
 }
 
 export default {
@@ -233,6 +242,7 @@ export default {
     {
       label: 'Buscar correos',
       activity: 'Revisando tu correo…',
+      summarize: (result) => `${result.emails.length} correo${result.emails.length === 1 ? '' : 's'}`,
       sensitive: false,
       declaration: {
         name: 'search_emails',
@@ -251,6 +261,7 @@ export default {
     {
       label: 'Leer y resumir correos',
       activity: 'Leyendo el correo…',
+      summarize: (result) => `Leído: ${result.subject}`,
       sensitive: false,
       declaration: {
         name: 'read_email',
