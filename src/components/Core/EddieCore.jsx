@@ -1,3 +1,4 @@
+import Icon from '../../layout/Icon';
 import './EddieCore.css';
 
 const STATE_LABELS = {
@@ -36,7 +37,7 @@ export default function EddieCore({ state = 'idle', compact = false }) {
         )}
       </div>
       <div className="eddie-core__nucleus">
-        {state === 'listening' ? <span className="eddie-core__icon" aria-hidden="true">🎙️</span> : <span className="eddie-core__spark" />}
+        {state === 'listening' ? <Icon name="mic" size={compact ? 14 : 24} className="eddie-core__icon" /> : <span className="eddie-core__spark" />}
       </div>
       {!compact && <p className="eddie-core__status">{STATE_LABELS[state]}</p>}
     </div>

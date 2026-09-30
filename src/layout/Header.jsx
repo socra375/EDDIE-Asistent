@@ -44,8 +44,8 @@ export default function Header({ section }) {
 
   return (
     <header className="header">
-      <div className="chips">
-        <span className="chip on header__clock-chip">
+      <div className="chips chips--left">
+        <span className="chip on">
           <LiveClock />
         </span>
         <span className={`chip ${online ? 'on' : 'bad'}`}>RED · {online ? 'EN LÍNEA' : 'SIN RED'}</span>

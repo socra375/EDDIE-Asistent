@@ -339,8 +339,8 @@ transversales:
   `processing` renderiza además `eddie-core__waves`: 16 barras dispuestas
   en círculo (una por `<span className="wave-spoke">`, rotada por
   `transform: rotate(...)` vía JS) que pulsan como un ecualizador de
-  audio alrededor del núcleo — con micrófono 🎙️ en el centro para
-  `listening`. El resto de estados conservan sus animaciones propias
+  audio alrededor del núcleo — con el ícono de micrófono (`Icon`) en el
+  centro para `listening`. El resto de estados conservan sus animaciones propias
   (respiración, giro, flash, etc.), todas puramente en CSS.
 - **`src/layout/`** — el marco de la app, inspirado en JARVIS-HRZ, usado
   una sola vez desde `App.jsx`:
@@ -364,8 +364,10 @@ transversales:
     salen de `--logo-ring`, `--logo-letter` y `--logo-amber`, que el tema
     claro redefine.
   - `Layout.css`: grid de tres columnas; la columna de chats se colapsa a
-    ancho 0 en vez de desmontarse (arranca cerrada). Bajo 1100px se oculta
-    la columna, y bajo 860px la barra de íconos pasa abajo.
+    ancho 0 en vez de desmontarse (arranca cerrada). Bajo 1100px pasa a ser
+    un panel deslizable (`App.jsx` lo cierra al elegir un chat o módulo, con
+    Escape o tocando el fondo `.chatlist-backdrop`), y bajo 860px la barra
+    de íconos pasa abajo.
 - **`src/home/`** — la pantalla de Inicio, el módulo por defecto:
   - `HomePanel.jsx`: une voz y chat. El estado visual del anillo sale de
     `useVoice()` y `useChat().status`, con esta prioridad: escuchando >

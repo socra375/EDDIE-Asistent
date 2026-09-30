@@ -91,8 +91,13 @@
 /* Narrow spots (the Home side panel, phones): one compact row of skills,
    an icon-only "Nueva" button and selects without visible labels. */
 @container (max-width: 560px) {
-  .chat-new__label {
+  .chat-new__label,
+  .chat-send__label {
     display: none;
+  }
+
+  .chat-send {
+    padding-inline: 0.75rem;
   }
 
   .chat-panel__options {
@@ -298,5 +303,13 @@
 @media (max-width: 640px) {
   .bubble {
     max-width: 90%;
+  }
+}
+
+/* On phones the Home ring already is Eddie's face; the small orb here
+   would only push the conversation down. */
+@media (max-width: 860px) {
+  .chat-panel__core {
+    display: none;
   }
 }

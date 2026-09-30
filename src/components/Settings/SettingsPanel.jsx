@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
+import Icon from '../../layout/Icon';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -82,7 +83,7 @@ export default function SettingsPanel({ onOpenConversation }) {
               sesión, Eddie sigue funcionando por completo, guardando todo solo en este navegador.
             </p>
             <button type="button" className="btn btn-primary" onClick={login} disabled={health && (!health.database || !health.google)}>
-              🔐 Iniciar sesión con Google
+              Iniciar sesión con Google
             </button>
             {health && (!health.database || !health.google) && (
               <p className="settings-warning">
@@ -198,7 +199,7 @@ export default function SettingsPanel({ onOpenConversation }) {
                     Abrir
                   </button>
                   <button type="button" className="btn tasks-delete" onClick={() => deleteConversation(c.id)} aria-label="Eliminar conversación">
-                    ✕
+                    <Icon name="close" size={14} />
                   </button>
                 </span>
               </li>

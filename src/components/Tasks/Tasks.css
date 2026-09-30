@@ -140,3 +140,36 @@
   padding: 0.25rem 0.5rem;
   color: var(--text-faint);
 }
+
+/* Phones: the date, priority and buttons drop below the title instead of
+   squeezing it into a narrow column. */
+@media (max-width: 640px) {
+  .task-item {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .task-item__check {
+    flex-basis: 100%;
+  }
+
+  .task-item__meta {
+    flex-wrap: wrap;
+    width: 100%;
+    padding-left: 1.6rem;
+  }
+
+  .tasks-delete {
+    margin-left: auto;
+  }
+
+  .tasks-form__date {
+    flex: 2 1 0;
+    max-width: none;
+  }
+
+  .tasks-form__priority {
+    flex: 1 1 96px;
+    max-width: none;
+  }
+}

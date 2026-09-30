@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getTasks, saveTasks } from '../../utils/storage';
 import { useAuth } from '../../context/AuthContext';
 import { remoteTasks, remoteCalendar } from '../../services/remote';
+import Icon from '../../layout/Icon';
 import './Tasks.css';
 
 const PRIORITIES = { alta: 3, media: 2, baja: 1 };
@@ -194,18 +195,24 @@ export default function TasksPanel() {
                   (t.googleEventId ? (
                     t.googleEventLink ? (
                       <a className="btn tasks-calendar" href={t.googleEventLink} target="_blank" rel="noreferrer">
-                        📅 Ver evento
+                        <Icon name="calendar" size={14} /> Ver evento
                       </a>
                     ) : (
                       <span className="tasks-calendar-done">✓ En Calendar</span>
                     )
                   ) : (
                     <button type="button" className="btn tasks-calendar" onClick={() => syncToCalendar(t)} disabled={syncingId === t.id}>
-                      {syncingId === t.id ? 'Sincronizando…' : '📅 A Calendar'}
+                      {syncingId === t.id ? (
+                        'Sincronizando…'
+                      ) : (
+                        <>
+                          <Icon name="calendar" size={14} /> A Calendar
+                        </>
+                      )}
                     </button>
                   ))}
                 <button type="button" className="btn tasks-delete" onClick={() => removeTask(t.id)} aria-label="Eliminar tarea">
-                  ✕
+                  <Icon name="close" size={14} />
                 </button>
               </div>
             </li>

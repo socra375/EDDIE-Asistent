@@ -239,8 +239,9 @@ export default function ChatPanel({ showCore = true }) {
             placeholder={skill.placeholder}
             aria-label="Mensaje para Eddie"
           />
-          <button type="submit" className="btn btn-primary" disabled={!input.trim() || busy}>
-            Enviar
+          <button type="submit" className="btn btn-primary chat-send" disabled={!input.trim() || busy} aria-label="Enviar">
+            <Icon name="send" size={16} />
+            <span className="chat-send__label">Enviar</span>
           </button>
         </form>
       </div>

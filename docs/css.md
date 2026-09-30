@@ -145,11 +145,23 @@ en dos lugares de distinto ancho (su módulo y el panel lateral de Inicio):
 }
 ```
 
-El layout general (`Layout.css`) oculta "Mis chats" bajo `1100px` y a
-`860px` pasa la barra de íconos abajo (como una tab bar nativa) y apila el
-encabezado. La pantalla de Inicio (`src/home/Home.css`) pasa de tres
-columnas a una sola bajo `1100px`, con el anillo primero y los botones
-flotantes fijos sobre la barra inferior.
+El layout general (`Layout.css`) tiene dos cortes:
+
+- Bajo `1100px` (tablets y Chromebooks pequeños) la grilla pasa a dos
+  columnas (barra + contenido) y "Mis chats" se vuelve un panel que se
+  desliza sobre el contenido, con fondo oscurecido. Se cierra con el
+  botón de la barra, tocando el fondo, con Escape o al elegir un chat.
+- Bajo `860px` la barra de íconos pasa abajo (como una tab bar nativa),
+  el encabezado se compacta (logo más chico y sin los chips de reloj, red
+  y GPS) y "Mis chats" se abre desde la izquierda sobre la barra.
+
+La pantalla de Inicio (`src/home/Home.css`) conserva sus tres columnas,
+más angostas, hasta `960px`; debajo pasa a una sola, con el anillo primero
+y los botones flotantes fijos. En Tareas, bajo `640px`, la fecha, la
+prioridad y los botones bajan debajo del título.
+
+Todo lo clicable muestra un anillo `--accent` al enfocarse con el teclado
+(`:focus-visible` en `index.css`), sin afectar los clics con el mouse.
 
 ## 5. Efectos HUD y pantalla de Inicio
 
