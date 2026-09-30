@@ -1,36 +1,39 @@
-/* Dark theme: near-black, flat surfaces (JARVIS-HRZ-style), keeping
-   Eddie's own cyan/violet accents. */
+/* Dark theme: HUD (Iron Man style) — cyan instrument panels on a deep
+   teal-black ground, monospace UI type, square corners. */
 :root {
   color-scheme: dark;
 
-  --bg: #05070b;
-  --bg-elevated: #080b12;
-  --panel-bg: rgba(14, 18, 28, 0.72);
-  --panel-bg-solid: #0b0f18;
-  --panel-border: rgba(120, 190, 255, 0.12);
-  --panel-border-strong: rgba(79, 214, 255, 0.38);
-  --line: rgba(255, 255, 255, 0.06);
-  --rail-bg: #06080d;
-  --list-bg: #080b11;
-  --new-chat-bg: #f2f6fc;
-  --new-chat-text: #05070b;
-  --tooltip-bg: #f2f6fc;
-  --tooltip-text: #05070b;
-  --accent: #4fd6ff;
-  --accent-2: #8b6bff;
-  --accent-soft: rgba(79, 214, 255, 0.12);
-  --text: #e8f2ff;
-  --text-dim: #8ea3c0;
-  --text-faint: #5a6b85;
-  --success: #4fffa8;
-  --warning: #ffcf5c;
-  --danger: #ff6b81;
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --shadow-glow: none;
+  --bg: #020b10;
+  --bg-elevated: #031219;
+  --bg-gradient: radial-gradient(ellipse at 50% 45%, #0b3446 0%, #031219 55%, #010609 100%);
+  --panel-bg: rgba(63, 232, 255, 0.05);
+  --panel-bg-solid: #031219;
+  --panel-border: rgba(63, 232, 255, 0.35);
+  --panel-border-strong: rgba(63, 232, 255, 0.75);
+  --line: rgba(63, 232, 255, 0.14);
+  --rail-bg: rgba(1, 8, 12, 0.72);
+  --list-bg: rgba(2, 12, 18, 0.72);
+  --new-chat-bg: rgba(63, 232, 255, 0.12);
+  --new-chat-text: #b9f7ff;
+  --tooltip-bg: #031219;
+  --tooltip-text: #b9f7ff;
+  --accent: #3fe8ff;
+  --accent-2: #b9f7ff;
+  --accent-dim: #0a7f99;
+  --accent-soft: rgba(63, 232, 255, 0.12);
+  --glow: 0 0 10px rgba(63, 232, 255, 0.55);
+  --text: #d6fbff;
+  --text-dim: #6fd3e6;
+  --text-faint: #1d8ba3;
+  --success: #4dffa6;
+  --warning: #ffb020;
+  --danger: #ff4b4b;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --shadow-glow: inset 0 0 18px rgba(63, 232, 255, 0.08);
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+  --font-mono: 'DejaVu Sans Mono', 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, ui-monospace, monospace;
 }
 
 :root[data-theme='light'] {
@@ -55,6 +58,12 @@
   --new-chat-text: #ffffff;
   --tooltip-bg: #101a2c;
   --tooltip-text: #ffffff;
+  --bg-gradient: none;
+  --accent-dim: #5a86b8;
+  --glow: none;
+  --success: #12a868;
+  --warning: #c77a00;
+  --danger: #d6334a;
 }
 
 * {
@@ -69,9 +78,10 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--bg-gradient), var(--bg);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -97,16 +107,49 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--panel-border-strong);
-  border-radius: 8px;
+  background: var(--accent-dim);
+  border-radius: 0;
 }
 
+/* HUD instrument panel: thin cyan frame with two lit corner brackets.
+   Every module card uses this class, so they all share the look. */
 .glass-panel {
+  position: relative;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(2px);
   box-shadow: var(--shadow-glow);
+}
+
+.glass-panel::before,
+.glass-panel::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+  pointer-events: none;
+}
+
+.glass-panel::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.glass-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+
+:root[data-theme='light'] .glass-panel::before,
+:root[data-theme='light'] .glass-panel::after {
+  filter: none;
 }
 
 .btn {
@@ -114,48 +157,53 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.55rem 1rem;
+  padding: 0.5rem 0.85rem;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--panel-border-strong);
-  background: var(--accent-soft);
-  color: var(--text);
-  font-size: 0.9rem;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.72rem;
   font-weight: 500;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .btn:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-
-.btn:active {
-  transform: translateY(0);
+  background: var(--accent-soft);
 }
 
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border-color: transparent;
-  color: #05131f;
-  font-weight: 600;
+  background: rgba(63, 232, 255, 0.22);
+  box-shadow: var(--glow);
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+:root[data-theme='light'] .btn-primary {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .btn-danger {
-  border-color: rgba(255, 107, 129, 0.5);
+  border-color: var(--danger);
   color: var(--danger);
-  background: rgba(255, 107, 129, 0.08);
+  background: transparent;
+}
+
+.btn-danger:hover {
+  background: rgba(255, 75, 75, 0.12);
 }
 
 .field-label {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.2em;
   color: var(--text-dim);
   margin-bottom: 0.35rem;
   display: block;
@@ -168,9 +216,9 @@ button {
   padding: 0.6rem 0.75rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(63, 232, 255, 0.03);
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 :root[data-theme='light'] .input,
@@ -184,6 +232,12 @@ button {
 .textarea:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-faint);
 }
 
 .textarea {
@@ -191,7 +245,10 @@ button {
   font-family: var(--font-mono);
 }
 
+/* Long-form answers stay in a proportional face — monospace everywhere
+   else is the HUD look, but paragraphs of it are tiring to read. */
 .rich-text__paragraph {
+  font-family: var(--font-sans);
   margin: 0 0 0.6rem;
   white-space: pre-wrap;
   line-height: 1.55;
@@ -203,7 +260,7 @@ button {
 
 .code-block {
   position: relative;
-  background: #060b14;
+  background: #01080c;
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-sm);
   padding: 1.6rem 0.9rem 0.9rem;

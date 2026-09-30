@@ -4,11 +4,13 @@ import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ChatProvider, useChat } from './context/ChatContext';
+import HudFx from './layout/HudFx';
 import IconRail from './layout/IconRail';
 import { moduleLabel } from './layout/modules';
 import ChatList from './layout/ChatList';
 import Header from './layout/Header';
 import ChatPanel from './components/Chat/ChatPanel';
+import HomePanel from './home/HomePanel';
 import StudyPanel from './components/Study/StudyPanel';
 import CodePanel from './components/Code/CodePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
@@ -33,12 +35,12 @@ function AutoReadBridge() {
 }
 
 function AppShell() {
-  const [activeModule, setActiveModule] = useState('chat');
-  const [chatListOpen, setChatListOpen] = useState(true);
-  const { status } = useChat();
+  const [activeModule, setActiveModule] = useState('home');
+  const [chatListOpen, setChatListOpen] = useState(false);
 
   return (
     <div className={`app-shell ${chatListOpen ? '' : 'app-shell--list-closed'}`}>
+      <HudFx />
       <IconRail
         active={activeModule}
         onSelect={setActiveModule}
@@ -47,8 +49,9 @@ function AppShell() {
       />
       <ChatList onOpenChat={() => setActiveModule('chat')} />
       <div className="app-main">
-        <Header section={moduleLabel(activeModule)} status={status} />
+        <Header section={moduleLabel(activeModule)} />
         <main className="app-content">
+          {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'study' && <StudyPanel />}
           {activeModule === 'code' && <CodePanel />}

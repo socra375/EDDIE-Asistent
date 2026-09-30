@@ -1,21 +1,40 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
-import EddieLogo from './EddieLogo';
+import { useLocation } from '../context/LocationContext';
 import LiveClock from './LiveClock';
 
-const STATUS_LABEL = {
-  idle: 'En línea',
-  processing: 'Analizando…',
-  responding: 'Respondiendo',
-  error: 'Error',
+const GPS_CHIP = {
+  granted: ['GPS · ACTIVO', 'on'],
+  requesting: ['GPS · BUSCANDO', 'warn'],
+  denied: ['GPS · DENEGADO', 'bad'],
+  unsupported: ['GPS · N/D', 'bad'],
+  idle: ['GPS · —', ''],
 };
 
-export default function Header({ section, status = 'idle' }) {
+function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+  return online;
+}
+
+export default function Header({ section }) {
   const { user, loading, login, logout } = useAuth();
   const { settings, updateSettings, updateVoiceSettings } = useSettings();
   const { ttsSupported, stopSpeaking } = useVoice();
+  const { status: gpsStatus } = useLocation();
+  const online = useOnline();
   const voiceOn = settings.voice.autoRead;
+  const [gpsLabel, gpsClass] = GPS_CHIP[gpsStatus] || GPS_CHIP.idle;
 
   function toggleVoice() {
     if (voiceOn) stopSpeaking();
@@ -24,54 +43,48 @@ export default function Header({ section, status = 'idle' }) {
 
   return (
     <header className="header">
-      <div className="header__brand">
-        <EddieLogo size={30} />
-        <div>
-          <p className="header__name">EDDIE</p>
-          <p className="header__section">{section}</p>
-        </div>
+      <div className="chips">
+        <span className="chip on header__clock-chip">
+          <LiveClock />
+        </span>
+        <span className={`chip ${online ? 'on' : 'bad'}`}>RED · {online ? 'EN LÍNEA' : 'SIN RED'}</span>
+        <span className={`chip ${gpsClass}`}>{gpsLabel}</span>
       </div>
 
-      <div className="header__right">
-        <LiveClock />
-        <span className={`status-pill status-pill--${status}`}>
-          <span className="status-pill__dot" />
-          {STATUS_LABEL[status] || status}
-        </span>
+      <div className="header__brand">
+        <h1 className="header__title">EDDIE</h1>
+        <p className="header__section">{section}</p>
+      </div>
+
+      <div className="chips chips--right">
         {!loading &&
           (user ? (
-            <button type="button" className="btn header__account" onClick={logout} title="Cerrar sesión">
-              {user.avatarUrl ? (
-                <img className="header__avatar" src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />
-              ) : (
-                <span aria-hidden="true">👤</span>
-              )}
-              <span className="header__account-name">{user.name?.split(' ')[0] || 'Cuenta'}</span>
+            <button type="button" className="chip chip--button on" onClick={logout} title="Cerrar sesión">
+              {user.name?.split(' ')[0] || 'Cuenta'} · SALIR
             </button>
           ) : (
-            <button type="button" className="btn header__account" onClick={login}>
+            <button type="button" className="chip chip--button" onClick={login}>
               Iniciar sesión
             </button>
           ))}
         <button
           type="button"
-          className={`voice-switch ${voiceOn ? 'voice-switch--on' : ''}`}
+          className={`chip chip--button ${voiceOn ? 'on' : ''}`}
           role="switch"
           aria-checked={voiceOn}
           onClick={toggleVoice}
           disabled={!ttsSupported}
-          title={ttsSupported ? 'Eddie lee sus respuestas en voz alta' : 'Este navegador no admite síntesis de voz'}
+          title={ttsSupported ? 'Eddie habla sus respuestas en voz alta' : 'Este navegador no admite síntesis de voz'}
         >
-          <span className="voice-switch__label">{voiceOn ? 'VOZ ON' : 'VOZ OFF'}</span>
-          <span className="voice-switch__knob" aria-hidden="true" />
+          VOZ · {voiceOn ? 'ON' : 'OFF'}
         </button>
         <button
           type="button"
-          className="btn header__theme"
+          className="chip chip--button"
           onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
           title="Cambiar tema"
         >
-          {settings.theme === 'dark' ? '🌙' : '☀️'}
+          {settings.theme === 'dark' ? 'Modo claro' : 'Modo HUD'}
         </button>
       </div>
     </header>

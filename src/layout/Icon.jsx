@@ -1,6 +1,8 @@
 // Line icons (24×24, stroke-based) so each module can carry its own color in
 // the icon rail instead of relying on emoji, which render differently per OS.
 const PATHS = {
+  home: 'M12 2.5 20.5 7.5v9L12 21.5 3.5 16.5v-9L12 2.5Zm0 6.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  mic: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Zm-6 9a6 6 0 0 0 12 0M12 18v3',
   chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z',
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Zm0 16a2 2 0 0 1 2-2h13',
   code: 'm8 8-4 4 4 4m8-8 4 4-4 4M14 5l-4 14',

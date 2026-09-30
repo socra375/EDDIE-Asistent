@@ -3,6 +3,7 @@ import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
 import { MODES } from '../../services/personality';
 import EddieCore from '../Core/EddieCore';
+import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
 import './Chat.css';
 
@@ -13,7 +14,7 @@ const QUICK_PROMPTS = [
   { icon: '📅', label: 'Organizar tareas', prompt: 'Ayúdame a organizar mis tareas y prioridades para esta semana.' },
 ];
 
-export default function ChatPanel() {
+export default function ChatPanel({ showCore = true }) {
   const { messages, status, sendMessage, resetConversation } = useChat();
   const { sttSupported, listening, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -44,9 +45,11 @@ export default function ChatPanel() {
 
   return (
     <section className="chat-panel">
-      <div className="chat-panel__core">
-        <EddieCore state={listening ? 'listening' : status} compact />
-      </div>
+      {showCore && (
+        <div className="chat-panel__core">
+          <EddieCore state={listening ? 'listening' : status} compact />
+        </div>
+      )}
 
       <div className="chat-panel__body glass-panel">
         <div className="chat-panel__toolbar">
@@ -61,7 +64,7 @@ export default function ChatPanel() {
             </select>
           </label>
           <button type="button" className="btn" onClick={resetConversation} disabled={!messages.length}>
-            🗑️ Nueva conversación
+            <Icon name="trash" size={14} /> Nueva conversación
           </button>
         </div>
 
@@ -105,8 +108,9 @@ export default function ChatPanel() {
             onClick={toggleMic}
             disabled={!sttSupported}
             title={sttSupported ? 'Usar micrófono' : 'Micrófono no compatible con este navegador'}
+            aria-label="Usar micrófono"
           >
-            🎙️
+            <Icon name="mic" size={18} />
           </button>
           <input
             className="input"

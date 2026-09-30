@@ -62,17 +62,29 @@ Una vez montada, la app renderiza aproximadamente esta jerarquía (simplificada)
 ```
 #root
 └── .app-shell                 (grid: rail | mis chats | principal)
+    ├── .hud-fx                 (layout/HudFx.jsx: rejilla, escaneo, viñeta
+    │                            y marco; decorativo, aria-hidden)
     ├── nav.rail                (layout/IconRail.jsx: un botón por módulo)
     ├── aside.chatlist          (layout/ChatList.jsx: nueva, buscar, historial)
     ├── .app-main
-    │   ├── header.header       (layout/Header.jsx: marca + reloj + estado
-    │   │                        + cuenta + interruptor de voz + tema)
+    │   ├── header.header       (layout/Header.jsx: chips de reloj, red y
+    │   │                        GPS | "EDDIE" + módulo | chips de cuenta,
+    │   │                        VOZ ON/OFF y tema)
     │   └── main.app-content    (aquí se monta el panel activo:
-    │                            ChatPanel, StudyPanel, CodePanel,
+    │                            HomePanel (por defecto), ChatPanel,
+    │                            StudyPanel, CodePanel,
     │                            TasksPanel, DocumentsPanel o
     │                            SettingsPanel)
     └── (AutoReadBridge: componente sin salida visual, solo efectos)
 ```
+
+`HomePanel` (`src/home/`) arma su propia rejilla: `section.home` con dos
+columnas de `section.hud-panel` (TIEMPO, UBICACIÓN, CLIMA | SISTEMA,
+TAREAS) y en el centro el anillo de Eddie: un `<button>` que envuelve un
+`<svg>` de 600×600 y un `<p role="status">` con el estado. Debajo van la
+transcripción en vivo o la última respuesta (`aria-live="polite"`), los
+botones flotantes de micrófono y chat, y el panel lateral
+`aside.home__chat` con el `ChatPanel` de siempre.
 
 Cada panel de módulo es dueño de su propio HTML interno (formularios,
 listas, botones); no hay plantillas HTML compartidas fuera de las clases
