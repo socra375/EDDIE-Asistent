@@ -19,7 +19,7 @@ export function LocationProvider({ children }) {
     setStatus('requesting');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
         setStatus('granted');
       },
       () => setStatus('denied'),

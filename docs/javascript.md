@@ -323,12 +323,37 @@ Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
     por título e historial ordenado por fecha; abrir un chat lleva al
     módulo Chat. Usa `conversations`, `loadConversation`,
     `deleteConversation` y `resetConversation` de `ChatContext`.
-  - `Header.jsx`: marca (`EddieLogo.jsx`), módulo actual, `LiveClock.jsx`,
-    estado, cuenta de Google, interruptor "VOZ ON/OFF" (el mismo ajuste
-    `voice.autoRead` de Configuración) y botón de tema.
+  - `Header.jsx`: encabezado HUD con "EDDIE" centrado y chips a los lados:
+    reloj (`LiveClock.jsx`), RED (eventos `online`/`offline`), GPS (estado
+    de `LocationContext`), cuenta de Google, "VOZ · ON/OFF" (el mismo
+    ajuste `voice.autoRead` de Configuración; al apagarlo corta la voz en
+    curso) y tema.
+  - `HudFx.jsx`: capa decorativa de fondo (rejilla, escaneo, viñeta, marco).
   - `Layout.css`: grid de tres columnas; la columna de chats se colapsa a
-    ancho 0 en vez de desmontarse. Bajo 1024px se oculta la columna, y
-    bajo 860px la barra de íconos pasa abajo.
+    ancho 0 en vez de desmontarse (arranca cerrada). Bajo 1100px se oculta
+    la columna, y bajo 860px la barra de íconos pasa abajo.
+- **`src/home/`** — la pantalla de Inicio, el módulo por defecto:
+  - `HomePanel.jsx`: une voz y chat. El estado visual del anillo sale de
+    `useVoice()` y `useChat().status`, con esta prioridad: escuchando >
+    procesando > respondiendo > hablando > error del chat > desactivado
+    (voz OFF o navegador sin micrófono) > error del micrófono > en espera.
+    Tocar el anillo empieza a escuchar (encendiendo la voz si estaba OFF);
+    al terminar de escuchar envía la transcripción con `sendMessage`. Solo
+    auto-envía una escucha iniciada desde el anillo (`ringListenRef`), para
+    no duplicar lo que el micrófono del `ChatPanel` ya pone en su input.
+    Sin reconocimiento de voz, el anillo abre el chat de texto.
+  - `EddieRing.jsx`: el reloj circular en SVG (marcas, arcos de segundos,
+    minutos y día, aguja) más las capas de "procesando" y ondas. Los arcos
+    se actualizan cada 100 ms por `ref`, sin re-renderizar React.
+  - `InfoPanels.jsx`: TIEMPO, UBICACIÓN + CLIMA (Open-Meteo y
+    geocodificación inversa de BigDataCloud directo desde el navegador,
+    sin clave, refrescando cada 10 min), SISTEMA (batería, red, núcleos,
+    memoria y pantalla; `N/D` si el navegador no lo expone) y TAREAS
+    (pendientes reales de `getTasks()` con barra de progreso).
+  - `weather.js`: `fetchWeather` y `fetchPlaceName`, con la misma tabla de
+    códigos de clima que `api/_lib/tools.js`.
+  - `HudPanel.jsx`: `HudPanel` y `HudRow`, el panel con título sobre el
+    borde que usan todos los paneles de Inicio.
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en
   bloques ` ```código``` ` y, dentro de cada bloque de texto, además en
   párrafos separados por línea en blanco (`splitParagraphs`) — cada uno

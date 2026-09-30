@@ -1,0 +1,609 @@
+/* ---- HUD home: side columns + central Eddie ring ---- */
+.home {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr minmax(240px, 300px);
+  gap: 1.5rem;
+  min-height: 0;
+}
+
+.home__col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 4px 4px 2px;
+  scrollbar-width: none;
+}
+
+.home__col::-webkit-scrollbar {
+  display: none;
+}
+
+.home__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---- Panels ---- */
+.hud-panel {
+  padding: 1rem 0.9rem 0.8rem;
+}
+
+.hud-panel__title {
+  position: absolute;
+  top: -0.6rem;
+  left: 0.75rem;
+  margin: 0;
+  padding: 0 0.5rem;
+  background: var(--panel-bg-solid);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  color: var(--accent-2);
+}
+
+:root[data-theme='light'] .hud-panel__title {
+  background: var(--bg);
+}
+
+.hud-big {
+  font-size: 2.4rem;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-2);
+  text-shadow: 0 0 14px var(--accent);
+}
+
+.hud-big small {
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.hud-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.hud-rows {
+  margin-top: 0.5rem;
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  line-height: 1.85;
+  letter-spacing: 0.08em;
+}
+
+.hud-row span {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.hud-row b {
+  min-width: 0;
+  font-weight: 400;
+  text-align: right;
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.tone-bad {
+  color: var(--danger) !important;
+}
+
+.tone-warn {
+  color: var(--warning) !important;
+}
+
+.hud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.hud-empty {
+  margin: 0.3rem 0;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.hud-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hud-tasks li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.hud-tasks__box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border: 1px solid var(--accent);
+}
+
+.hud-tasks__item--high {
+  color: var(--warning);
+}
+
+.hud-bar {
+  height: 8px;
+  margin: 0.6rem 0 0.1rem;
+  border: 1px solid var(--accent-dim);
+}
+
+.hud-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: var(--glow);
+  transition: width 0.4s ease;
+}
+
+/* ---- Eddie ring ---- */
+.eddie-ring {
+  --ring: var(--accent);
+  --ring-soft: var(--accent-2);
+  --ring-dim: var(--accent-dim);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(100%, calc(100vh - 290px), 620px);
+  min-width: 240px;
+}
+
+.eddie-ring__hit {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.eddie-ring__hit:focus-visible {
+  outline: 2px dashed var(--ring);
+  outline-offset: 6px;
+}
+
+.eddie-ring__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--ring) 70%, transparent));
+  transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.eddie-ring .tick {
+  stroke: var(--ring);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.eddie-ring .tick--major {
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.eddie-ring .numeral {
+  fill: var(--ring);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
+
+.eddie-ring .ring-line {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.eddie-ring .arc {
+  fill: none;
+  transition: stroke 0.3s ease;
+}
+
+.eddie-ring .arc--sec {
+  stroke: var(--ring);
+  stroke-width: 7;
+}
+
+.eddie-ring .arc--min {
+  stroke: var(--ring-soft);
+  stroke-width: 3;
+  opacity: 0.9;
+}
+
+.eddie-ring .ring-track {
+  fill: none;
+  stroke: var(--ring-dim);
+  stroke-width: 2;
+  opacity: 0.6;
+}
+
+.eddie-ring .arc--day {
+  stroke: var(--warning);
+  stroke-width: 4;
+}
+
+.eddie-ring .ring-dots {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 1;
+  stroke-dasharray: 2 7;
+  opacity: 0.5;
+}
+
+.eddie-ring__hand line {
+  stroke: var(--warning);
+  stroke-width: 3;
+}
+
+.eddie-ring__hand path {
+  fill: var(--warning);
+}
+
+.eddie-ring__cross line {
+  stroke: var(--ring);
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.eddie-ring__core {
+  fill: color-mix(in srgb, var(--ring) 10%, transparent);
+  stroke: var(--ring);
+  stroke-width: 1.5;
+  opacity: 0.8;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.eddie-ring__dot {
+  fill: var(--ring-soft);
+}
+
+.eddie-ring__corners path {
+  fill: none;
+  stroke: var(--ring-soft);
+  stroke-width: 2.5;
+}
+
+.eddie-ring__ticks,
+.eddie-ring__process {
+  transform-box: view-box;
+  transform-origin: 300px 300px;
+}
+
+.eddie-ring__process,
+.eddie-ring__waves {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.eddie-ring .process-arc {
+  fill: none;
+  stroke: var(--warning);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.eddie-ring .process-arc--inner {
+  stroke-width: 3;
+  opacity: 0.7;
+}
+
+.eddie-ring .wave {
+  stroke: var(--ring-soft);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.eddie-ring__status {
+  margin: 0;
+  padding-left: 0.6em;
+  font-size: 0.85rem;
+  letter-spacing: 0.6em;
+  text-align: center;
+  color: var(--ring-soft);
+  text-shadow: 0 0 10px var(--ring);
+}
+
+/* Idle: slow drift of the tick bezel, soft breathing core. */
+.eddie-ring[data-state='idle'] .eddie-ring__ticks {
+  animation: ring-spin 120s linear infinite;
+}
+
+.eddie-ring[data-state='idle'] .eddie-ring__core {
+  animation: ring-breathe 4s ease-in-out infinite;
+}
+
+/* Listening: radial bars pulse like an audio meter, core throbs. */
+.eddie-ring[data-state='listening'] .eddie-ring__waves {
+  opacity: 1;
+}
+
+.eddie-ring[data-state='listening'] .wave {
+  animation: ring-wave 0.9s ease-in-out infinite;
+}
+
+.eddie-ring[data-state='listening'] .eddie-ring__core {
+  animation: ring-throb 0.9s ease-in-out infinite;
+}
+
+.eddie-ring[data-state='listening'] .eddie-ring__svg {
+  filter: drop-shadow(0 0 12px var(--ring));
+}
+
+/* Processing: amber arcs spin fast, bezel turns. */
+.eddie-ring[data-state='processing'] {
+  --ring-soft: var(--warning);
+}
+
+.eddie-ring[data-state='processing'] .eddie-ring__process {
+  opacity: 1;
+  animation: ring-spin 1.4s linear infinite;
+}
+
+.eddie-ring[data-state='processing'] .eddie-ring__ticks {
+  animation: ring-spin 12s linear infinite reverse;
+}
+
+/* Speaking: the whole ring glows on a beat. */
+.eddie-ring[data-state='speaking'] .eddie-ring__svg {
+  animation: ring-glow 0.8s ease-in-out infinite;
+}
+
+.eddie-ring[data-state='speaking'] .eddie-ring__core {
+  animation: ring-throb 0.8s ease-in-out infinite;
+}
+
+/* Disabled: powered down. */
+.eddie-ring[data-state='disabled'] .eddie-ring__svg {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.eddie-ring[data-state='disabled'] .eddie-ring__status {
+  color: var(--text-faint);
+  text-shadow: none;
+}
+
+/* Error: red, with a short flash. */
+.eddie-ring[data-state='error'] {
+  --ring: var(--danger);
+  --ring-soft: #ffb3b3;
+}
+
+.eddie-ring[data-state='error'] .eddie-ring__svg {
+  animation: ring-flash 0.35s ease-in-out 3;
+}
+
+.eddie-ring[data-state='error'] .eddie-ring__status {
+  letter-spacing: 0.2em;
+  font-size: 0.72rem;
+}
+
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ring-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.95;
+  }
+}
+
+@keyframes ring-throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.6);
+  }
+}
+
+@keyframes ring-wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ring-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px var(--ring));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px var(--ring));
+  }
+}
+
+@keyframes ring-flash {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eddie-ring *,
+  .eddie-ring__svg {
+    animation: none !important;
+  }
+}
+
+/* ---- Transcript / last reply under the ring ---- */
+.home__transcript {
+  width: min(100%, 560px);
+  min-height: 3rem;
+  text-align: center;
+}
+
+.home__live,
+.home__reply {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.home__live {
+  color: var(--accent-2);
+  font-style: italic;
+}
+
+.home__hint {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  color: var(--text-faint);
+}
+
+.home__more {
+  margin-top: 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* ---- Floating buttons + text chat drawer ---- */
+.home__fabs {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 0.6rem;
+  z-index: 3;
+}
+
+.home__fab {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--panel-bg-solid);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.home__fab:hover {
+  background: var(--accent-soft);
+}
+
+.home__fab--live {
+  background: rgba(63, 232, 255, 0.22);
+  box-shadow: var(--glow);
+}
+
+.home__chat {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(460px, 100%);
+  padding: 0.8rem;
+  border: 1px solid var(--accent);
+  background: var(--panel-bg-solid);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+  z-index: 4;
+}
+
+.home__chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  color: var(--accent-2);
+}
+
+.home__chat .chat-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) {
+  .home {
+    grid-template-columns: 1fr;
+    height: auto !important;
+    padding-bottom: 8rem;
+  }
+
+  .home__center {
+    order: -1;
+  }
+
+  .home__col {
+    overflow: visible;
+  }
+
+  .eddie-ring {
+    width: min(92%, 520px);
+  }
+
+  .home__fabs {
+    position: fixed;
+    right: 1rem;
+    bottom: 5rem;
+  }
+
+  .home__chat {
+    position: fixed;
+    inset: 0.5rem;
+    width: auto;
+  }
+}

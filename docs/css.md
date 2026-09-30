@@ -16,16 +16,19 @@ ningún componente:
 ```css
 :root {
   color-scheme: dark;
-  --bg: #060a12;
-  --accent: #4fd6ff;
-  --accent-2: #8b6bff;
-  --text: #e8f2ff;
-  --text-dim: #8ea3c0;
-  --danger: #ff6b81;
-  --success: #4fffa8;
-  --warning: #ffcf5c;
-  --radius-sm: 8px;
-  --radius-lg: 22px;
+  --bg: #020b10;
+  --bg-gradient: radial-gradient(...); /* halo cian detrás del contenido */
+  --accent: #3fe8ff;
+  --accent-2: #b9f7ff;
+  --accent-dim: #0a7f99;
+  --text: #d6fbff;
+  --text-dim: #6fd3e6;
+  --danger: #ff4b4b;
+  --success: #4dffa6;
+  --warning: #ffb020;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
+  --font-mono: 'DejaVu Sans Mono', ui-monospace, ...;
   /* ...etc */
 }
 
@@ -37,6 +40,12 @@ ningún componente:
   /* redefine las mismas variables con la paleta clara */
 }
 ```
+
+La paleta oscura es la del HUD (estilo Iron Man): fondo casi negro, cian
+como color principal, ámbar para "procesando" y rojo para errores. Toda la
+interfaz usa la fuente monoespaciada `--font-mono` en mayúsculas con letras
+espaciadas; solo el texto largo de las respuestas (`.rich-text__paragraph`)
+sigue en `--font-sans` para leerse cómodo.
 
 El tema **oscuro es el valor por defecto** (declarado en `:root` sin
 selector adicional). El tema claro solo sobreescribe las variables que
@@ -64,10 +73,10 @@ Definidas una vez en `index.css` y usadas en todos los módulos:
 
 | Clase | Uso |
 | --- | --- |
-| `.glass-panel` | El panel translúcido con blur que da el aspecto "HUD" (fondo semitransparente, borde sutil, `backdrop-filter: blur`) |
-| `.btn` | Botón base |
-| `.btn-primary` | Botón de acción principal (gradiente `--accent` → `--accent-2`) |
-| `.btn-danger` | Botón destructivo (borrar memoria, borrar historial) |
+| `.glass-panel` | Panel HUD: fondo cian muy tenue, borde fino y esquinas iluminadas (`::before`/`::after`). Todos los módulos lo heredan sin cambios propios |
+| `.btn` | Botón base: transparente, borde `--accent`, mayúsculas con letras espaciadas |
+| `.btn-primary` | Botón de acción principal (relleno tenue + brillo `--glow`) |
+| `.btn-danger` | Botón destructivo, contorno rojo (borrar memoria, borrar historial) |
 | `.input`, `.select`, `.textarea` | Controles de formulario con el mismo estilo de borde/fondo/focus |
 | `.field-label` | Etiqueta pequeña en mayúsculas sobre un campo |
 | `.rich-text__paragraph`, `.code-block` | Usadas por `RichText.jsx` para renderizar la respuesta de Eddie, distinguiendo párrafos normales de bloques de código |
@@ -136,9 +145,26 @@ un único breakpoint:
 }
 ```
 
-El layout general (`Layout.css`) tiene su propio breakpoint a `860px` que
-reorganiza el sidebar de columna vertical (escritorio) a barra horizontal
-inferior con solo iconos (móvil) — igual que una app nativa con tab bar.
+El layout general (`Layout.css`) oculta "Mis chats" bajo `1100px` y a
+`860px` pasa la barra de íconos abajo (como una tab bar nativa) y apila el
+encabezado. La pantalla de Inicio (`src/home/Home.css`) pasa de tres
+columnas a una sola bajo `1100px`, con el anillo primero y los botones
+flotantes fijos sobre la barra inferior.
+
+## 5. Efectos HUD y pantalla de Inicio
+
+- `src/layout/HudFx.jsx` + `Layout.css`: capa fija con rejilla hexagonal,
+  líneas de escaneo, viñeta y marco de esquinas. Lleva
+  `pointer-events: none`, así nunca bloquea clics, y se oculta en el tema
+  claro.
+- `src/home/Home.css`: paneles con el título montado sobre el borde
+  (`.hud-panel__title`), filas etiqueta/valor (`.hud-row`) y el anillo de
+  Eddie. El anillo usa tres variables propias (`--ring`, `--ring-soft`,
+  `--ring-dim`) que cada estado redefine en `.eddie-ring[data-state=...]`:
+  `idle` (giro lento de 120 s y núcleo que respira), `listening` (barras de
+  onda y pulso del núcleo), `processing` (ámbar, arcos girando en 1,4 s),
+  `speaking` (brillo que late), `disabled` (gris, opacidad baja) y `error`
+  (rojo con tres destellos). `prefers-reduced-motion` las apaga todas.
 
 ## Resumen de convenciones al añadir estilos nuevos
 
