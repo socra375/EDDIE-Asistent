@@ -11,10 +11,7 @@ import ChatList from './layout/ChatList';
 import Header from './layout/Header';
 import ChatPanel from './components/Chat/ChatPanel';
 import HomePanel from './home/HomePanel';
-import StudyPanel from './components/Study/StudyPanel';
-import CodePanel from './components/Code/CodePanel';
 import TasksPanel from './components/Tasks/TasksPanel';
-import DocumentsPanel from './components/Documents/DocumentsPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
@@ -53,10 +50,7 @@ function AppShell() {
         <main className="app-content">
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
           {activeModule === 'chat' && <ChatPanel />}
-          {activeModule === 'study' && <StudyPanel />}
-          {activeModule === 'code' && <CodePanel />}
           {activeModule === 'tasks' && <TasksPanel />}
-          {activeModule === 'documents' && <DocumentsPanel />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
       </div>

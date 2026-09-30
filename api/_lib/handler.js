@@ -2,7 +2,7 @@ import { callProvider } from './providers.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 4000;
+const MAX_SYSTEM_LENGTH = 6000;
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude']);
 
 class ValidationError extends Error {}
