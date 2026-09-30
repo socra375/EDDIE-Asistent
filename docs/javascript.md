@@ -168,7 +168,7 @@ anidados y decide qué panel de módulo mostrar:
 <SettingsProvider>
   <VoiceProvider>
     <ChatProvider>
-      <AppShell />       {/* Sidebar + TopBar + panel activo */}
+      <AppShell />       {/* IconRail + ChatList + Header + panel activo */}
     </ChatProvider>
   </VoiceProvider>
 </SettingsProvider>
@@ -314,18 +314,21 @@ Organizados por módulo (`Chat/`, `Study/`, `Code/`, `Tasks/`,
   audio alrededor del núcleo — con micrófono 🎙️ en el centro para
   `listening`. El resto de estados conservan sus animaciones propias
   (respiración, giro, flash, etc.), todas puramente en CSS.
-- **`Layout/`** — `Sidebar.jsx` (lista de módulos, con `EddieLogo.jsx` como
-  marca) y `TopBar.jsx` (título + reloj en vivo + estado + botón de tema),
-  usados una sola vez desde `App.jsx`. `LiveClock.jsx` actualiza la hora
-  cada segundo con `setInterval` y la formatea con `Intl.DateTimeFormat`
-  según el idioma elegido en Configuración. `EddieLogo.jsx` es un SVG puro
-  (sin imagen que empaquetar) — un glifo "E" con dos anillos orbitando a
-  distinta velocidad alrededor, animado con CSS. `Sidebar.jsx` está
-  colapsada por defecto (solo el logo, vía `sidebar` con `width: 64px` en
-  `Layout.css`); un `onMouseEnter` en `.sidebar__brand` agrega la clase
-  `sidebar--expanded`, que la convierte en un flyout (`position: absolute`,
-  ancho 220px, por encima del contenido) hasta que el mouse sale del
-  `<nav>` (`onMouseLeave`).
+- **`src/layout/`** — el marco de la app, inspirado en JARVIS-HRZ, usado
+  una sola vez desde `App.jsx`:
+  - `IconRail.jsx`: barra vertical de íconos, uno por módulo con su propio
+    color (lista en `modules.js`), Configuración abajo y un botón arriba
+    para mostrar u ocultar "Mis chats". Los íconos son SVG de `Icon.jsx`.
+  - `ChatList.jsx`: columna "Mis chats" con nueva conversación, buscador
+    por título e historial ordenado por fecha; abrir un chat lleva al
+    módulo Chat. Usa `conversations`, `loadConversation`,
+    `deleteConversation` y `resetConversation` de `ChatContext`.
+  - `Header.jsx`: marca (`EddieLogo.jsx`), módulo actual, `LiveClock.jsx`,
+    estado, cuenta de Google, interruptor "VOZ ON/OFF" (el mismo ajuste
+    `voice.autoRead` de Configuración) y botón de tema.
+  - `Layout.css`: grid de tres columnas; la columna de chats se colapsa a
+    ancho 0 en vez de desmontarse. Bajo 1024px se oculta la columna, y
+    bajo 860px la barra de íconos pasa abajo.
 - **`Shared/RichText.jsx`** — parte cualquier respuesta de texto en
   bloques ` ```código``` ` y, dentro de cada bloque de texto, además en
   párrafos separados por línea en blanco (`splitParagraphs`) — cada uno

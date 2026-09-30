@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSettings } from '../../context/SettingsContext';
+import { useSettings } from '../context/SettingsContext';
 
 export default function LiveClock() {
   const { settings } = useSettings();
@@ -14,7 +14,7 @@ export default function LiveClock() {
   const date = new Intl.DateTimeFormat(settings.language, { dateStyle: 'medium' }).format(now);
 
   return (
-    <span className="topbar__clock" title={date}>
+    <span className="header__clock" title={date}>
       {time}
     </span>
   );

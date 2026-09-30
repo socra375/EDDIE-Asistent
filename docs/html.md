@@ -61,13 +61,13 @@ Una vez montada, la app renderiza aproximadamente esta jerarquía (simplificada)
 
 ```
 #root
-└── .app-shell                 (grid: sidebar | contenido)
-    ├── nav.sidebar             (Sidebar.jsx)
-    │   ├── .sidebar__brand
-    │   └── ul.sidebar__list    (un <li>/<button> por módulo)
+└── .app-shell                 (grid: rail | mis chats | principal)
+    ├── nav.rail                (layout/IconRail.jsx: un botón por módulo)
+    ├── aside.chatlist          (layout/ChatList.jsx: nueva, buscar, historial)
     ├── .app-main
-    │   ├── header.topbar       (TopBar.jsx: título + estado + tema)
-    │   └── .app-content        (aquí se monta el panel activo:
+    │   ├── header.header       (layout/Header.jsx: marca + reloj + estado
+    │   │                        + cuenta + interruptor de voz + tema)
+    │   └── main.app-content    (aquí se monta el panel activo:
     │                            ChatPanel, StudyPanel, CodePanel,
     │                            TasksPanel, DocumentsPanel o
     │                            SettingsPanel)

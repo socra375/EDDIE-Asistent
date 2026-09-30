@@ -4,8 +4,10 @@ import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ChatProvider, useChat } from './context/ChatContext';
-import Sidebar, { MODULES } from './components/Layout/Sidebar';
-import TopBar from './components/Layout/TopBar';
+import IconRail from './layout/IconRail';
+import { moduleLabel } from './layout/modules';
+import ChatList from './layout/ChatList';
+import Header from './layout/Header';
 import ChatPanel from './components/Chat/ChatPanel';
 import StudyPanel from './components/Study/StudyPanel';
 import CodePanel from './components/Code/CodePanel';
@@ -13,7 +15,7 @@ import TasksPanel from './components/Tasks/TasksPanel';
 import DocumentsPanel from './components/Documents/DocumentsPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
-import './App.css';
+import './layout/Layout.css';
 
 function AutoReadBridge() {
   const { lastReply } = useChat();
@@ -32,28 +34,28 @@ function AutoReadBridge() {
 
 function AppShell() {
   const [activeModule, setActiveModule] = useState('chat');
-  const { settings, updateSettings } = useSettings();
+  const [chatListOpen, setChatListOpen] = useState(true);
   const { status } = useChat();
 
-  const activeMeta = MODULES.find((m) => m.id === activeModule);
-
-  function toggleTheme() {
-    updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' });
-  }
-
   return (
-    <div className="app-shell">
-      <Sidebar active={activeModule} onSelect={setActiveModule} />
+    <div className={`app-shell ${chatListOpen ? '' : 'app-shell--list-closed'}`}>
+      <IconRail
+        active={activeModule}
+        onSelect={setActiveModule}
+        chatListOpen={chatListOpen}
+        onToggleChatList={() => setChatListOpen((open) => !open)}
+      />
+      <ChatList onOpenChat={() => setActiveModule('chat')} />
       <div className="app-main">
-        <TopBar title={activeMeta?.label || 'Eddie'} status={status} theme={settings.theme} onToggleTheme={toggleTheme} />
-        <div className="app-content">
+        <Header section={moduleLabel(activeModule)} status={status} />
+        <main className="app-content">
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'study' && <StudyPanel />}
           {activeModule === 'code' && <CodePanel />}
           {activeModule === 'tasks' && <TasksPanel />}
           {activeModule === 'documents' && <DocumentsPanel />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
-        </div>
+        </main>
       </div>
       <AutoReadBridge />
       <SettingsSyncBridge />
