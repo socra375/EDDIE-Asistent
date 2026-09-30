@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
+import { useWakeWord } from '../context/wakeWordState';
+import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../services/wakeWord';
 import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import './Memory.css';
@@ -42,6 +44,91 @@ function ItemBody({ category, item }) {
       {category === 'decisions' && item.project && <span className="memory-item__meta">Proyecto: {item.project}</span>}
       {category === 'context' && <span className="memory-item__meta">Vigente hasta {fmtDate(item.expiresAt)}</span>}
     </div>
+  );
+}
+
+const WAKE_STATUS = {
+  off: 'Desactivada',
+  unsupported: 'Tu navegador no permite escuchar una palabra clave (usa Chrome o Edge).',
+  paused: 'En pausa mientras hablas con Eddie o él contesta.',
+  denied: 'El navegador bloqueó el micrófono: permítelo en el candado de la barra de direcciones.',
+  error: 'No se pudo escuchar (micrófono ocupado o sin conexión).',
+};
+
+// The phrase that wakes Eddie by voice. Lives here, next to what Eddie knows
+// about the user, because it is part of how Eddie is set up for them.
+function WakeWordCard() {
+  const { settings, updateWakeSettings } = useSettings();
+  const wake = useWakeWord();
+  const [draft, setDraft] = useState(settings.wake?.word || DEFAULT_WAKE_WORD);
+  const [saved, setSaved] = useState('');
+  const clean = cleanWakeWord(draft);
+
+  function saveWord(e) {
+    e.preventDefault();
+    if (!clean) return;
+    updateWakeSettings({ word: clean });
+    setDraft(clean);
+    setSaved(`Listo: ahora despierto con “${clean}”.`);
+  }
+
+  const statusText =
+    wake.status === 'listening' ? `Escuchando la palabra “${wake.word}”…` : WAKE_STATUS[wake.status] || '';
+
+  return (
+    <section className="glass-panel memory__wake" aria-label="Palabra clave de activación">
+      <h3>Palabra clave de activación</h3>
+      <p className="memory__wake-desc">
+        Di la palabra y Eddie te escucha, sin tocar nada. Puedes decirla y seguir hablando (“{wake.word}, ¿qué tengo hoy?”) o decirla sola y
+        hablar después.
+      </p>
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={wake.enabled}
+          onChange={(e) => {
+            updateWakeSettings({ enabled: e.target.checked });
+            wake.retry();
+          }}
+        />
+        <span>Escuchar la palabra clave</span>
+      </label>
+      <form className="memory__wake-form" onSubmit={saveWord}>
+        <label className="memory__field">
+          <span>Palabra o frase</span>
+          <input
+            className="input"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setSaved('');
+            }}
+            maxLength={30}
+            aria-label="Palabra clave"
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={!clean || clean === (settings.wake?.word || DEFAULT_WAKE_WORD)}>
+          Guardar palabra
+        </button>
+      </form>
+      {!clean && <p className="memory__warn">Usa al menos 3 letras (mejor una palabra poco común, así no se activa sola).</p>}
+      {saved && <p className="memory__notice" role="status">{saved}</p>}
+      {wake.enabled && (
+        <p className={`memory__wake-status memory__wake-status--${wake.status}`} role="status">
+          {statusText}
+          {(wake.status === 'denied' || wake.status === 'error') && (
+            <button type="button" className="btn" onClick={wake.retry}>
+              Reintentar
+            </button>
+          )}
+        </p>
+      )}
+      {wake.enabled && wake.status === 'listening' && wake.heard && <p className="memory__wake-heard">Lo último que oí: “{wake.heard}”</p>}
+      <p className="memory__wake-note">
+        Funciona con Eddie abierto en una pestaña del navegador. El navegador procesa el audio con su servicio de voz (en Chrome, el de Google) y
+        Eddie solo reacciona a lo que empieza con la palabra clave; no guarda lo demás.
+      </p>
+    </section>
   );
 }
 
@@ -117,6 +204,8 @@ export default function MemoryPanel() {
         </div>
         {!settings.memoryEnabled && <p className="memory__warn">La memoria está apagada: Eddie no la consulta ni guarda nada nuevo.</p>}
       </div>
+
+      <WakeWordCard />
 
       <form className="glass-panel memory__form" onSubmit={submit} aria-label="Añadir a la memoria">
         <h3>Añadir a la memoria</h3>

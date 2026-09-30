@@ -39,6 +39,10 @@ export function SettingsProvider({ children }) {
     setSettings((prev) => ({ ...prev, voice: { ...prev.voice, ...patch } }));
   }
 
+  function updateWakeSettings(patch) {
+    setSettings((prev) => ({ ...prev, wake: { ...DEFAULT_SETTINGS.wake, ...(prev.wake || {}), ...patch } }));
+  }
+
   function setConnectorEnabled(id, enabled) {
     setSettings((prev) => {
       const off = new Set(prev.disabledConnectors || []);
@@ -94,6 +98,7 @@ export function SettingsProvider({ children }) {
       settings,
       updateSettings,
       updateVoiceSettings,
+      updateWakeSettings,
       setConnectorEnabled,
       memory,
       rememberFact,

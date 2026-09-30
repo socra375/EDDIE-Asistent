@@ -160,3 +160,69 @@
   flex: none;
   gap: 0.35rem;
 }
+
+.memory__wake {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem 1.2rem;
+}
+
+.memory__wake h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.memory__wake-desc,
+.memory__wake-note,
+.memory__wake-heard {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.memory__wake-note {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.memory__wake-heard {
+  font-style: italic;
+}
+
+.memory__wake-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.memory__wake-form .memory__field {
+  flex: 1 1 220px;
+}
+
+.memory__wake-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--success);
+}
+
+.memory__wake-status--paused {
+  color: var(--text-dim);
+}
+
+.memory__wake-status--denied,
+.memory__wake-status--error,
+.memory__wake-status--unsupported {
+  color: var(--warning);
+}
