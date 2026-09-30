@@ -1,4 +1,4 @@
-// Applies a plain result descriptor ({ status, json, redirect, setCookie })
+// Applies a plain result descriptor ({ status, json, redirect, setCookie, headers })
 // to a Node http.ServerResponse. Works unchanged for both Vercel's Node
 // runtime and the local Express dev server — both extend the same
 // http.ServerResponse API.
@@ -8,6 +8,7 @@ export function applyResult(res, result) {
   if (result.setCookie?.length) {
     res.setHeader('Set-Cookie', result.setCookie);
   }
+  for (const [name, value] of Object.entries(result.headers || {})) res.setHeader(name, value);
   if (result.redirect) {
     res.statusCode = result.status || 302;
     res.setHeader('Location', result.redirect);

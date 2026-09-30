@@ -1,7 +1,8 @@
-// Everything under /api/connectors. Today only the list for the hub; OAuth
+// Everything under /api/connectors. The list for the hub, the "Hoy" panel's data; OAuth
 // starts/callbacks and incoming webhooks (Telegram, WhatsApp) will be routed
 // here as their connectors arrive, all inside the same serverless function.
 import { describeConnectors } from './connectors/registry.js';
+import { getToday } from './todayHandlers.js';
 import { getSessionUser, SESSION_COOKIE_NAME } from './session.js';
 
 // Works signed in or not: without a session (or without a database)
@@ -18,9 +19,13 @@ async function listConnectors(cookies) {
   return { status: 200, json: { connectors: await describeConnectors({ user }), toolProviders: ['gemini', 'groq', 'openrouter'] } };
 }
 
-export async function handleConnectorsRequest({ method, path = [], cookies = {} }) {
+export async function handleConnectorsRequest({ method, path = [], cookies = {}, query = {} }) {
   if (path.length === 0) {
     if (method === 'GET') return listConnectors(cookies);
+    return { status: 405, json: { error: 'Método no permitido.' } };
+  }
+  if (path.length === 1 && path[0] === 'today') {
+    if (method === 'GET') return getToday({ query, cookies });
     return { status: 405, json: { error: 'Método no permitido.' } };
   }
   return { status: 404, json: { error: 'Esta acción de conectores todavía no existe.' } };

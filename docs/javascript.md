@@ -246,6 +246,20 @@ detalle del protocolo.
   a `/api/connectors?path=<id>/...`) para que el OAuth y los webhooks de los
   próximos conectores (Telegram, WhatsApp) quepan sin superar el límite
   de 12 funciones del plan Hobby de Vercel (hoy hay 11).
+- **`api/_lib/todayHandlers.js`** — `GET /api/connectors/today?tz=…&off=…`
+  (enrutado por `connectorsHandlers.js`, así que sigue siendo la misma
+  función de Vercel) con lo que necesita el panel "Hoy": agenda de hoy y
+  mañana, correos importantes y titulares. Llama a las mismas herramientas
+  que usa Eddie en el chat (`list_events`, `search_emails`, `get_news`)
+  mediante `createToolset`, así que respeta los conectores que el usuario
+  apagó (`off`) y solo toca sus cuentas con su sesión. "Importantes" =
+  sin leer, en la bandeja de entrada, de los últimos 3 días y fuera de las
+  categorías Promociones, Social, Novedades y Foros. Cada sección responde
+  con un estado para que el panel se explique solo: `ok`, `off`,
+  `needs_setup` (falta configuración en el servidor), `needs_login`,
+  `needs_connect` (Gmail sin conectar) o `error` (con el motivo); una que
+  falla no afecta a las demás. La respuesta lleva `Cache-Control: private,
+  no-store` (`applyResult` ahora acepta `headers`).
 - **`api/_lib/fetchWithRetry.js`** — wrapper genérico de reintento con
   backoff alrededor de `fetch`, usado tanto por `providers.js` (Gemini,
   Claude y Groq) como por los conectores (Open-Meteo). Acepta `options` como objeto
@@ -545,6 +559,20 @@ transversales:
     un panel deslizable (`App.jsx` lo cierra al elegir un chat o módulo, con
     Escape o tocando el fondo `.chatlist-backdrop`), y bajo 860px la barra
     de íconos pasa abajo.
+- **`src/today/`** — el módulo "Hoy" (segundo de la barra):
+  - `useToday.js`: pide `/api/connectors/today` con la zona horaria del
+    navegador y los conectores apagados; recarga al iniciar o cerrar sesión,
+    al cambiar los conectores y cada 5 minutos, y conserva los últimos datos
+    buenos si una recarga falla.
+  - `TodayPanel.jsx`: saludo con el nombre (según la hora), fecha y una línea
+    de resumen; tarjetas AGENDA (hoy y mañana), CORREOS, PENDIENTES (las
+    tareas locales, vencidas y de hoy primero, se actualizan con
+    `eddie:tasks-changed`), CLIMA (`usePlaceAndWeather`) y NOTICIAS. Las
+    tarjetas vacías muestran qué hacer: iniciar sesión, "Conectar Gmail",
+    abrir Conectores o reintentar. "Resumen del día con Eddie" envía un
+    pedido al chat (`tag: 'HOY'`, se muestra como "Resumen del día") y abre
+    el Chat; Eddie lo responde con sus herramientas y, si la voz está
+    activa, lo lee.
 - **`src/home/`** — la pantalla de Inicio, el módulo por defecto:
   - `HomePanel.jsx`: une voz y chat. El estado visual del anillo sale de
     `useVoice()` y `useChat().status`, con esta prioridad: escuchando >
@@ -565,6 +593,8 @@ transversales:
     sin clave, refrescando cada 10 min), SISTEMA (batería, red, núcleos,
     memoria y pantalla; `N/D` si el navegador no lo expone) y TAREAS
     (pendientes reales de `getTasks()` con barra de progreso).
+  - `usePlaceAndWeather.js`: clima y nombre del lugar (se recargan al
+    moverse o cada 10 minutos), compartido por Inicio y Hoy.
   - `weather.js`: `fetchWeather` y `fetchPlaceName`, con la misma tabla de
     códigos de clima que `api/_lib/connectors/weather/index.js`.
   - `HudPanel.jsx`: `HudPanel` y `HudRow`, el panel con título sobre el

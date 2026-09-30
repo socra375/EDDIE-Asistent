@@ -52,7 +52,7 @@ app.get('/api/health', (_req, res) => {
 app.all(['/api/connectors', '/api/connectors/*'], async (req, res) => {
   try {
     const path = (req.params[0] || '').split('/').filter(Boolean);
-    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: cookiesOf(req) }));
+    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: cookiesOf(req), query: req.query }));
   } catch (err) {
     respondError(res, err);
   }
