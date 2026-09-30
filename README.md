@@ -85,12 +85,13 @@ exclusivamente desde variables de entorno del backend:
 
 - `GEMINI_API_KEY` — habilita el proveedor Gemini.
 - `ANTHROPIC_API_KEY` — habilita el proveedor Claude.
-- `GROQ_API_KEY` — habilita Groq (Llama, gratis y muy rápido), como
+- `GROQ_API_KEY` — habilita Groq (modelo `openai/gpt-oss-120b`, gratis y muy rápido), como
   proveedor elegible y como **respaldo automático**: si el proveedor elegido
   falla antes de empezar a responder (límite gratuito, saturación, tiempo
   agotado o clave faltante), Groq responde en su lugar y la respuesta lleva
   la etiqueta "vía Groq". `GROQ_MODEL` (opcional) cambia el modelo de Groq
-  sin tocar el código.
+  sin tocar el código; si Groq retira el modelo, Eddie consulta la lista de
+  modelos vigentes de Groq y cambia solo.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en

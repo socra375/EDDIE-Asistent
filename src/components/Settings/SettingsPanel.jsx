@@ -20,7 +20,10 @@ const PROVIDER_MODELS = {
     { value: '', label: 'claude-sonnet-5 (predeterminado)' },
     { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5 (más rápido)' },
   ],
-  groq: [{ value: '', label: 'Llama 3.3 70B (predeterminado, gratis y muy rápido)' }],
+  groq: [
+    { value: '', label: 'openai/gpt-oss-120b (predeterminado, gratis)' },
+    { value: 'openai/gpt-oss-20b', label: 'openai/gpt-oss-20b (más rápido)' },
+  ],
 };
 
 const LANGUAGES = [
@@ -110,7 +113,7 @@ export default function SettingsPanel({ onOpenConversation }) {
             >
               <option value="gemini">Google Gemini Flash</option>
               <option value="claude">Anthropic Claude</option>
-              <option value="groq">Groq (Llama)</option>
+              <option value="groq">Groq (gratis y rápido)</option>
             </select>
           </label>
           <label>
