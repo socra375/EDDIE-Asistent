@@ -31,7 +31,7 @@ api/
       wikipedia/               ← resúmenes de Wikipedia (sin clave)
       currency/                ← tasas de cambio de open.er-api.com (sin clave)
       gmail/                   ← (sesiones 9–11) buscar, leer y enviar/responder con confirmación (permisos incrementales)
-      google/                  ← (sesión 7, sin herramientas aún) Calendario + Drive (reutiliza google.js y googleCredentials.js)
+      google/                  ← (sesión 12) Calendario: ver, crear, y mover/borrar con confirmación (+ Drive y Tareas → Calendario)
       telegram/
       whatsapp/
       spotify/

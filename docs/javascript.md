@@ -176,10 +176,22 @@ detalle del protocolo.
     conectarlo. `auth.scope: 'gmail'` hace que el hub muestre "Conectar
     Gmail" (`/api/auth/google/start?scope=gmail`). Requiere
     `CONNECTOR_SECRET`.
-  - `google/`: la cuenta de Google del login (Calendario desde Tareas y
-    Drive desde el chat); todavía sin herramientas para la IA (llegan en
-    la sesión 12). `auth.isConnected(user)` mira si hay credenciales
-    guardadas.
+  - `google/`: la cuenta de Google del login (además del Calendario desde
+    Tareas y Drive desde el chat). Herramientas del Calendario principal:
+    `list_events` (de hoy a 7 días por defecto, o entre dos fechas; máximo
+    31 días y 25 eventos), `create_event` (sin hora = todo el día; con
+    inicio y sin fin = 1 hora o `duration_minutes`) y, con tarjeta de
+    confirmación, `update_event` (si solo cambia el día conserva la hora; si
+    solo cambia el inicio conserva la duración; la tarjeta muestra antes →
+    después y deja editar fecha e horas) y `delete_event`. Las fechas y
+    horas se resuelven en la zona horaria del usuario con
+    `connectors/dates.js` (`resolveDate`, `resolveTime`, `zonedInstant`
+    con cambio de horario incluido) y los eventos se crean con esa
+    `timeZone`. `auth.isConnected(user)` mira si hay credenciales
+    guardadas; sin sesión o sin el permiso `calendar.events` las
+    herramientas devuelven un `{ error }` que lo explica.
+  - `dates.js`: fechas en la zona del usuario ("hoy", "mañana", "el
+    viernes", "3pm"), compartidas por Tareas y Calendario.
   - `planned.js`: solo metadatos de los conectores que llegan en próximas
     sesiones (Telegram, Spotify, Notion, WhatsApp y el Chromebook), para
     mostrarlos en el hub.

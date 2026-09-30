@@ -3,9 +3,9 @@
 // anything themselves: they validate the request against the tasks the
 // browser sent along (context.tasks) and emit an action that the app
 // applies once the answer is complete (see applyTaskActions in the app).
+import { resolveDate } from '../dates.js';
 
 const PRIORITIES = ['alta', 'media', 'baja'];
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 
 export function normalize(s) {
   return String(s || '')
@@ -17,40 +17,10 @@ export function normalize(s) {
     .trim();
 }
 
-function todayIn(timezone) {
-  try {
-    // en-CA formats as YYYY-MM-DD.
-    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone || 'UTC' }).format(new Date());
-  } catch {
-    return new Date().toISOString().slice(0, 10);
-  }
-}
-
-function addDays(isoDate, days) {
-  const d = new Date(`${isoDate}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 // Accepts YYYY-MM-DD or everyday words ("hoy", "mañana", "el viernes"),
-// resolved in the user's time zone. Returns null for "no date", undefined
-// when the value can't be understood.
+// resolved in the user's time zone (see ../dates.js).
 export function resolveDueDate(value, timezone) {
-  if (value == null || value === '') return null;
-  const raw = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw) && !Number.isNaN(new Date(`${raw}T12:00:00Z`).getTime())) return raw;
-  const today = todayIn(timezone);
-  const words = normalize(raw).replace(/^(el|este|esta|para el|para)\s+/, '');
-  if (words === 'hoy') return today;
-  if (words === 'manana') return addDays(today, 1);
-  if (words === 'pasado manana') return addDays(today, 2);
-  const weekday = WEEKDAYS.indexOf(words.replace(/^proximo\s+/, ''));
-  if (weekday >= 0) {
-    const current = new Date(`${today}T12:00:00Z`).getUTCDay();
-    const ahead = (weekday - current + 7) % 7 || 7;
-    return addDays(today, ahead);
-  }
-  return undefined;
+  return resolveDate(value, timezone);
 }
 
 // Best pending task for a spoken description: exact match, then containment
