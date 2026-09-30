@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useWakeWord } from '../context/wakeWordState';
-import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../services/wakeWord';
+import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, MAX_FOLLOW_UP_SECONDS } from '../services/wakeWord';
 import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import './Memory.css';
@@ -72,8 +72,11 @@ function WakeWordCard() {
     setSaved(`Listo: ahora despierto con “${clean}”.`);
   }
 
-  const statusText =
-    wake.status === 'listening' ? `Escuchando la palabra “${wake.word}”…` : WAKE_STATUS[wake.status] || '';
+  const statusText = wake.waiting
+    ? `Eddie te escucha: tienes ${wake.secondsLeft} s para responder, sin decir la palabra…`
+    : wake.status === 'listening'
+      ? `Escuchando la palabra “${wake.word}”…`
+      : WAKE_STATUS[wake.status] || '';
 
   return (
     <section className="glass-panel memory__wake" aria-label="Palabra clave de activación">
@@ -111,10 +114,28 @@ function WakeWordCard() {
           Guardar palabra
         </button>
       </form>
+      <label className="memory__field memory__wake-wait">
+        <span>Tiempo de espera tras responder (segundos)</span>
+        <input
+          className="input"
+          type="number"
+          min="0"
+          max={MAX_FOLLOW_UP_SECONDS}
+          step="1"
+          value={settings.wake?.followUpSeconds ?? DEFAULT_FOLLOW_UP_SECONDS}
+          onChange={(e) => updateWakeSettings({ followUpSeconds: cleanFollowUpSeconds(e.target.value) })}
+          aria-label="Tiempo de espera en segundos"
+        />
+      </label>
+      <p className="memory__wake-desc">
+        {wake.followUp > 0
+          ? `Cuando Eddie termina de responder, te espera ${wake.followUp} s para que sigas hablando sin repetir la palabra. Si no dices nada, vuelve a esperar la palabra clave. Con 0 hay que decirla cada vez.`
+          : 'Desactivado: hay que decir la palabra clave cada vez que quieras hablarle.'}
+      </p>
       {!clean && <p className="memory__warn">Usa al menos 3 letras (mejor una palabra poco común, así no se activa sola).</p>}
       {saved && <p className="memory__notice" role="status">{saved}</p>}
       {wake.enabled && (
-        <p className={`memory__wake-status memory__wake-status--${wake.status}`} role="status">
+        <p className={`memory__wake-status memory__wake-status--${wake.waiting ? 'waiting' : wake.status}`} role="status">
           {statusText}
           {(wake.status === 'denied' || wake.status === 'error') && (
             <button type="button" className="btn" onClick={wake.retry}>

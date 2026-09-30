@@ -249,6 +249,13 @@ abierto en una pestaña, basta decirla:
 - **"Eddie, ¿qué tengo hoy?"** — lo que sigue a la palabra se envía tal cual.
 - **"Eddie"** solo — se abre el micrófono y lo que digas después se envía al terminar.
 
+**Tiempo de espera** (por defecto 5 s, de 0 a 30): cuando Eddie termina de contestar —y de hablar—
+abre el micrófono ese tiempo para que sigas la conversación **sin repetir la palabra**. Si empiezas a
+hablar, se envía y, tras la siguiente respuesta, vuelve a abrirse; si no dices nada, se cierra y Eddie
+vuelve a esperar la palabra clave. Con 0 hay que decirla cada vez. Solo se aplica a las conversaciones
+que empezaste con la palabra (no a las del anillo de Inicio ni a las del chat); la tarjeta muestra
+"tienes N s para responder" mientras la ventana está abierta.
+
 Solo reacciona si la palabra va **al principio** de la frase (admite "oye", "hey", "hola" delante),
 así que hablar *de* Eddie ("le dije a Eddie que…") no lo despierta. Se pausa mientras Eddie te
 escucha, piensa o habla (así no se despierta con su propia voz) y, al despertarlo por voz,

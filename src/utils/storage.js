@@ -45,6 +45,7 @@ export const DEFAULT_SETTINGS = {
   wake: {
     enabled: false,
     word: 'eddie',
+    followUpSeconds: 5,
   },
   // Connectors switched off in the Conectores hub; everything else is on,
   // so a newly added connector works without the user opting in.
