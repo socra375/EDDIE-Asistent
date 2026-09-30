@@ -1,9 +1,11 @@
-// Optional catch-all: matches both /api/tasks and /api/tasks/<id>, merging
-// what used to be two files into one — see api/auth/session.js for why
-// (Vercel Hobby plan's 12-function-per-deployment cap).
-import { listTasks, createTask, updateTask, removeTask } from '../_lib/tasksHandlers.js';
-import { parseCookies } from '../_lib/cookies.js';
-import { applyResult, respondError } from '../_lib/respond.js';
+// One file for both /api/tasks and /api/tasks/<id> (vercel.json rewrites the
+// latter to /api/tasks?id=<id>), merging what used to be two files into one —
+// see api/auth/session.js for why (Vercel Hobby plan's 12-function cap).
+// Not an optional catch-all ([[...id]].js): outside Next.js, Vercel didn't
+// route the bare /api/tasks to it and the SPA fallback answered instead.
+import { listTasks, createTask, updateTask, removeTask } from './_lib/tasksHandlers.js';
+import { parseCookies } from './_lib/cookies.js';
+import { applyResult, respondError } from './_lib/respond.js';
 
 export default async function handler(req, res) {
   try {

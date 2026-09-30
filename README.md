@@ -250,10 +250,10 @@ Mismo dominio para frontend y API — no se requiere configuración de CORS
 adicional, y las cookies de sesión funcionan de forma nativa.
 
 **Nota sobre el plan gratuito (Hobby) de Vercel**: tiene un límite de 12
-funciones serverless por despliegue. El proyecto usa 10 (agrupando
+funciones serverless por despliegue. El proyecto usa 11 (agrupando
 endpoints relacionados de bajo tráfico en un mismo archivo, p. ej.
 `api/auth/session.js` maneja GET/POST/DELETE para me/logout/eliminar
-cuenta, y `api/tasks/[[...id]].js` maneja tanto `/api/tasks` como
+cuenta, y `api/tasks.js` maneja tanto `/api/tasks` como
 `/api/tasks/<id>`). Si agregas nuevos endpoints, ten en cuenta ese límite
 o pasa a un plan de pago.
 
@@ -300,9 +300,9 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   auth/google/start.js, auth/google/callback.js
   auth/session.js        GET/POST/DELETE = me / logout / eliminar cuenta (un solo archivo)
   calendar/events.js, drive/save.js
-  tasks/[[...id]].js     GET/POST sin id, PATCH/DELETE con id (un solo archivo)
+  tasks.js               GET/POST sin id, PATCH/DELETE con id (un solo archivo + reescritura en vercel.json)
   settings/index.js, memory/index.js
-  connectors/[[...path]].js  GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
+  connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
   _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: clock, weather, google
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)

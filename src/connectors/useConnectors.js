@@ -14,9 +14,10 @@ export function useConnectors(userKey) {
     fetch(`${API_BASE}/api/connectors`, { credentials: 'include' })
       .then(async (res) => {
         const data = await res.json().catch(() => null);
-        if (!res.ok || !Array.isArray(data?.connectors)) {
-          throw new Error(data?.error || `El servidor respondió con un error (${res.status}).`);
-        }
+        if (!res.ok) throw new Error(data?.error || `El servidor respondió con un error (${res.status}).`);
+        // A 200 without the list means something other than the API answered
+        // (e.g. the web page itself), so say that instead of "error 200".
+        if (!Array.isArray(data?.connectors)) throw new Error('el servidor no devolvió la lista (respuesta inesperada).');
         if (!cancelled) setState({ status: 'ready', connectors: data.connectors, error: '' });
       })
       .catch((err) => {
