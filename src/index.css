@@ -1,15 +1,24 @@
+/* Dark theme: near-black, flat surfaces (JARVIS-HRZ-style), keeping
+   Eddie's own cyan/violet accents. */
 :root {
   color-scheme: dark;
 
-  --bg: #060a12;
-  --bg-elevated: #0a1120;
-  --panel-bg: rgba(16, 26, 46, 0.65);
-  --panel-bg-solid: #0d1626;
-  --panel-border: rgba(90, 200, 255, 0.18);
-  --panel-border-strong: rgba(90, 200, 255, 0.4);
+  --bg: #05070b;
+  --bg-elevated: #080b12;
+  --panel-bg: rgba(14, 18, 28, 0.72);
+  --panel-bg-solid: #0b0f18;
+  --panel-border: rgba(120, 190, 255, 0.12);
+  --panel-border-strong: rgba(79, 214, 255, 0.38);
+  --line: rgba(255, 255, 255, 0.06);
+  --rail-bg: #06080d;
+  --list-bg: #080b11;
+  --new-chat-bg: #f2f6fc;
+  --new-chat-text: #05070b;
+  --tooltip-bg: #f2f6fc;
+  --tooltip-text: #05070b;
   --accent: #4fd6ff;
   --accent-2: #8b6bff;
-  --accent-soft: rgba(79, 214, 255, 0.15);
+  --accent-soft: rgba(79, 214, 255, 0.12);
   --text: #e8f2ff;
   --text-dim: #8ea3c0;
   --text-faint: #5a6b85;
@@ -18,8 +27,8 @@
   --danger: #ff6b81;
   --radius-sm: 8px;
   --radius-md: 14px;
-  --radius-lg: 22px;
-  --shadow-glow: 0 0 32px rgba(79, 214, 255, 0.12);
+  --radius-lg: 18px;
+  --shadow-glow: none;
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
 }
@@ -39,6 +48,13 @@
   --text-dim: #46567a;
   --text-faint: #7c8aa8;
   --shadow-glow: 0 0 24px rgba(28, 127, 214, 0.08);
+  --line: rgba(16, 26, 44, 0.08);
+  --rail-bg: #f7f9fd;
+  --list-bg: #f2f5fb;
+  --new-chat-bg: #101a2c;
+  --new-chat-text: #ffffff;
+  --tooltip-bg: #101a2c;
+  --tooltip-text: #ffffff;
 }
 
 * {
@@ -53,7 +69,7 @@ body,
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse at top, var(--bg-elevated), var(--bg) 65%);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

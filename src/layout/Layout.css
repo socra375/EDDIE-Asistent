@@ -1,0 +1,448 @@
+/* Three columns: icon rail · "Mis chats" · main (header + content). The
+   chat list column collapses to zero width instead of unmounting, so its
+   scroll position and search survive toggling. */
+.app-shell {
+  display: grid;
+  grid-template-columns: 64px 280px 1fr;
+  height: 100vh;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.app-shell--list-closed {
+  grid-template-columns: 64px 0 1fr;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.25rem;
+}
+
+.app-content > * {
+  height: 100%;
+}
+
+/* ---- Icon rail ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 1rem 0;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--line);
+}
+
+.rail__group,
+.rail__bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rail__bottom {
+  margin-top: auto;
+}
+
+.rail__item {
+  --item-color: var(--text-dim);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--item-color);
+  opacity: 0.8;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.rail__item:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rail__item--active {
+  opacity: 1;
+  background: color-mix(in srgb, var(--item-color) 14%, transparent);
+  border-color: color-mix(in srgb, var(--item-color) 45%, transparent);
+}
+
+.rail__toggle {
+  color: var(--text-dim);
+}
+
+/* The module colors are tuned for the dark background; darken them on the
+   light theme so the green and yellow icons stay legible on white. */
+:root[data-theme='light'] .rail__item .icon {
+  filter: brightness(0.62) saturate(1.4);
+}
+
+.rail__item[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* ---- Mis chats ---- */
+.chatlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow: hidden;
+  padding: 1.1rem 0.9rem;
+  background: var(--list-bg);
+  border-right: 1px solid var(--line);
+}
+
+.app-shell--list-closed .chatlist {
+  padding: 0;
+  border-right: none;
+  visibility: hidden;
+}
+
+.chatlist__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.chatlist__new {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: none;
+  background: var(--new-chat-bg);
+  color: var(--new-chat-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.chatlist__new:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chatlist__search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-faint);
+}
+
+.chatlist__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.85rem;
+}
+
+.chatlist__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+}
+
+.chatlist__item {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.chatlist__item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.chatlist__item--active {
+  border-color: var(--panel-border-strong);
+  background: var(--accent-soft);
+}
+
+.chatlist__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.chatlist__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatlist__meta {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.chatlist__delete {
+  display: grid;
+  place-items: center;
+  margin-right: 0.4rem;
+  padding: 0.35rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.chatlist__item:hover .chatlist__delete,
+.chatlist__delete:focus-visible {
+  opacity: 1;
+}
+
+.chatlist__delete:hover {
+  color: var(--danger);
+}
+
+.chatlist__empty {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+}
+
+/* ---- Header ---- */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.header__name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.header__section {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.header__right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header__clock {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.header__theme {
+  padding: 0.4rem 0.6rem;
+}
+
+.header__account {
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.header__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.header__account-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.status-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.status-pill--processing .status-pill__dot,
+.status-pill--responding .status-pill__dot {
+  background: var(--accent);
+}
+
+.status-pill--error .status-pill__dot {
+  background: var(--danger);
+}
+
+.voice-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.3rem 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.voice-switch__knob {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.voice-switch--on {
+  color: var(--accent);
+  border-color: var(--panel-border-strong);
+}
+
+.voice-switch--on .voice-switch__knob {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.voice-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1024px) {
+  .app-shell,
+  .app-shell--list-closed {
+    grid-template-columns: 64px 0 1fr;
+  }
+
+  .chatlist {
+    display: none;
+  }
+
+  .rail__toggle {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .app-shell,
+  .app-shell--list-closed {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .app-main {
+    order: 1;
+  }
+
+  .rail {
+    order: 2;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0.4rem 0.5rem;
+    border-right: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .rail__group,
+  .rail__bottom {
+    flex-direction: row;
+    margin: 0;
+  }
+
+  .rail__item[data-tooltip]:hover::after {
+    display: none;
+  }
+
+  .app-content {
+    padding: 0.75rem;
+  }
+
+  .header {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .header__clock,
+  .header__account-name,
+  .voice-switch__label {
+    display: none;
+  }
+
+  .voice-switch {
+    padding: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-pill {
+    display: none;
+  }
+}
