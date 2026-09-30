@@ -4,7 +4,9 @@
 //
 // Wire format is newline-delimited JSON, one object per line:
 //   {"type":"chunk","text":"..."}   — a piece of the answer, as generated
-//   {"type":"done","provider":...,"model":...} — stream finished
+//   {"type":"done","provider":...,"model":...,"fallbackFrom":...} — stream
+//                                       finished (fallbackFrom is set when
+//                                       Groq answered for a failed provider)
 //   {"type":"error","message":"..."} — failed after the stream had already
 //                                       started (see below)
 //
@@ -35,7 +37,7 @@ export async function runChatStream(req, res) {
       res.write(`${JSON.stringify({ type: 'chunk', text })}\n`);
     });
     ensureStream();
-    res.write(`${JSON.stringify({ type: 'done', provider: result.provider, model: result.model })}\n`);
+    res.write(`${JSON.stringify({ type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom })}\n`);
     res.end();
   } catch (err) {
     if (!streamStarted) {

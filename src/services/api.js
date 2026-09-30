@@ -65,7 +65,7 @@ export async function sendChatMessage({ provider, model, system, messages, conte
         content += event.text;
         onChunk?.(content);
       } else if (event.type === 'done') {
-        meta = { provider: event.provider, model: event.model };
+        meta = { provider: event.provider, model: event.model, fallbackFrom: event.fallbackFrom };
       } else if (event.type === 'error') {
         throw new EddieApiError(event.message);
       }

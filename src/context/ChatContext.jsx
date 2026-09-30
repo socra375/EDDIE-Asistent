@@ -130,6 +130,7 @@ export function ChatProvider({ children }) {
         });
 
         const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider, ...replyMeta };
+        if (result.fallbackFrom) assistantMessage.fallbackFrom = result.fallbackFrom;
         setMessages((prev) => (responseStarted ? prev.map((m) => (m.id === assistantId ? assistantMessage : m)) : [...prev, assistantMessage]));
         setLastReply(assistantMessage);
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);

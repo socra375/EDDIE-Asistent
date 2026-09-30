@@ -20,6 +20,7 @@ const PROVIDER_MODELS = {
     { value: '', label: 'claude-sonnet-5 (predeterminado)' },
     { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5 (más rápido)' },
   ],
+  groq: [{ value: '', label: 'Llama 3.3 70B (predeterminado, gratis y muy rápido)' }],
 };
 
 const LANGUAGES = [
@@ -109,6 +110,7 @@ export default function SettingsPanel({ onOpenConversation }) {
             >
               <option value="gemini">Google Gemini Flash</option>
               <option value="claude">Anthropic Claude</option>
+              <option value="groq">Groq (Llama)</option>
             </select>
           </label>
           <label>
@@ -126,7 +128,15 @@ export default function SettingsPanel({ onOpenConversation }) {
           <div className="settings-health">
             <span className={`health-dot ${health.gemini ? 'health-dot--ok' : 'health-dot--off'}`} /> Gemini {health.gemini ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.claude ? 'health-dot--ok' : 'health-dot--off'}`} /> Claude {health.claude ? 'configurado' : 'no configurado'}
+            <span className={`health-dot ${health.groq ? 'health-dot--ok' : 'health-dot--off'}`} /> Groq {health.groq ? 'configurado' : 'no configurado'}
           </div>
+        )}
+        {health && settings.provider !== 'groq' && (
+          <p className="settings-placeholder">
+            {health.groq
+              ? 'Respaldo activo: si el proveedor elegido falla antes de responder (límite gratuito, saturación o error), Groq responde en su lugar.'
+              : 'Sin respaldo: agrega GROQ_API_KEY en las variables de entorno de Vercel para que Groq responda cuando el proveedor elegido falle.'}
+          </p>
         )}
         {health && !health[settings.provider] && (
           <p className="settings-warning">

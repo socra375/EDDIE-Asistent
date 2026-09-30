@@ -213,6 +213,11 @@
   font-size: 0.62rem;
 }
 
+.bubble__tag--fallback {
+  border-color: color-mix(in srgb, var(--warning) 60%, transparent);
+  color: var(--warning);
+}
+
 .bubble__actions {
   display: flex;
   flex-wrap: wrap;

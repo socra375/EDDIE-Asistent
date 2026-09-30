@@ -3,7 +3,7 @@ import { callProvider } from './providers.js';
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
 const MAX_SYSTEM_LENGTH = 6000;
-const ALLOWED_PROVIDERS = new Set(['gemini', 'claude']);
+const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq']);
 
 class ValidationError extends Error {}
 
@@ -16,7 +16,7 @@ function sanitizeRequest(body) {
 
   const provider = body.provider;
   if (!ALLOWED_PROVIDERS.has(provider)) {
-    throw new ValidationError('El proveedor debe ser "gemini" o "claude".');
+    throw new ValidationError('El proveedor debe ser "gemini", "claude" o "groq".');
   }
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
