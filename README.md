@@ -99,6 +99,13 @@ exclusivamente desde variables de entorno del backend:
   (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
   (opcional) lo cambia, p. ej. a `whisper-large-v3`. Sin la clave, o si
   eliges "El del navegador" en Configuración → Voz, se usa la Web Speech API.
+- `ELEVENLABS_API_KEY` — (opcional) la **voz propia de Eddie**: las
+  respuestas se leen con ElevenLabs usando la voz `bUQeiO7gn4ehGuSnZf26`
+  y el modelo `eleven_flash_v2_5` (en español, rápido y a mitad de
+  créditos). `ELEVENLABS_VOICE_ID` y `ELEVENLABS_MODEL` los cambian. Sin la
+  clave, si se acaban los créditos o si la voz no está permitida en tu plan
+  (el plan gratis no puede usar voces de la biblioteca por API), Eddie
+  sigue con la voz del navegador y Configuración → Voz explica por qué.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en
