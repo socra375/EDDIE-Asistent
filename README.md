@@ -110,6 +110,8 @@ exclusivamente desde variables de entorno del backend:
   (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
   (opcional) lo cambia, p. ej. a `whisper-large-v3`. Sin la clave, o si
   eliges "El del navegador" en Configuración → Voz, se usa la Web Speech API.
+- `YOUTUBE_API_KEY` — (opcional) la clave de la API de YouTube Data v3 para que Eddie elija con fiabilidad el
+  video que reproduce (ver la sección YouTube). Sin ella usa la página de resultados.
 - `TAVILY_API_KEY` — (opcional) la **búsqueda web** funciona sin clave con
   un límite bajo; una clave gratis de https://app.tavily.com (1.000
   búsquedas al mes) lo amplía. Noticias, Wikipedia, monedas y tareas no
@@ -242,18 +244,26 @@ Google) con protección CSRF por `state` y sesiones propias:
 
 ## YouTube
 
-Pídele a Eddie "abre YouTube", "busca un tutorial de React en YouTube" o "ponme música de salsa":
-abre **una pestaña nueva** con YouTube o con los resultados de esa búsqueda (por chat, por voz o con
-la palabra clave). Eddie no elige ni reproduce un video por su cuenta: la lista de resultados se abre
-y el video lo eliges tú. Solo abre direcciones de YouTube (`youtube.com`, `music.youtube.com`,
-`youtu.be`), nada más.
+Pídele a Eddie "abre YouTube" o "busca un tutorial de React en YouTube": abre **una pestaña nueva** con
+YouTube o con los resultados de esa búsqueda (por chat, por voz o con la palabra clave). Si le pides
+**poner algo** ("ponme música de salsa", "reproduce el tráiler de Dune"), elige el primer video y lo
+**reproduce él mismo** en un reproductor flotante dentro de Eddie (sin ventanas emergentes), con el título
+y el canal; puedes decirle "pausa el video", "sigue" o "cierra el video". Si YouTube no deja reproducir ese
+video fuera de su sitio (algunos de música), el reproductor lo avisa y deja un botón para verlo en YouTube.
+Solo abre direcciones de YouTube (`youtube.com`, `music.youtube.com`, `youtu.be`), nada más.
+
+Para elegir el video usa la API de YouTube si existe `YOUTUBE_API_KEY` (gratis, unas 100 búsquedas al día; se
+crea en Google Cloud → habilitar "YouTube Data API v3" → Credenciales → Clave de API, restringida a esa API, y
+se pone en las variables de entorno de Vercel, nunca en el código ni en el chat). Sin clave lee la página de
+resultados de YouTube, que no es una API oficial y puede fallar; en ese caso Eddie abre la lista de resultados
+y te lo dice.
 
 Los navegadores solo dejan abrir una ventana tras un clic. Por eso, si lo pides por voz o la respuesta
 tarda, el navegador puede bloquearla: Eddie deja debajo de su respuesta (y en Inicio) un botón
 "Abrir YouTube: …" y un clic la abre. Para que se abra sola, permite las ventanas emergentes de este
 sitio (el icono del candado o de "ventana bloqueada" en la barra de direcciones). En Telegram manda el
 enlace con un botón "Abrir" que lo abre en el teléfono (o en la app de YouTube). Se enciende o apaga en
-Conectores → YouTube.
+Conectores → YouTube. (En Telegram, cuando pide poner algo manda el enlace del video con un botón "Reproducir".)
 
 ## Palabra clave de activación
 
@@ -270,6 +280,13 @@ hablar, se envía y, tras la siguiente respuesta, vuelve a abrirse; si no dices 
 vuelve a esperar la palabra clave. Con 0 hay que decirla cada vez. Solo se aplica a las conversaciones
 que empezaste con la palabra (no a las del anillo de Inicio ni a las del chat); la tarjeta muestra
 "tienes N s para responder" mientras la ventana está abierta.
+
+**Apagar el micrófono:** di **"Eddie, suspéndete"** o **"apágate"** (también "desactiva el micrófono",
+"duérmete", "ya no me escuches"; funciona igual con tu palabra clave, sola o dentro de la ventana de espera,
+y también escrito en el chat). Eddie apaga "Escuchar la palabra clave" y te lo confirma. Como con el
+micrófono apagado ya no puede oírte, para volver a encenderlo hay que activar el interruptor en
+**Memoria → Palabra clave de activación**. Solo se entiende si es la orden completa: "apágate la luz" o
+"suspende la reunión" se tratan como una frase normal.
 
 Solo reacciona si la palabra va **al principio** de la frase (admite "oye", "hey", "hola" delante),
 así que hablar *de* Eddie ("le dije a Eddie que…") no lo despierta. Se pausa mientras Eddie te

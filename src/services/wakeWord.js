@@ -62,3 +62,41 @@ export function findWakeWord(text, word) {
   const rest = original.slice(match[0].length).replace(/^[\s,.:;…-]+/, '').trim();
   return { found: true, rest };
 }
+
+// "Eddie, suspéndete" / "apágate": the spoken off switch for the microphone
+// (the wake word listener). Only a whole message counts — "apágate la luz" or
+// a sentence that merely contains the word does nothing — and the wake word
+// (or "eddie") may come before it, "por favor" / "ya" after it.
+const SLEEP_COMMANDS = new Set([
+  'suspendete',
+  'suspende',
+  'suspension',
+  'modo suspension',
+  'apagate',
+  'desactivate',
+  'duermete',
+  'a dormir',
+  've a dormir',
+  'descansa',
+  'descansate',
+  'ya no me escuches',
+  'no me escuches mas',
+  'deja de escucharme',
+  'deja de escuchar',
+]);
+const MIC_OFF = /^(apaga|apagar|desactiva|desactivar|silencia|silenciar|cierra|cerrar) (el |tu |mi )?(microfono|mic|escucha)$/;
+
+export function isSleepCommand(text, word = DEFAULT_WAKE_WORD) {
+  let t = fold(text)
+    .replace(/[^a-z0-9ñ ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return false;
+  const names = [...new Set([...wakePhrases(word), ...wakePhrases(DEFAULT_WAKE_WORD)])].map((p) => escapeRe(p).replace(/ /g, '\\s+'));
+  const name = `(?:${names.join('|')})`;
+  t = t
+    .replace(new RegExp(`^(?:(?:${FILLERS.join('|')}) )?(?:${name} )?`), '')
+    .replace(new RegExp(`(?: ${name})?(?: (?:por favor|ya|ahora|gracias))*$`), '')
+    .trim();
+  return SLEEP_COMMANDS.has(t) || MIC_OFF.test(t);
+}
