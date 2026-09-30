@@ -13,6 +13,7 @@ import { buildSystemPrompt } from '../../../src/services/personality.js';
 import { sendMessage, editMessage, answerCallback, sendAction, sendVoice, downloadFile, tg } from './api.js';
 import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistory, markUpdateSeen, addPending, takePending, latestPending } from './store.js';
 import { loadUserContext, applyActionsForUser } from './serverActions.js';
+import { safeYoutubeUrl } from '../connectors/youtube/index.js';
 
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
@@ -181,7 +182,7 @@ export function speakable(text) {
   return String(text || '')
     .replace(/https?:\/\/\S+/g, '')
     .replace(/[*_`#>~|]+/g, '')
-    .replace(/✓|✔|✅|✖|🎙|📞/gu, '')
+    .replace(/✓|✔|✅|✖|🎙|📞|▶/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -262,6 +263,13 @@ async function runAssistant(link, text, viaVoice) {
       await sendMessage(chatId, cardText(c), {
         reply_markup: { inline_keyboard: [[{ text: `✅ ${c.preview?.confirmLabel || 'Confirmar'}`, callback_data: `ok:${id}` }, { text: '✖ Cancelar', callback_data: `no:${id}` }]] },
       });
+    }
+
+    // Pages Eddie meant to open (YouTube): a bot can't open a browser, so the
+    // link goes out with a button that opens it on the phone (or in the app).
+    for (const action of (result.actions || []).filter((a) => a?.type === 'open_url').slice(0, 2)) {
+      const url = safeYoutubeUrl(action.url);
+      if (url) await sendMessage(chatId, `▶ ${String(action.label || 'YouTube').slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: '▶ Abrir', url }]] } });
     }
 
     if (wantsVoice) {

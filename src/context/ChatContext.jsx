@@ -15,6 +15,7 @@ import { useLocation } from './LocationContext';
 import { useAuth } from './AuthContext';
 import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
+import { applyBrowserActions } from '../services/browserActions';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -292,6 +293,11 @@ export function ChatProvider({ children }) {
           assistantMessage.taskChanges = result.actions
             .map((a) => (a.type === 'create_task' ? `Tarea creada: ${a.task?.title}` : a.type === 'complete_task' ? `Tarea hecha: ${a.title}` : null))
             .filter(Boolean);
+        }
+        // Pages Eddie opened (YouTube): those the browser blocked stay as buttons.
+        if (result.actions?.length) {
+          const links = applyBrowserActions(result.actions);
+          if (links.length) assistantMessage.links = links;
         }
         // Things Eddie saved to (or removed from) the memory while answering.
         if (result.actions?.length) {

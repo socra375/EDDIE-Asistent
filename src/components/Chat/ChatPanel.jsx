@@ -241,6 +241,18 @@ export default function ChatPanel({ showCore = true }) {
                   ))}
                 </ul>
               )}
+              {m.links?.length > 0 && (
+                <ul className="bubble__changes bubble__links" aria-label="Enlaces que abrió Eddie">
+                  {m.links.map((link) => (
+                    <li key={link.url}>
+                      <Icon name="play" size={13} />{' '}
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.opened ? 'Se abrió en una pestaña nueva' : 'Tu navegador bloqueó la ventana: pulsa para abrirla'}>
+                        {link.opened ? 'Abierto' : 'Abrir'} {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {m.memoryChanges?.length > 0 && (
                 <ul className="bubble__changes" aria-label="Cambios en tu memoria">
                   {m.memoryChanges.map((change) => (

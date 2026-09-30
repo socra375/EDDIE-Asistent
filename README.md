@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Telegram…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Telegram…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -239,6 +239,21 @@ Google) con protección CSRF por `state` y sesiones propias:
    cookie — el frontend nunca ve ni maneja tokens de Google directamente.
 4. Los tokens de Calendar/Drive se guardan en `google_credentials` y se
    renuevan automáticamente con el `refresh_token` cuando expiran.
+
+## YouTube
+
+Pídele a Eddie "abre YouTube", "busca un tutorial de React en YouTube" o "ponme música de salsa":
+abre **una pestaña nueva** con YouTube o con los resultados de esa búsqueda (por chat, por voz o con
+la palabra clave). Eddie no elige ni reproduce un video por su cuenta: la lista de resultados se abre
+y el video lo eliges tú. Solo abre direcciones de YouTube (`youtube.com`, `music.youtube.com`,
+`youtu.be`), nada más.
+
+Los navegadores solo dejan abrir una ventana tras un clic. Por eso, si lo pides por voz o la respuesta
+tarda, el navegador puede bloquearla: Eddie deja debajo de su respuesta (y en Inicio) un botón
+"Abrir YouTube: …" y un clic la abre. Para que se abra sola, permite las ventanas emergentes de este
+sitio (el icono del candado o de "ventana bloqueada" en la barra de direcciones). En Telegram manda el
+enlace con un botón "Abrir" que lo abre en el teléfono (o en la app de YouTube). Se enciende o apaga en
+Conectores → YouTube.
 
 ## Palabra clave de activación
 
