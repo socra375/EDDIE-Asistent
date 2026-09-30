@@ -131,7 +131,7 @@ export default function HomePanel({ onOpenTasks }) {
                 <div className="home__links">
                   {lastAssistant.links.map((link) => (
                     <a key={link.url} className="btn" href={link.url} target="_blank" rel="noopener noreferrer">
-                      <Icon name="play" size={14} /> {link.opened ? 'Abierto' : 'Abrir'} {link.label}
+                      <Icon name="play" size={14} /> {link.played ? 'Reproduciendo' : link.opened ? 'Abierto' : 'Abrir'} {link.label}
                     </a>
                   ))}
                 </div>

@@ -16,6 +16,7 @@ import { useAuth } from './AuthContext';
 import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
+import { isSleepCommand } from '../services/wakeWord';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -59,7 +60,7 @@ function nextId() {
 }
 
 export function ChatProvider({ children }) {
-  const { settings, memory } = useSettings();
+  const { settings, memory, updateWakeSettings } = useSettings();
   const { location } = useLocation();
   const { user } = useAuth();
   const [conversations, setConversations] = useState(() => getConversations());
@@ -191,6 +192,20 @@ export function ChatProvider({ children }) {
       if (title) replyMeta.title = title;
       setMessages((prev) => (silent ? prev : [...prev, userMessage]));
       setErrorMessage('');
+
+      // "Eddie, suspéndete" / "apágate": switches the microphone (the wake word
+      // listener) off, by voice or by typing. Turning it back on is up to the
+      // user, in Memoria — with the microphone off Eddie can't hear them.
+      if (!tag && isSleepCommand(trimmed, settings.wake?.word)) {
+        const wasOn = Boolean(settings.wake?.enabled);
+        updateWakeSettings({ enabled: false });
+        addEddieMessage(
+          wasOn
+            ? 'Me suspendo: apagué el micrófono y ya no escucho la palabra clave. Cuando quieras, actívame otra vez en Memoria.'
+            : 'El micrófono de la palabra clave ya estaba apagado. Puedes activarlo en Memoria.',
+        );
+        return null;
+      }
 
       // "Sí" / "no" right after Eddie asked to confirm something answers the
       // card instead of starting a new request (voice-friendly).
@@ -329,7 +344,7 @@ export function ChatProvider({ children }) {
         return null;
       }
     },
-    [messages, settings, memory, location, user, resolveConfirmation],
+    [messages, settings, memory, location, user, resolveConfirmation, updateWakeSettings, addEddieMessage],
   );
 
   // Starts a fresh, empty conversation. The one being left behind is

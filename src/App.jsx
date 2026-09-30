@@ -16,6 +16,7 @@ import SettingsPanel from './components/Settings/SettingsPanel';
 import ConnectorsPanel from './connectors/ConnectorsPanel';
 import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
+import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
@@ -104,6 +105,7 @@ function AppShell() {
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
       </div>
+      <YouTubePlayer />
       <AutoReadBridge />
       <SettingsSyncBridge />
     </div>

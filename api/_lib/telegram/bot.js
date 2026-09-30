@@ -267,9 +267,10 @@ async function runAssistant(link, text, viaVoice) {
 
     // Pages Eddie meant to open (YouTube): a bot can't open a browser, so the
     // link goes out with a button that opens it on the phone (or in the app).
-    for (const action of (result.actions || []).filter((a) => a?.type === 'open_url').slice(0, 2)) {
+    for (const action of (result.actions || []).filter((a) => a?.type === 'open_url' || a?.type === 'play_video').slice(0, 2)) {
       const url = safeYoutubeUrl(action.url);
-      if (url) await sendMessage(chatId, `▶ ${String(action.label || 'YouTube').slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: '▶ Abrir', url }]] } });
+      const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || 'YouTube';
+      if (url) await sendMessage(chatId, `▶ ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : '▶ Abrir', url }]] } });
     }
 
     if (wantsVoice) {

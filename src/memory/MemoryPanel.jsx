@@ -83,7 +83,7 @@ function WakeWordCard() {
       <h3>Palabra clave de activación</h3>
       <p className="memory__wake-desc">
         Di la palabra y Eddie te escucha, sin tocar nada. Puedes decirla y seguir hablando (“{wake.word}, ¿qué tengo hoy?”) o decirla sola y
-        hablar después.
+        hablar después. Para apagar el micrófono di “{wake.word}, suspéndete” o “apágate”; para volver a encenderlo, actívalo aquí.
       </p>
       <label className="settings-toggle">
         <input

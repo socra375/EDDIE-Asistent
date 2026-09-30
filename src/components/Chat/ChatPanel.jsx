@@ -246,8 +246,8 @@ export default function ChatPanel({ showCore = true }) {
                   {m.links.map((link) => (
                     <li key={link.url}>
                       <Icon name="play" size={13} />{' '}
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.opened ? 'Se abrió en una pestaña nueva' : 'Tu navegador bloqueó la ventana: pulsa para abrirla'}>
-                        {link.opened ? 'Abierto' : 'Abrir'} {link.label}
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.played ? 'Se reproduce en el reproductor de Eddie; pulsa para abrirlo en YouTube' : link.opened ? 'Se abrió en una pestaña nueva' : 'Tu navegador bloqueó la ventana: pulsa para abrirla'}>
+                        {link.played ? 'Reproduciendo' : link.opened ? 'Abierto' : 'Abrir'} {link.label}
                       </a>
                     </li>
                   ))}

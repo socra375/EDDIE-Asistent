@@ -201,17 +201,26 @@ detalle del protocolo.
     `bot.js` (`handleWebhook`: secreto, comandos, notas de voz, el asistente,
     botones de confirmación); `handlers.js` enruta `link`, `unlink`,
     `settings` y `webhook`. La app lo controla desde `TelegramControls.jsx`.
-  - `youtube/`: `open_youtube({ query?, url? })` — sin argumentos abre la
-    portada, con `query` los resultados de la búsqueda
+  - `youtube/`: `open_youtube({ query?, url?, play? })` — sin argumentos abre
+    la portada, con `query` los resultados de la búsqueda
     (`youtube.com/results?search_query=…`), con `url` el enlace que se dio.
-    No llama a ninguna API ni escribe nada: emite una acción `open_url` que
-    la app abre en una pestaña nueva (`services/browserActions.js`:
-    `window.open`; si el navegador la bloquea, el mensaje guarda `links` y el
-    chat/Inicio los muestran como botón) o que el bot de Telegram manda como
-    enlace con botón. Solo admite youtube.com, www/m/music.youtube.com y
-    youtu.be (`safeYoutubeUrl`: https, sin credenciales, puerto ni
-    fragmento; `youtube.com.evil.com`, `javascript:` o `data:` se rechazan);
-    la app vuelve a comprobarlo antes de abrir. Sale por tema (`route`).
+    Con `play` elige el primer video (`resolveVideo`: API de YouTube con
+    `YOUTUBE_API_KEY`, `videoEmbeddable=true`; sin clave, o si falla, lee
+    `"videoRenderer":{"videoId":…` de la página de resultados; cualquier
+    sorpresa = sin video y se abren los resultados con una nota del motivo) y
+    emite `play_video`; `control_video({ action: pause|resume|close })` emite
+    `player_control`. Nada se escribe: la app lo aplica en
+    `services/browserActions.js` — `open_url` con `window.open` (si el
+    navegador la bloquea, el mensaje guarda `links` y el chat/Inicio los
+    muestran como botón), `play_video`/`player_control` como eventos del
+    navegador que escucha `player/YouTubePlayer.jsx` (tarjeta flotante con
+    `youtube-nocookie.com/embed/ID`, pausa/reanuda por `postMessage`, aviso
+    si el video no admite incrustarse, errores 101/150). El bot de Telegram
+    manda el enlace con botón. Solo admite youtube.com, www/m/music.youtube.com
+    y youtu.be (`safeYoutubeUrl`: https, sin credenciales, puerto ni
+    fragmento; `youtube.com.evil.com`, `javascript:` o `data:` se rechazan) y
+    los ids deben ser de 11 caracteres seguros; la app vuelve a comprobarlo
+    antes de abrir o reproducir. Sale por tema (`route`).
   - `github/`: `github_list_repos`, `github_repo_activity`,
     `github_list_issues`, `github_get_issue` y, sensibles,
     `github_create_issue` y `github_comment` (la app las muestra en una
