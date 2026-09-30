@@ -14,6 +14,9 @@ import { useSettings } from './SettingsContext';
 import { useLocation } from './LocationContext';
 import { useAuth } from './AuthContext';
 import { applyTaskActions, tasksForContext } from '../services/taskActions';
+import { applyMemoryActions } from '../services/memoryActions';
+import { getMemory } from '../utils/storage';
+import { memoryForContext } from '../services/memory';
 
 const ChatContext = createContext(null);
 
@@ -39,6 +42,14 @@ function latestPendingConfirmation(messages) {
   const last = [...messages].reverse().find((m) => m.role === 'assistant');
   const card = last?.confirmations?.find((c) => c.state === 'pending');
   return card ? { messageId: last.id, card } : null;
+}
+// With memory switched off in Configuración, Eddie neither sees nor writes it.
+function disabledFor(settings) {
+  const off = settings.disabledConnectors || [];
+  return settings.memoryEnabled === false && !off.includes('memory') ? [...off, 'memory'] : off;
+}
+function memoryContext(settings) {
+  return settings.memoryEnabled === false ? [] : memoryForContext(getMemory());
 }
 let idCounter = 0;
 function nextId() {
@@ -144,10 +155,11 @@ export function ChatProvider({ children }) {
         const { result, actions } = await confirmAction({
           tool: card.tool,
           args,
-          context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, tasks: tasksForContext() },
-          disabledConnectors: settings.disabledConnectors || [],
+          context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, tasks: tasksForContext(), memory: memoryContext(settings) },
+          disabledConnectors: disabledFor(settings),
         });
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
+        if (actions.length) applyMemoryActions(actions);
         const summary = result.summary || 'Listo, hecho.';
         updateConfirmation(messageId, confirmationId, { state: 'done', result: summary });
         updateStep(messageId, card.stepId, { status: 'done', summary, verified: result.verified ?? null });
@@ -211,7 +223,8 @@ export function ChatProvider({ children }) {
       const system = buildSystemPrompt({
         mode,
         language: settings.language,
-        memory: settings.memoryEnabled ? memory : {},
+        memory: settings.memoryEnabled ? memory : null,
+        query: trimmed,
         tasks: getTasks(),
         disabledConnectors: settings.disabledConnectors || [],
       });
@@ -239,8 +252,9 @@ export function ChatProvider({ children }) {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             location: location || undefined,
             tasks: tasksForContext(),
+            memory: memoryContext(settings),
           },
-          disabledConnectors: settings.disabledConnectors || [],
+          disabledConnectors: disabledFor(settings),
           onStep: (step) => {
             steps = mergeSteps(steps, step);
             if (responseStarted) setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, steps } : m)));
@@ -278,6 +292,11 @@ export function ChatProvider({ children }) {
           assistantMessage.taskChanges = result.actions
             .map((a) => (a.type === 'create_task' ? `Tarea creada: ${a.task?.title}` : a.type === 'complete_task' ? `Tarea hecha: ${a.title}` : null))
             .filter(Boolean);
+        }
+        // Things Eddie saved to (or removed from) the memory while answering.
+        if (result.actions?.length) {
+          const remembered = applyMemoryActions(result.actions);
+          if (remembered.length) assistantMessage.memoryChanges = remembered;
         }
         setMessages((prev) => (responseStarted ? prev.map((m) => (m.id === assistantId ? assistantMessage : m)) : [...prev, assistantMessage]));
         setLastReply(assistantMessage);

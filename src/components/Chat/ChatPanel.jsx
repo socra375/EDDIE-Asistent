@@ -92,8 +92,8 @@ export default function ChatPanel({ showCore = true }) {
       title: request.title,
     });
     if (reply && skill.id === 'study') {
-      rememberFact('nivel_academico', option);
-      rememberFact('ultimo_tema_estudiado', text.slice(0, 80));
+      rememberFact({ category: 'profile', key: 'nivel académico', text: option });
+      rememberFact({ category: 'context', text: `Estudió: ${text.slice(0, 80)}`, days: 14 });
     }
   }
 
@@ -237,6 +237,15 @@ export default function ChatPanel({ showCore = true }) {
                   {m.taskChanges.map((change) => (
                     <li key={change}>
                       <Icon name="check" size={13} /> {change}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {m.memoryChanges?.length > 0 && (
+                <ul className="bubble__changes" aria-label="Cambios en tu memoria">
+                  {m.memoryChanges.map((change) => (
+                    <li key={change}>
+                      <Icon name="memory" size={13} /> {change}
                     </li>
                   ))}
                 </ul>

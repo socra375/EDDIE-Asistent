@@ -5,6 +5,7 @@ import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import Icon from '../../layout/Icon';
+import { countItems } from '../../services/memory';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -54,7 +55,7 @@ const LANGUAGES = [
 ];
 
 export default function SettingsPanel({ onOpenConversation }) {
-  const { settings, updateSettings, updateVoiceSettings, memory, forgetFact, forgetEverything } = useSettings();
+  const { settings, updateSettings, updateVoiceSettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
   const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoiceError, speakWithSettings } =
@@ -354,25 +355,15 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Permitir que Eddie recuerde preferencias entre sesiones</span>
         </label>
 
-        {Object.keys(memory).length === 0 ? (
-          <p className="settings-placeholder">No hay información guardada todavía.</p>
-        ) : (
-          <ul className="memory-list">
-            {Object.entries(memory).map(([key, value]) => (
-              <li key={key}>
-                <span>
-                  <strong>{key}:</strong> {String(value)}
-                </span>
-                <button type="button" className="btn tasks-delete" onClick={() => forgetFact(key)}>
-                  Eliminar
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="settings-placeholder">
+          {countItems(memory) === 0
+            ? 'No hay información guardada todavía.'
+            : `Eddie recuerda ${countItems(memory)} ${countItems(memory) === 1 ? 'cosa' : 'cosas'} de ti.`}{' '}
+          Revísalas, añade o borra en el módulo Memoria.
+        </p>
 
         <div className="settings-row settings-row--actions">
-          <button type="button" className="btn btn-danger" onClick={forgetEverything} disabled={Object.keys(memory).length === 0}>
+          <button type="button" className="btn btn-danger" onClick={forgetEverything} disabled={countItems(memory) === 0}>
             Borrar toda la memoria
           </button>
         </div>

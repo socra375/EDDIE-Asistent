@@ -115,6 +115,10 @@ Los canales Telegram y WhatsApp usarán botones del propio mensaje para lo mismo
 
 Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, por su límite de tokens por minuto), con las llamadas de una misma ronda en paralelo. A los 30 s se dejan de ofrecer herramientas para que la respuesta final quepa en el tiempo de Vercel. Mientras trabaja, el stream emite un evento `{"type":"step","id":"s1","tool":"search_web","label":…,"activity":"Buscando en internet…","status":"running"}` por cada llamada (y otro, con el mismo `id`, cuando termina: `done`/`error`/`waiting`, con `summary`), y la app los muestra como un recibo en la burbuja de espera, en Inicio y en el mensaje final.
 
+### Memoria estructurada
+
+La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`): perfil, preferencias, proyectos (estado, stack, último cambio, próximo objetivo), decisiones, conocimientos y contexto temporal con vencimiento. Sigue guardándose como un solo `jsonb` en la tabla `memory` (sin migración de base de datos; el PUT rechaza más de 200 KB) y el mapa antiguo se migra al leerlo. Flujo: el navegador manda el mensaje y una lista plana `context.memory`; el system prompt lleva solo lo relevante para ese mensaje (presupuesto de 1400 caracteres); Eddie guarda lo nuevo con `remember`/`update_project` (acciones que aplica la app y que aparecen bajo la respuesta como "Recordé: …"), consulta con `recall` y olvida con `forget` (con tarjeta). Tareas y conversaciones siguen en sus módulos; los resúmenes de conversaciones y la búsqueda vectorial llegan con pgvector (sesiones 20–21).
+
 ### Flujo de acción: entiende → planifica → pide permiso → ejecuta → comprueba → informa
 
 - **Planifica**: para pedidos de 3 o más acciones, o delicados, Eddie llama primero a `make_plan({ goal, steps })` (herramienta oculta del conector `agent`, no cambia nada) y el plan aparece numerado en el recibo.

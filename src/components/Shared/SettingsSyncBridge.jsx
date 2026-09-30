@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { remoteSettings, remoteMemory } from '../../services/remote';
+import { mergeMemory, isEmptyMemory, normalizeMemory } from '../../services/memory';
 
 // No visible output — reconciles localStorage-based settings/memory with
 // the backend when a Google session exists. On login: adopt whatever the
@@ -30,10 +31,13 @@ export default function SettingsSyncBridge() {
           await remoteSettings.put(settings);
         }
 
-        if (remoteM && Object.keys(remoteM.memory || {}).length > 0) {
-          replaceMemory(remoteM.memory);
-        } else if (Object.keys(memory).length > 0) {
-          await remoteMemory.put(memory);
+        // Memory is merged, not replaced: what this device learned before
+        // signing in and what the account already knows both survive.
+        const remoteMemoryData = normalizeMemory(remoteM?.memory);
+        const merged = mergeMemory(memory, remoteMemoryData);
+        if (!isEmptyMemory(merged)) {
+          replaceMemory(merged);
+          await remoteMemory.put(merged);
         }
       } catch {
         // Sync is best-effort; the app keeps working from localStorage either way.

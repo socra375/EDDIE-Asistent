@@ -15,6 +15,7 @@ import TasksPanel from './components/Tasks/TasksPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
 import ConnectorsPanel from './connectors/ConnectorsPanel';
 import TodayPanel from './today/TodayPanel';
+import MemoryPanel from './memory/MemoryPanel';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
 
@@ -97,6 +98,7 @@ function AppShell() {
           )}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'tasks' && <TasksPanel />}
+          {activeModule === 'memory' && <MemoryPanel />}
           {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
