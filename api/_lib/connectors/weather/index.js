@@ -105,6 +105,7 @@ export default {
     {
       label: 'Consultar el clima actual',
       activity: 'Consultando el clima…',
+      summarize: (result) => `${result.place}: ${result.temperature_celsius} °C, ${String(result.condition).toLowerCase()}`,
       sensitive: false,
       declaration: {
         name: 'get_current_weather',

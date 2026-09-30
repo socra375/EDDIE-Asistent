@@ -5,6 +5,7 @@ import { useVoice } from '../context/VoiceContext';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
 import ConfirmCard from '../components/Chat/ConfirmCard';
+import StepTrace from '../components/Chat/StepTrace';
 import EddieRing from './EddieRing';
 import { LocationAndWeather, SystemPanel, TasksSummary, TimePanel } from './InfoPanels';
 import './Home.css';
@@ -26,7 +27,7 @@ const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
 const PREVIEW_CHARS = 220;
 
 export default function HomePanel({ onOpenTasks }) {
-  const { status, sendMessage, lastReply, errorMessage, messages, activity, resolveConfirmation } = useChat();
+  const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation } = useChat();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
@@ -112,10 +113,14 @@ export default function HomePanel({ onOpenTasks }) {
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
-          ) : status === 'processing' && activity ? (
-            <p className="home__activity">{activity}</p>
+          ) : status === 'processing' && (activity || liveSteps.length > 0) ? (
+            <>
+              <StepTrace steps={liveSteps} live />
+              {activity && <p className="home__activity">{activity}</p>}
+            </>
           ) : reply ? (
             <>
+              <StepTrace steps={lastAssistant?.steps} />
               <p className="home__reply">{replyPreview}</p>
               {reply.length > PREVIEW_CHARS && (
                 <button type="button" className="home__more" onClick={() => setExpanded((v) => !v)}>

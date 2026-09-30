@@ -99,6 +99,7 @@ export default {
     {
       label: 'Leer los titulares del día',
       activity: 'Leyendo las noticias…',
+      summarize: (result) => `${result.headlines.length} titulares${result.topic ? ` sobre «${result.topic}»` : ''}`,
       sensitive: false,
       declaration: {
         name: 'get_news',

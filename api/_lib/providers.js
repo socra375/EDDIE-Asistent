@@ -739,11 +739,11 @@ const FALLBACKS = [
 // answers, so a mid-stream failure is reported as-is.
 // `disabledConnectors` lists the connectors the user switched off in the hub;
 // their tools are never offered to the model.
-// `onActivity` hears each tool as it starts ("Buscando en internet…").
-export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onActivity }) {
+// `onStep` hears every tool step as it starts and ends (see runTool).
+export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onStep }) {
   const startedAt = Date.now();
-  const toolset = createToolset({ disabled: disabledConnectors, context, onActivity });
-  const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations });
+  const toolset = createToolset({ disabled: disabledConnectors, context, onStep });
+  const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
   let started = false;
   const trackedChunk = (text) => {
     started = true;

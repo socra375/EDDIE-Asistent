@@ -88,9 +88,9 @@ export function sanitizeContext(context) {
 
 // `cookies` identify the signed-in user for account tools (Gmail); the
 // session is only looked up if such a tool runs.
-export async function handleChatRequest(body, onChunk, onActivity, { cookies = {} } = {}) {
+export async function handleChatRequest(body, onChunk, onStep, { cookies = {} } = {}) {
   const request = sanitizeRequest(body);
-  return callProvider({ ...request, context: { ...request.context, getUser: lazySessionUser(cookies) }, onChunk, onActivity });
+  return callProvider({ ...request, context: { ...request.context, getUser: lazySessionUser(cookies) }, onChunk, onStep });
 }
 
 export function errorToResponse(err) {

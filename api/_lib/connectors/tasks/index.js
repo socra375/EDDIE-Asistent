@@ -108,6 +108,7 @@ export default {
     {
       label: 'Crear tareas',
       activity: 'Anotando la tarea…',
+      summarize: (result) => `Tarea creada: «${result.task.title}»${result.task.dueDate ? ` (${result.task.dueDate})` : ''}`,
       sensitive: false,
       declaration: {
         name: 'create_task',
@@ -128,6 +129,7 @@ export default {
     {
       label: 'Marcar tareas como hechas',
       activity: 'Marcando la tarea…',
+      summarize: (result) => `Tarea completada: «${result.title}»`,
       sensitive: false,
       declaration: {
         name: 'complete_task',

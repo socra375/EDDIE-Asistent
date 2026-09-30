@@ -108,7 +108,14 @@ Los canales Telegram y WhatsApp usarán botones del propio mensaje para lo mismo
 
 ### Agente de varios pasos
 
-Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, por su límite de tokens por minuto), con las llamadas de una misma ronda en paralelo. A los 30 s se dejan de ofrecer herramientas para que la respuesta final quepa en el tiempo de Vercel. Mientras trabaja, el stream emite `{"type":"activity","label":"Buscando en internet…"}` y la app lo muestra en la burbuja de espera y en Inicio.
+Gemini puede encadenar hasta 5 rondas de herramientas por respuesta (Groq, 3, por su límite de tokens por minuto), con las llamadas de una misma ronda en paralelo. A los 30 s se dejan de ofrecer herramientas para que la respuesta final quepa en el tiempo de Vercel. Mientras trabaja, el stream emite un evento `{"type":"step","id":"s1","tool":"search_web","label":…,"activity":"Buscando en internet…","status":"running"}` por cada llamada (y otro, con el mismo `id`, cuando termina: `done`/`error`/`waiting`, con `summary`), y la app los muestra como un recibo en la burbuja de espera, en Inicio y en el mensaje final.
+
+### Flujo de acción: entiende → planifica → pide permiso → ejecuta → comprueba → informa
+
+- **Planifica**: para pedidos de 3 o más acciones, o delicados, Eddie llama primero a `make_plan({ goal, steps })` (herramienta oculta del conector `agent`, no cambia nada) y el plan aparece numerado en el recibo.
+- **Pide permiso**: las herramientas `sensitive` dejan su paso en `waiting` y una tarjeta con `stepId`; al confirmar o cancelar el paso se actualiza.
+- **Comprueba**: tras crear, mover o borrar un evento, Calendario vuelve a leerlo; tras enviar un correo, Gmail revisa que esté en `SENT`. El resultado (`verified: true | false | null`) sale en el recibo como "verificado"/"sin verificar" y en el resumen ("Comprobado en tu Calendario.").
+- **Informa**: la personalidad exige un cierre concreto ("Ya lo hice. Este fue el resultado.") y nunca decir "listo" sin confirmación de la herramienta.
 
 ## Variables de entorno nuevas
 

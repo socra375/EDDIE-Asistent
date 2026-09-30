@@ -9,6 +9,7 @@ import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
 import MessageActions from './MessageActions';
 import ConfirmCard from './ConfirmCard';
+import StepTrace from './StepTrace';
 import './Chat.css';
 
 const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter' };
@@ -23,7 +24,7 @@ const QUICK_STARTS = [
 ];
 
 export default function ChatPanel({ showCore = true }) {
-  const { messages, status, sendMessage, resetConversation, activity, resolveConfirmation } = useChat();
+  const { messages, status, sendMessage, resetConversation, activity, liveSteps, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -224,6 +225,7 @@ export default function ChatPanel({ showCore = true }) {
                   </span>
                 )}
               </span>
+              {m.role === 'assistant' && <StepTrace steps={m.steps} />}
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
               </div>
@@ -246,6 +248,7 @@ export default function ChatPanel({ showCore = true }) {
           {status === 'processing' && (
             <div className="bubble bubble--assistant bubble--pending">
               <span className="bubble__author">Eddie</span>
+              <StepTrace steps={liveSteps} live />
               <p className="bubble__text">{activity || 'Analizando tu solicitud…'}</p>
             </div>
           )}

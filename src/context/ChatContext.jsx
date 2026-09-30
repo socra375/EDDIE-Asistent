@@ -63,8 +63,11 @@ export function ChatProvider({ children }) {
   const [status, setStatus] = useState('idle'); // idle | processing | responding | error
   const [errorMessage, setErrorMessage] = useState('');
   const [lastReply, setLastReply] = useState(null);
-  // What Eddie is doing right now while it works ("Buscando en internet…").
-  const [activity, setActivity] = useState('');
+  // The steps (tool calls) of the request in flight, before its reply bubble
+  // exists; once it does they live on the message as `steps`.
+  const [liveSteps, setLiveSteps] = useState([]);
+  // What Eddie is doing right now, for the one-line status ("Buscando en internet…").
+  const activity = useMemo(() => [...liveSteps].reverse().find((s) => s.status === 'running')?.activity || '', [liveSteps]);
   // Latest messages for callbacks that run later (a card being confirmed).
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -110,6 +113,14 @@ export function ChatProvider({ children }) {
     );
   }, []);
 
+  // A card's step on the same message (card.stepId) follows the card.
+  const updateStep = useCallback((messageId, stepId, patch) => {
+    if (!stepId) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId && m.steps ? { ...m, steps: m.steps.map((s) => (s.id === stepId ? { ...s, ...patch } : s)) } : m)),
+    );
+  }, []);
+
   // The user's answer to a confirmation card: "cancel", or "confirm" with
   // the card's arguments (possibly edited). Only a pending card can be
   // answered, and only once.
@@ -121,12 +132,14 @@ export function ChatProvider({ children }) {
 
       if (decision !== 'confirm') {
         updateConfirmation(messageId, confirmationId, { state: 'cancelled' });
+        updateStep(messageId, card.stepId, { status: 'cancelled', summary: 'Lo cancelaste.' });
         addEddieMessage('Cancelado, no hice nada.');
         return;
       }
 
       const args = editedArgs || card.args;
       updateConfirmation(messageId, confirmationId, { state: 'running', args });
+      updateStep(messageId, card.stepId, { status: 'running', summary: 'Haciéndolo…' });
       try {
         const { result, actions } = await confirmAction({
           tool: card.tool,
@@ -137,14 +150,16 @@ export function ChatProvider({ children }) {
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
         const summary = result.summary || 'Listo, hecho.';
         updateConfirmation(messageId, confirmationId, { state: 'done', result: summary });
+        updateStep(messageId, card.stepId, { status: 'done', summary, verified: result.verified ?? null });
         addEddieMessage(summary);
       } catch (err) {
         const reason = err instanceof EddieApiError ? err.message : 'No se pudo completar la acción.';
         updateConfirmation(messageId, confirmationId, { state: 'error', result: reason });
+        updateStep(messageId, card.stepId, { status: 'error', summary: reason });
         addEddieMessage(`No pude hacerlo: ${reason}`);
       }
     },
-    [settings, user, updateConfirmation, addEddieMessage],
+    [settings, user, updateConfirmation, updateStep, addEddieMessage],
   );
 
   const sendMessage = useCallback(
@@ -205,6 +220,14 @@ export function ChatProvider({ children }) {
       // and grows live instead of popping in all at once at the end.
       const assistantId = nextId();
       let responseStarted = false;
+      // Steps seen so far, merged by id (a step arrives once as it starts and
+      // again as it ends).
+      let steps = [];
+      const mergeSteps = (list, step) => {
+        const i = list.findIndex((s) => s.id === step.id);
+        return i === -1 ? [...list, step] : list.map((s, j) => (j === i ? { ...s, ...step } : s));
+      };
+      setLiveSteps([]);
 
       try {
         const result = await sendChatMessage({
@@ -218,13 +241,20 @@ export function ChatProvider({ children }) {
             tasks: tasksForContext(),
           },
           disabledConnectors: settings.disabledConnectors || [],
-          onActivity: (label) => setActivity(label || ''),
+          onStep: (step) => {
+            steps = mergeSteps(steps, step);
+            if (responseStarted) setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, steps } : m)));
+            else setLiveSteps(steps);
+          },
           onChunk: (fullTextSoFar) => {
             if (!responseStarted) {
-              setActivity('');
+              setLiveSteps([]);
               responseStarted = true;
               setStatus('responding');
-              setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...replyMeta }]);
+              setMessages((prev) => [
+                ...prev,
+                { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...(steps.length ? { steps } : {}), ...replyMeta },
+              ]);
             } else {
               setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullTextSoFar } : m)));
             }
@@ -233,7 +263,10 @@ export function ChatProvider({ children }) {
 
         const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, timestamp: Date.now(), provider: result.provider, ...replyMeta };
         if (result.fallbackFrom) assistantMessage.fallbackFrom = result.fallbackFrom;
-        setActivity('');
+        setLiveSteps([]);
+        // The server's list is the final word on the receipt.
+        const finalSteps = result.steps?.length ? result.steps : steps;
+        if (finalSteps.length) assistantMessage.steps = finalSteps;
         // Actions waiting for the user's OK, shown as cards under the reply.
         if (result.confirmations?.length) {
           assistantMessage.confirmations = result.confirmations.map((c) => ({ ...c, state: 'pending' }));
@@ -251,7 +284,7 @@ export function ChatProvider({ children }) {
         window.setTimeout(() => setStatus((s) => (s === 'responding' ? 'idle' : s)), 600);
         return assistantMessage;
       } catch (err) {
-        setActivity('');
+        setLiveSteps([]);
         setStatus('error');
         const message = err instanceof EddieApiError ? err.message : 'Ocurrió un error inesperado.';
         setErrorMessage(message);
@@ -264,7 +297,7 @@ export function ChatProvider({ children }) {
         } else {
           setMessages((prev) => [
             ...prev,
-            { id: nextId(), role: 'assistant', content: `No pude completar la solicitud: ${message}`, timestamp: Date.now(), isError: true },
+            { id: nextId(), role: 'assistant', content: `No pude completar la solicitud: ${message}`, timestamp: Date.now(), isError: true, ...(steps.length ? { steps } : {}) },
           ]);
         }
         window.setTimeout(() => setStatus((s) => (s === 'error' ? 'idle' : s)), 2500);
@@ -328,6 +361,7 @@ export function ChatProvider({ children }) {
       resetConversation,
       lastReply,
       activity,
+      liveSteps,
       resolveConfirmation,
       setStatus,
       conversations,
@@ -336,7 +370,7 @@ export function ChatProvider({ children }) {
       deleteConversation,
       clearAllConversations,
     }),
-    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, activity, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
+    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, activity, liveSteps, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

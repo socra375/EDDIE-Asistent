@@ -57,6 +57,7 @@ export default {
     {
       label: 'Buscar en internet',
       activity: 'Buscando en internet…',
+      summarize: (result) => `${result.results.length} resultado${result.results.length === 1 ? '' : 's'} para «${result.query}»`,
       sensitive: false,
       declaration: {
         name: 'search_web',

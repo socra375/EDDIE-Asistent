@@ -41,6 +41,33 @@ async function calendar(token, path = '', options = {}) {
   throw new CalendarError(data?.error?.message || 'Google Calendar no respondió en este momento.');
 }
 
+// "Comprueba": after writing, read the event back from Google and check it
+// really is there as asked. true = confirmed, false = it doesn't match,
+// null = couldn't check (the write itself still went through).
+async function readBack(token, id, isRight) {
+  try {
+    return Boolean(isRight(await calendar(token, `/${encodeURIComponent(id)}`)));
+  } catch {
+    return null;
+  }
+}
+
+// After a delete, Google answers 404/410, or returns the event as cancelled.
+async function confirmGone(token, id) {
+  try {
+    return (await calendar(token, `/${encodeURIComponent(id)}`)).status === 'cancelled';
+  } catch (err) {
+    return err instanceof CalendarError && /ya no existe/.test(err.message) ? true : null;
+  }
+}
+
+// One line for the receipt, stating whether the check passed.
+function withCheck(text, verified) {
+  if (verified === true) return `${text} Comprobado en tu Calendario.`;
+  if (verified === false) return `${text} Pero al releerlo en tu Calendario no coincide: revísalo.`;
+  return text;
+}
+
 function guarded(fn) {
   return async (args, context) => {
     try {
@@ -138,7 +165,8 @@ async function createEvent(args, context) {
   if (args.location) body.location = clip(args.location, 200);
   if (args.description) body.description = clip(args.description, 1000);
   const event = await calendar(token, '', { method: 'POST', body: JSON.stringify(body) });
-  return { created: true, event: describeEvent(event, tz), link: event.htmlLink };
+  const verified = await readBack(token, event.id, (e) => e.status !== 'cancelled' && e.summary === title);
+  return { created: true, event: describeEvent(event, tz), link: event.htmlLink, verified };
 }
 
 function whenText(e) {
@@ -199,7 +227,11 @@ async function updateEvent(args, context) {
   if (args.title) body.summary = args.title;
   const event = await calendar(token, `/${encodeURIComponent(args.event_id)}`, { method: 'PATCH', body: JSON.stringify(body) });
   const moved = describeEvent(event, tz);
-  return { updated: true, event: moved, summary: `Listo: "${moved.title}" quedó el ${whenText(moved)}.` };
+  const verified = await readBack(token, args.event_id, (e) => {
+    const now = describeEvent(e, tz);
+    return e.status !== 'cancelled' && now.date === moved.date && now.start === moved.start;
+  });
+  return { updated: true, event: moved, verified, summary: withCheck(`Listo: "${moved.title}" quedó el ${whenText(moved)}.`, verified) };
 }
 
 async function prepareDelete(args, context) {
@@ -225,7 +257,8 @@ async function deleteEvent(args, context) {
   const token = await calendarToken(context);
   const event = describeEvent(await calendar(token, `/${encodeURIComponent(args.event_id)}`), tz);
   await calendar(token, `/${encodeURIComponent(args.event_id)}`, { method: 'DELETE' });
-  return { deleted: true, summary: `Borré "${event.title}" del ${whenText(event)}.` };
+  const verified = await confirmGone(token, args.event_id);
+  return { deleted: true, verified, summary: withCheck(`Borré "${event.title}" del ${whenText(event)}.`, verified) };
 }
 
 const EVENT_ID = { event_id: { type: 'STRING', description: 'El id del evento que devolvió list_events.' } };
@@ -250,6 +283,7 @@ export default {
     {
       label: 'Ver tu agenda',
       activity: 'Revisando tu agenda…',
+      summarize: (result) => `${result.events.length} evento${result.events.length === 1 ? '' : 's'} (${result.from}${result.to !== result.from ? ` a ${result.to}` : ''})`,
       sensitive: false,
       declaration: {
         name: 'list_events',
@@ -269,6 +303,7 @@ export default {
     {
       label: 'Crear eventos',
       activity: 'Creando el evento…',
+      summarize: (result) => `Evento creado: ${result.event.title} · ${result.event.day}${result.event.start ? ` ${result.event.start}–${result.event.end}` : ''}`,
       sensitive: false,
       declaration: {
         name: 'create_event',
