@@ -5,7 +5,7 @@ import { useVoice } from '../../context/VoiceContext';
 import { MODES, DEFAULT_MODE } from '../../services/personality';
 import { SKILLS, getSkill, buildSkillRequest } from '../../services/skills';
 import { MAX_IMAGES, prepareImage } from '../../services/images';
-import { useProbeConfig } from '../../services/probe';
+import { autoDetectReady, saveProbeConfig, useProbeConfig } from '../../services/probe';
 import EddieCore from '../Core/EddieCore';
 import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
@@ -15,10 +15,6 @@ import StepTrace from './StepTrace';
 import './Chat.css';
 
 const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter', probe: 'Sonda local' };
-
-// The local probe on the user's computer, as one more skill in the chat (only
-// when it is switched on in Conectores → Sonda local).
-const PROBE_SKILL = { id: 'probe', label: 'Sonda', icon: 'monitor', placeholder: 'Pregúntale a tu equipo: ¿cuánto disco libre tengo?' };
 
 // Quick starts on an empty chat: some ask right away, others open a skill.
 const QUICK_STARTS = [
@@ -49,8 +45,9 @@ export default function ChatPanel({ showCore = true }) {
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const probeConfig = useProbeConfig();
-  const skill = skillId === 'probe' && probeConfig.enabled ? PROBE_SKILL : getSkill(skillId === 'probe' ? 'general' : skillId);
-  const skills = probeConfig.enabled ? [...SKILLS, PROBE_SKILL] : SKILLS;
+  // "Sonda local" mode: everything typed or spoken goes to the probe on this computer.
+  const probeOn = probeConfig.forced;
+  const skill = getSkill(skillId);
   const busy = status === 'processing';
 
   useEffect(() => {
@@ -81,13 +78,7 @@ export default function ChatPanel({ showCore = true }) {
   }, [input]);
 
   function selectSkill(id, action) {
-    if (id === 'probe') {
-      setSkillId('probe');
-      setActionId('');
-      setOption('');
-      inputRef.current?.focus();
-      return;
-    }
+    if (probeOn) saveProbeConfig({ forced: false });
     const next = getSkill(id);
     setSkillId(next.id);
     setActionId(action || next.actions?.[0].id || '');
@@ -138,8 +129,8 @@ export default function ChatPanel({ showCore = true }) {
   async function submit() {
     const text = input.trim();
     if ((!text && !attachments.length) || busy || preparing) return;
-    if (skill.id === 'probe' && (attachments.length || !text)) {
-      setAttachError('La sonda local no ve imágenes: escríbele tu pregunta, o cambia a General para enviar la imagen.');
+    if (probeOn && (attachments.length || !text)) {
+      setAttachError('La sonda local no ve imágenes: escríbele tu pregunta, o apaga «Sonda local» para enviar la imagen a Eddie.');
       return;
     }
     if (listening) stop();
@@ -149,7 +140,7 @@ export default function ChatPanel({ showCore = true }) {
     setAttachError('');
     reset();
 
-    if (skill.id === 'probe') {
+    if (probeOn) {
       sendMessage(text, { probe: true });
       return;
     }
@@ -217,13 +208,13 @@ export default function ChatPanel({ showCore = true }) {
         onDrop={handleDrop}
       >
         <div className="chat-panel__toolbar">
-          <div className="skills" role="group" aria-label="Habilidades">
-            {skills.map((s) => (
+          <div className={`skills ${probeOn ? 'skills--muted' : ''}`} role="group" aria-label="Habilidades">
+            {SKILLS.map((s) => (
               <button
                 key={s.id}
                 type="button"
-                className={`skill ${s.id === skill.id ? 'skill--active' : ''}`}
-                aria-pressed={s.id === skill.id}
+                className={`skill ${!probeOn && s.id === skill.id ? 'skill--active' : ''}`}
+                aria-pressed={!probeOn && s.id === skill.id}
                 onClick={() => selectSkill(s.id)}
               >
                 <Icon name={s.icon} size={14} />
@@ -231,6 +222,25 @@ export default function ChatPanel({ showCore = true }) {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className={`btn probe-toggle ${probeOn ? 'probe-toggle--on' : ''}`}
+            onClick={() => {
+              saveProbeConfig({ forced: !probeOn });
+              setAttachError('');
+              inputRef.current?.focus();
+            }}
+            aria-pressed={probeOn}
+            title={
+              probeOn
+                ? 'Apagar: los mensajes vuelven a Eddie en la nube'
+                : `Enviar todo a la Sonda local de este equipo (${probeConfig.url}/chat)${autoDetectReady(probeConfig) ? '. Apagado, solo las preguntas sobre tu equipo (disco, memoria, batería…) van a la sonda.' : ''}`
+            }
+          >
+            <Icon name="monitor" size={14} />
+            <span className="probe-toggle__label">Sonda local</span>
+            <span className="probe-toggle__state">{probeOn ? 'ON' : 'OFF'}</span>
+          </button>
           <button
             type="button"
             className="btn chat-new"
@@ -245,8 +255,10 @@ export default function ChatPanel({ showCore = true }) {
         </div>
 
         <div className="chat-panel__options">
-          {skill.id === 'probe' ? (
-            <p className="chat-panel__hint">Tus preguntas van a la Sonda local de este equipo ({probeConfig.url}), no a la nube.</p>
+          {probeOn ? (
+            <p className="chat-panel__hint chat-panel__hint--probe" role="status">
+              Modo Sonda local: todo lo que escribas o digas va a {probeConfig.url}/chat (tu equipo), no a la nube.
+            </p>
           ) : skill.actions ? (
             <label className="chat-option">
               <span className="field-label">Qué necesitas</span>
@@ -270,7 +282,7 @@ export default function ChatPanel({ showCore = true }) {
               </select>
             </label>
           )}
-          {skill.option && (
+          {!probeOn && skill.option && (
             <label className="chat-option">
               <span className="field-label">{skill.option.label}</span>
               <select className="select" value={option} onChange={(e) => setOption(e.target.value)}>
@@ -400,14 +412,14 @@ export default function ChatPanel({ showCore = true }) {
             type="button"
             className="btn mic-btn"
             onClick={() => fileRef.current?.click()}
-            disabled={busy || attachments.length >= MAX_IMAGES || skill.id === 'probe'}
+            disabled={busy || attachments.length >= MAX_IMAGES || probeOn}
             title="Adjuntar una imagen (también puedes pegarla o arrastrarla)"
             aria-label="Adjuntar imagen"
           >
             <Icon name="image" size={18} />
           </button>
           {canUseCamera && (
-            <button type="button" className="btn mic-btn" onClick={() => cameraRef.current?.click()} disabled={busy || attachments.length >= MAX_IMAGES} title="Tomar una foto" aria-label="Tomar una foto">
+            <button type="button" className="btn mic-btn" onClick={() => cameraRef.current?.click()} disabled={busy || attachments.length >= MAX_IMAGES || probeOn} title="Tomar una foto" aria-label="Tomar una foto">
               <Icon name="camera" size={18} />
             </button>
           )}
@@ -429,7 +441,7 @@ export default function ChatPanel({ showCore = true }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={attachments.length ? 'Pregunta algo sobre la imagen (o envíala sola)…' : skill.placeholder}
+            placeholder={probeOn ? 'Pregúntale a tu equipo: revisa mi disco duro…' : attachments.length ? 'Pregunta algo sobre la imagen (o envíala sola)…' : skill.placeholder}
             aria-label="Mensaje para Eddie"
           />
           <button type="submit" className="btn btn-primary chat-send" disabled={(!input.trim() && !attachments.length) || busy || preparing} aria-label="Enviar">

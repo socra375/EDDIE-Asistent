@@ -495,9 +495,10 @@ directamente desde el navegador de ese mismo equipo.
 2. En Eddie → **Conectores → Sonda local**: deja la dirección `http://127.0.0.1:8000`, escribe la clave (la misma que
    tiene la sonda; se guarda solo en este navegador) y pulsa **Probar conexión**. Si Chrome pregunta si el sitio
    puede acceder a apps o dispositivos de este equipo, acepta.
-3. Activa **Usar la sonda en el chat**: aparece la habilidad **Sonda** en el chat. Pregúntale "revisa mi disco duro" y
-   verás su respuesta con el formato original y las herramientas que usó. Opcional: **Detectar solo las preguntas
-   sobre el equipo**, para que esas vayan solas a la sonda desde la habilidad General.
+3. Guarda la clave: desde ese momento las preguntas sobre el equipo ("revisa mi disco duro", "¿cuánta RAM me
+   queda?") van solas a la sonda, y si no responde contesta Eddie en la nube. Para mandarle **todo**, pulsa el botón
+   **Sonda local** (OFF → ON) arriba del chat: cada mensaje escrito o dictado va a `…/chat` de tu equipo (hasta
+   90 s de espera) y la respuesta muestra las herramientas que usó. Elegir una habilidad o volver a pulsarlo lo apaga.
 
 Solo funciona en el equipo donde corre la sonda (no desde el teléfono, Telegram ni WhatsApp).
 

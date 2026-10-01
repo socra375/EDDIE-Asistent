@@ -66,13 +66,14 @@ escuchar solo en `127.0.0.1` (`uvicorn main:app --host 127.0.0.1 --port 8000`), 
 - `src/services/probeCore.js`: funciones puras — `cleanProbeUrl` (solo direcciones de este equipo: `127.0.0.1`,
   `localhost`, `[::1]`), `askProbe` (POST `/chat` con `X-Eddie-Key`, 90 s de límite), `pingProbe` (GET `/health`, sin
   clave ni IA), `parseProbeReply` (valida `response` y limpia `tools_used`), `looksLikeSystemQuestion`.
-- `src/services/probe.js`: la configuración (`eddie.probe`: dirección, clave, activada, automática) vive **solo en el
-  navegador**; nunca se sincroniza con el servidor de Eddie.
-- Conectores → **Sonda local**: dirección, clave, *Probar conexión*, *Enviar pregunta de prueba*, *Usar la sonda en
-  el chat* y *Detectar solo las preguntas sobre el equipo*.
-- Chat: la habilidad **Sonda** manda cada mensaje a la sonda; la respuesta se muestra con su Markdown (negritas,
-  listas, títulos, código) y, como recibo, las herramientas que usó. En modo automático, solo las preguntas sobre el
-  equipo van a la sonda y, si la sonda no responde, contesta Eddie en la nube como siempre.
+- `src/services/probe.js`: la configuración (`eddie.probe`: `url`, `key`, `forced`, `autoDetect`) vive **solo en el
+  navegador**; nunca se sincroniza con el servidor de Eddie. `autoDetectReady` exige dirección válida y clave guardada.
+- Conectores → **Sonda local**: dirección, clave, *Probar conexión* (20 s, por si Chrome pide permiso de red local),
+  *Enviar pregunta de prueba*, *Modo Sonda local en el chat* y la detección automática (encendida por defecto).
+- Chat: el botón **Sonda local ON/OFF** de la barra (siempre visible) fuerza que cada mensaje, escrito o dictado
+  (también desde Inicio), vaya a la sonda, sin pasar por la detección; errores claros si no responde. La respuesta se
+  muestra con su Markdown (negritas, listas, títulos, código) y, como recibo, las herramientas que usó. Con el botón
+  apagado, solo las preguntas sobre el equipo van a la sonda y, si no responde, contesta Eddie en la nube.
 - Lo hablado con la sonda queda fuera de la memoria de conversaciones (los resúmenes que se guardan en el servidor);
   si sigues conversando con Eddie en la nube en el mismo chat, él ve esos mensajes como contexto.
 
