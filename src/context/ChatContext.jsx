@@ -17,6 +17,7 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
+import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -48,7 +49,9 @@ function latestPendingConfirmation(messages) {
 // With memory switched off in Configuración, Eddie neither sees nor writes it.
 function disabledFor(settings) {
   const off = settings.disabledConnectors || [];
-  return settings.memoryEnabled === false && !off.includes('memory') ? [...off, 'memory'] : off;
+  if (settings.memoryEnabled !== false) return off;
+  // Without memory, Eddie also neither keeps nor consults conversation notes.
+  return [...new Set([...off, 'memory', 'conversations'])];
 }
 function memoryContext(settings) {
   return settings.memoryEnabled === false ? [] : memoryForContext(getMemory());
@@ -90,6 +93,14 @@ export function ChatProvider({ children }) {
   useEffect(() => {
     setActiveConversationId(conversationId);
   }, [conversationId]);
+
+  // Conversation memory: each finished conversation leaves a short note on
+  // the server (only when signed in and memory / the connector are on).
+  useEpisodeSaver({
+    conversationId,
+    messages,
+    enabled: Boolean(user) && settings.memoryEnabled !== false && !(settings.disabledConnectors || []).includes('conversations'),
+  });
 
   // Persists the active conversation into the saved list as it grows. A
   // conversation with no messages yet is never written, so starting a new

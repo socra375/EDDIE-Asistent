@@ -1,5 +1,6 @@
 import { lazySessionUser } from './session.js';
 import { callProvider } from './providers.js';
+import { queryFrom, recallBlock } from './episodes/recall.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
@@ -99,7 +100,18 @@ export function sanitizeContext(context) {
 // session is only looked up if such a tool runs.
 export async function handleChatRequest(body, onChunk, onStep, { cookies = {} } = {}) {
   const request = sanitizeRequest(body);
-  return callProvider({ ...request, context: { ...request.context, getUser: lazySessionUser(cookies) }, onChunk, onStep });
+  const getUser = lazySessionUser(cookies);
+  // Notes from past conversations that fit what was just said (conversation
+  // memory); skipped when the user switched that connector off, and never
+  // allowed to make the answer fail or wait long.
+  let system = request.system;
+  // (A short message like "hola" has nothing to look for, so it doesn't even look the session up.)
+  if (!request.disabledConnectors.includes('conversations') && queryFrom(request.messages)) {
+    const user = process.env.GEMINI_API_KEY && process.env.DATABASE_URL ? await getUser() : null;
+    const recalled = user ? await recallBlock({ userId: user.id, messages: request.messages, timezone: request.context.timezone }) : '';
+    if (recalled) system = `${system}\n\n${recalled}`;
+  }
+  return callProvider({ ...request, system, context: { ...request.context, getUser }, onChunk, onStep });
 }
 
 export function errorToResponse(err) {

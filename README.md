@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Recordatorios, Telegram…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -296,6 +296,30 @@ Chrome el audio lo procesa el servicio de voz de Google): funciona en Chrome y E
 pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagada ni en Firefox.
 Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
+## Memoria de conversaciones (Eddie recuerda lo que hablaron)
+
+Además de lo que le pides recordar (perfil, preferencias, proyectos…), Eddie guarda **un resumen corto de
+cada conversación** y, cuando vuelves a un tema, lo recuerda aunque hayan pasado días: "¿qué decidimos de la
+base de datos del proyecto?". Funciona en la app y en Telegram, y solo con la sesión de Google iniciada.
+
+- **Cuándo se guarda**: al terminar una conversación: 5 minutos sin hablar, al cambiar o empezar otro chat, o al
+  cerrar la pestaña (en Telegram: 30 minutos sin escribir, o `/nuevo`). Solo cuenta si hubo al menos 4
+  mensajes, y si es pura charla sin nada que recordar (saludos, pruebas) no se guarda nada.
+- **Qué se guarda**: el resumen (2–4 frases, sin contraseñas ni tarjetas), no la conversación completa, junto
+  con un *vector* de su significado (embedding de Gemini) para encontrarlo por sentido y no por palabras.
+- **Cómo se usa**: antes de contestar, Eddie busca los resúmenes más parecidos a lo que dijiste y, si alguno
+  encaja, se lo pasa al modelo como contexto. Si preguntas "¿de qué hablamos ayer?" usa la herramienta
+  `search_conversations`.
+- **Tu control**: en **Memoria → Conversaciones recordadas** las ves todas, borras una o todas, y apagas
+  "Recordar mis conversaciones" (también se apaga con el interruptor de Memoria o con el conector en
+  Conectores). Se guardan como máximo 300.
+
+Necesita `GEMINI_API_KEY` (la misma de siempre, para los vectores y los resúmenes; si falta, resume con Groq u
+OpenRouter pero no puede crear vectores), la base de datos de Neon y la migración
+`db/migrations/0004_episodes.sql` (activa la extensión **pgvector**, gratis en Neon: en el editor SQL de
+Neon, pega y ejecuta el archivo). Opcional: `GEMINI_EMBEDDING_MODEL` si Google cambia el nombre del modelo
+(por defecto `gemini-embedding-001`).
+
 ## Recordatorios y resumen de la mañana (por Telegram)
 
 Eddie te avisa solo, por Telegram, aunque tengas la app cerrada:
@@ -498,6 +522,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
   migrations/0003_reminders.sql      Recordatorios y resumen de la mañana
+  migrations/0004_episodes.sql       Memoria de conversaciones (pgvector)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

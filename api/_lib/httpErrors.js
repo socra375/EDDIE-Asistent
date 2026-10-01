@@ -11,6 +11,8 @@ export function errorToStatus(err) {
       return 503;
     case 'PROVIDER_ERROR':
       return 502;
+    case 'RATE_LIMITED':
+      return 429;
     default:
       return 500;
   }

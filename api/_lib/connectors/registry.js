@@ -17,12 +17,13 @@ import github from './github/index.js';
 import telegram from './telegram/index.js';
 import youtube from './youtube/index.js';
 import reminders from './reminders/index.js';
+import conversations from './conversations/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, websearch, news, wikipedia, currency, gmail, google, github, youtube, telegram];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, youtube, telegram];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
