@@ -17,6 +17,7 @@ import github from './github/index.js';
 import notion from './notion/index.js';
 import telegram from './telegram/index.js';
 import whatsapp from './whatsapp/index.js';
+import probe from './probe/index.js';
 import youtube from './youtube/index.js';
 import reminders from './reminders/index.js';
 import conversations from './conversations/index.js';
@@ -25,7 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, telegram, whatsapp];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, telegram, whatsapp, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -76,7 +77,8 @@ function matchesIntent(connector, intent) {
 // switched off in the hub, and relevant to what the user is talking about.
 function activeConnectors({ disabled = [], env = process.env, intent } = {}) {
   const off = new Set(disabled);
-  return CONNECTORS.filter((c) => !off.has(c.id) && missingEnv(c, env).length === 0 && matchesIntent(c, intent));
+  // Entries without tools (Telegram, WhatsApp, the local probe) only describe a channel for the hub.
+  return CONNECTORS.filter((c) => c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0 && matchesIntent(c, intent));
 }
 
 // Connectors the user could still use by name, whatever the topic — only the

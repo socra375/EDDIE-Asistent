@@ -271,6 +271,51 @@ button {
   margin-bottom: 0;
 }
 
+.rich-text__heading {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  margin: 0.2rem 0 0.4rem;
+  line-height: 1.35;
+}
+
+.rich-text__heading--1 {
+  font-size: 1.1em;
+}
+
+.rich-text__list {
+  font-family: var(--font-sans);
+  margin: 0 0 0.6rem;
+  padding-left: 1.3rem;
+  line-height: 1.55;
+}
+
+.rich-text__list li + li {
+  margin-top: 0.15rem;
+}
+
+.rich-text__quote {
+  font-family: var(--font-sans);
+  margin: 0 0 0.6rem;
+  padding-left: 0.8rem;
+  border-left: 2px solid var(--panel-border);
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+
+.rich-text__code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+}
+
+.rich-text__list:last-child,
+.rich-text__quote:last-child,
+.rich-text__heading:last-child {
+  margin-bottom: 0;
+}
+
 .code-block {
   position: relative;
   background: #01080c;

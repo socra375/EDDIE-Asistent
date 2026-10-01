@@ -6,7 +6,7 @@
 //
 // Unlike the task tools, these write to the database themselves: a reminder
 // has to exist on the server to fire while no browser is open.
-import { dayLabel, localParts, resolveDate, resolveTime, todayIn, zonedInstant } from '../dates.js';
+import { addDays, dayLabel, localParts, resolveDate, resolveTime, zonedInstant } from '../dates.js';
 import { clip } from '../http.js';
 import { hasTelegramLink } from '../../telegram/store.js';
 import { MAX_PENDING_REMINDERS, addReminder, deleteReminder, getBriefing, getReminder, listPendingReminders, setBriefing } from '../../reminders/store.js';
@@ -41,7 +41,8 @@ export function resolveWhen(args, timezone, now = new Date()) {
   } else {
     const time = resolveTime(args.time);
     if (time === undefined) return { error: `No entendí la hora "${args.time}". Usa HH:MM (24 h) o algo como "5pm".` };
-    const date = resolveDate(args.date, tz);
+    const today = localParts(now.toISOString(), tz).date;
+    const date = resolveDate(args.date, tz, today);
     if (date === undefined) return { error: `No entendí la fecha "${args.date}". Usa AAAA-MM-DD, "hoy", "mañana" o un día de la semana.` };
     if (!time && !date) return { error: 'Dime cuándo: en cuántos minutos (in_minutes) o la hora (time) y, si no es hoy, la fecha (date).' };
     const at = time || DEFAULT_TIME;
@@ -49,10 +50,9 @@ export function resolveWhen(args, timezone, now = new Date()) {
     if (date) {
       instant = new Date(zonedInstant(date, at, tz));
     } else {
-      instant = new Date(zonedInstant(todayIn(tz), at, tz));
+      instant = new Date(zonedInstant(today, at, tz));
       if (instant.getTime() <= now.getTime() + 30000) {
-        const tomorrow = resolveDate('mañana', tz);
-        instant = new Date(zonedInstant(tomorrow, at, tz));
+        instant = new Date(zonedInstant(addDays(today, 1), at, tz));
         assumed = ' (esa hora ya pasó hoy, así que es mañana)';
       }
     }
@@ -65,10 +65,8 @@ export function resolveWhen(args, timezone, now = new Date()) {
 // "mié 1 oct, 17:00" in the user's zone.
 export function whenLabel(isoInstant, timezone, now = new Date()) {
   const { date, time } = localParts(isoInstant, timezone);
-  const today = todayIn(timezone);
-  const tomorrow = resolveDate('mañana', timezone);
-  const day = date === today ? 'hoy' : date === tomorrow ? 'mañana' : dayLabel(date);
-  void now;
+  const today = localParts(now.toISOString(), timezone).date;
+  const day = date === today ? 'hoy' : date === addDays(today, 1) ? 'mañana' : dayLabel(date);
   return `${day} a las ${time}`;
 }
 
