@@ -23,7 +23,8 @@ const PORT = process.env.PORT || 8787;
 
 app.use(cors());
 app.use(express.raw({ type: 'application/octet-stream', limit: MAX_AUDIO_BYTES }));
-app.use(express.json({ limit: '5mb' }));
+// rawBody: Meta's WhatsApp webhook signs the exact bytes it sends.
+app.use(express.json({ limit: '5mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 function cookiesOf(req) {
   return parseCookies(req.headers.cookie);
@@ -52,7 +53,7 @@ app.get('/api/health', (_req, res) => {
 app.all(['/api/connectors', '/api/connectors/*'], async (req, res) => {
   try {
     const path = (req.params[0] || '').split('/').filter(Boolean);
-    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: cookiesOf(req), query: req.query, headers: req.headers, body: req.body }));
+    applyResult(res, await handleConnectorsRequest({ method: req.method, path, cookies: cookiesOf(req), query: req.query, headers: req.headers, body: req.body, rawBody: req.rawBody }));
   } catch (err) {
     respondError(res, err);
   }
