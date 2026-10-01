@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -129,6 +129,9 @@ exclusivamente desde variables de entorno del backend:
   solo en Vercel (nunca en el navegador ni en la base de datos); pégala en
   Vercel → Settings → Environment Variables y vuelve a desplegar, y nunca en
   un chat.
+- `NOTION_TOKEN` (y `EDDIE_OWNER_EMAIL`, la misma de GitHub) — (opcionales) activan el conector de **Notion**
+  (ver la sección Notion). `NOTION_PARENT_PAGE_ID` es opcional: la página donde Eddie crea las notas cuando no
+  le dices otra.
 - `ELEVENLABS_API_KEY` — (opcional) la **voz propia de Eddie**: las
   respuestas se leen con ElevenLabs usando la voz `bUQeiO7gn4ehGuSnZf26`
   y el modelo `eleven_flash_v2_5` (en español, rápido y a mitad de
@@ -314,6 +317,37 @@ mandarle una foto (con la pregunta como pie de foto, o sin ella).
 - **Límites**: no se pueden leer las HEIC del iPhone (sácalas como JPG o captura de pantalla), 25 MB máximo de
   origen, 3 imágenes por mensaje (Vercel solo acepta ~4,5 MB por petición). En Telegram, las imágenes
   mandadas como archivo deben pesar menos de unos 900 KB; como foto normal no hay problema.
+
+## Notion (buscar, leer y escribir tus páginas)
+
+Eddie puede buscar y leer tus páginas de Notion, ver las filas de tus bases de datos (tareas, proyectos,
+lecturas…) y escribir: crear una página (o una fila nueva) o añadir texto al final de una existente. Ejemplos:
+"busca mis apuntes de React en Notion", "resúmeme la página del viaje", "¿qué proyectos tengo En curso?",
+"crea una página con la lista de compras", "añade esto a mis notas". Funciona en la app y en Telegram.
+
+- **Solo escribe con tu OK**: crear y añadir siempre pasan por una tarjeta (puedes editar el título y el texto
+  antes de confirmar); Eddie relee lo guardado para comprobarlo. **No borra ni archiva nada.**
+- **Solo ve lo que le compartas**: una integración de Notion solo accede a las páginas que le des.
+- **Solo para ti**: como GitHub, usa un único token en las variables de Vercel y solo responde a quien inició
+  sesión con el correo de `EDDIE_OWNER_EMAIL`.
+
+Pasos (los haces tú, una sola vez):
+
+1. Entra a https://www.notion.so/profile/integrations → **New integration** → nombre "Eddie", tu espacio de
+   trabajo, tipo **Internal**. En *Capabilities* deja activadas **Read content**, **Update content** e
+   **Insert content**. Guarda y copia el **Internal Integration Secret** (nunca lo pegues en un chat).
+2. En **Vercel → Settings → Environment Variables → Production** agrega `NOTION_TOKEN` con ese secreto y
+   asegúrate de que `EDDIE_OWNER_EMAIL` sea tu correo de Google. Luego **Redeploy**.
+3. **Comparte tus páginas con la integración**: en Notion abre la página (o la base de datos) →
+   menú **•••** (arriba a la derecha) → **Conexiones** → agrega "Eddie". Las subpáginas la heredan. Crea, por
+   ejemplo, una página "Notas de Eddie" y compártela: ahí guardará lo que le pidas. Si quieres que sea el destino
+   por defecto, copia su identificador (los 32 caracteres del final de su enlace) a `NOTION_PARENT_PAGE_ID`
+   en Vercel.
+4. Prueba: "Eddie, busca en Notion mis notas" o "crea una página llamada Prueba en Notas de Eddie".
+
+Si Eddie dice que no encuentra una página, casi siempre es el paso 3. El contenido que escribe usa Markdown
+sencillo (títulos con `#`, listas con `-`, tareas con `- [ ]`, citas con `>`, código con tres comillas
+invertidas); el formato dentro de una línea (negritas, enlaces) se guarda como texto normal.
 
 ## Memoria de conversaciones (Eddie recuerda lo que hablaron)
 

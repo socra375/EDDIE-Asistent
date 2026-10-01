@@ -233,6 +233,11 @@ detalle del protocolo.
     (`episodes/recall.js#recallForTool`, umbral 0,5, hasta 5). Los resúmenes
     se crean solos (`episodes/`, ver `docs/eddie-2-arquitectura.md`); el
     conector también apaga el guardado y la recuperación automática.
+  - `notion/`: `notion_search`, `notion_read_page`, `notion_query_database` y,
+    con tarjeta, `notion_create_page` y `notion_append` (relectura →
+    `verified`). `NOTION_TOKEN` + dueño (`EDDIE_OWNER_EMAIL`), como GitHub;
+    `blocks.js` convierte bloques ↔ texto/Markdown. Detalles en
+    `docs/eddie-2-arquitectura.md`.
   - `github/`: `github_list_repos`, `github_repo_activity`,
     `github_list_issues`, `github_get_issue` y, sensibles,
     `github_create_issue` y `github_comment` (la app las muestra en una
