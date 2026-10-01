@@ -139,14 +139,6 @@ exclusivamente desde variables de entorno del backend:
   clave, si se acaban los créditos o si la voz no está permitida en tu plan
   (el plan gratis no puede usar voces de la biblioteca por API), Eddie
   sigue con la voz del navegador y Configuración → Voz explica por qué.
-- `GEMINI_TTS_VOICE` (+ `GEMINI_TTS_API_KEY`) — (opcional) la **voz de Gemini**: una voz que diseñaste o
-  replicaste en Google AI Studio (su id `voice_…`) o una prediseñada (`Kore`, `Charon`, `Puck`…). Aparece en
-  Configuración → Voz como «Voz de Gemini». Una voz creada solo funciona con una clave **del mismo proyecto** de AI
-  Studio: ponla en `GEMINI_TTS_API_KEY` (si es la misma de `GEMINI_API_KEY`, no hace falta). Opcionales:
-  `GEMINI_TTS_MODEL` (por defecto `gemini-3.8-flash-tts`) y `GEMINI_TTS_STYLE` (una indicación de tono, p. ej.
-  "Cálido y sereno"). El plan gratis da unos 100 audios al día, así que Eddie lee con esa voz en pocos fragmentos
-  largos; si falla o se acaba el límite, sigue con ElevenLabs y luego con la del navegador. Telegram y WhatsApp siguen
-  usando ElevenLabs para las notas de voz.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en
