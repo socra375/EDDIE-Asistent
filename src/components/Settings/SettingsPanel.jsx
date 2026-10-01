@@ -58,7 +58,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, updateVoiceSettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
-  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoiceError, speakWithSettings } =
+  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, speakWithSettings } =
     useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
@@ -72,7 +72,8 @@ export default function SettingsPanel({ onOpenConversation }) {
   const onFreeOpenRouter = settings.provider === 'openrouter' && (!settings.model || settings.model.endsWith(':free') || settings.model === 'openrouter/free');
 
   function chooseVoice(value) {
-    if (value === CLOUD_VOICE) updateVoiceSettings({ tts: 'elevenlabs' });
+    if (value === CLOUD_VOICE) updateVoiceSettings({ tts: 'elevenlabs', elevenVoice: '' });
+    else if (value.startsWith(`${CLOUD_VOICE}:`)) updateVoiceSettings({ tts: 'elevenlabs', elevenVoice: value.slice(CLOUD_VOICE.length + 1) });
     else updateVoiceSettings({ tts: 'browser', voiceURI: value });
   }
 
@@ -276,10 +277,18 @@ export default function SettingsPanel({ onOpenConversation }) {
               <span className="field-label">Voz de Eddie</span>
               <select
                 className="select"
-                value={ttsEngine === 'elevenlabs' ? CLOUD_VOICE : settings.voice.voiceURI || ''}
+                value={ttsEngine === 'elevenlabs' ? (cloudVoices.some((v) => v.id === cloudVoice && !v.default) ? `${CLOUD_VOICE}:${cloudVoice}` : CLOUD_VOICE) : settings.voice.voiceURI || ''}
                 onChange={(e) => chooseVoice(e.target.value)}
               >
-                {cloudVoiceAvailable && <option value={CLOUD_VOICE}>Voz de Eddie · ElevenLabs</option>}
+                {cloudVoiceAvailable && cloudVoices.length <= 1 && <option value={CLOUD_VOICE}>Voz de Eddie · ElevenLabs</option>}
+                {cloudVoiceAvailable &&
+                  cloudVoices.length > 1 &&
+                  cloudVoices.map((v) => (
+                    <option key={v.id} value={v.default ? CLOUD_VOICE : `${CLOUD_VOICE}:${v.id}`}>
+                      ElevenLabs · {v.name}
+                      {v.default ? ' (por defecto)' : ''}
+                    </option>
+                  ))}
                 <option value="">Navegador · automática (la más natural)</option>
                 {voicesFor(voices, settings.language).map((v) => (
                   <option key={v.voiceURI} value={v.voiceURI}>

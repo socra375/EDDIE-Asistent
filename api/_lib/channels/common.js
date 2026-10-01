@@ -44,7 +44,9 @@ export function speakable(text) {
 // Eddie's voice for the start of the answer (one request is capped, so a long
 // answer is voiced up to its last whole sentence within the cap; the full text
 // always goes out as a message too). An MP3 buffer, or null.
-export async function voiceFor(text, language, tag = 'channel') {
+// `voiceId` is the user's pick in Configuración; synthesizeSpeech only
+// accepts it if it's one of the configured voices.
+export async function voiceFor(text, language, tag = 'channel', voiceId) {
   if (!process.env.ELEVENLABS_API_KEY) return null;
   let clean = speakable(text);
   if (!clean) return null;
@@ -53,7 +55,7 @@ export async function voiceFor(text, language, tag = 'channel') {
     clean = cut > 100 ? clean.slice(0, cut + 1) : clean.slice(0, MAX_SPEECH_CHARS);
   }
   try {
-    const res = await synthesizeSpeech({ text: clean, language });
+    const res = await synthesizeSpeech({ text: clean, language, voiceId });
     return Buffer.from(await res.arrayBuffer());
   } catch (err) {
     console.error(`[${tag}] voice failed:`, err.message);

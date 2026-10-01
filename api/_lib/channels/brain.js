@@ -57,6 +57,7 @@ export async function askEddie({ link, text, images = [], note }) {
     confirmations,
     actions: result.actions || [],
     language,
+    voiceId: typeof s.voice?.elevenVoice === 'string' ? s.voice.elevenVoice.slice(0, 40) : undefined,
   };
 }
 

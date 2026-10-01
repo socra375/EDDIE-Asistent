@@ -13,6 +13,42 @@ export const DEFAULT_TTS_MODEL = 'eleven_flash_v2_5';
 export const MAX_SPEECH_CHARS = 600;
 
 const VOICE_ID_RE = /^[A-Za-z0-9]{10,40}$/;
+const MAX_VOICES = 12;
+
+// Extra voices to choose from in Configuración: ELEVENLABS_VOICES as
+// "Name:voiceId" pairs separated by commas, semicolons or new lines
+// ("Mayordomo:abc…,Cercano:def…"). A bare id is named by its position.
+export function parseVoiceList(raw) {
+  const voices = [];
+  const seen = new Set();
+  for (const part of String(raw || '').split(/[,;\n]+/)) {
+    const item = part.trim();
+    if (!item) continue;
+    const cut = item.lastIndexOf(':');
+    const id = (cut >= 0 ? item.slice(cut + 1) : item).trim();
+    if (!VOICE_ID_RE.test(id) || seen.has(id)) continue;
+    const name = (cut >= 0 ? item.slice(0, cut) : '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 40) || `Voz ${voices.length + 1}`;
+    seen.add(id);
+    voices.push({ id, name });
+    if (voices.length >= MAX_VOICES) break;
+  }
+  return voices;
+}
+
+// The default voice (ELEVENLABS_VOICE_ID, or Eddie's) plus the extra ones —
+// the only ids the server will speak with.
+export function voiceChoices(env = process.env) {
+  const extra = parseVoiceList(env.ELEVENLABS_VOICES);
+  const defaultId = VOICE_ID_RE.test(env.ELEVENLABS_VOICE_ID || '') ? env.ELEVENLABS_VOICE_ID : DEFAULT_VOICE_ID;
+  const named = extra.find((v) => v.id === defaultId);
+  return [{ id: defaultId, name: named?.name || 'Eddie', default: true }, ...extra.filter((v) => v.id !== defaultId)];
+}
+
+// For /api/health: the voices to pick from (names and ids only; ids aren't secret).
+export function voiceListStatus(env = process.env) {
+  if (!env.ELEVENLABS_API_KEY) return [];
+  return voiceChoices(env).map(({ id, name, default: isDefault }) => ({ id, name, ...(isDefault ? { default: true } : {}) }));
+}
 
 function speechError(message, status) {
   const err = new Error(message);
@@ -45,13 +81,16 @@ export async function synthesizeSpeech({
   language,
   apiKey = process.env.ELEVENLABS_API_KEY,
   model = process.env.ELEVENLABS_MODEL || DEFAULT_TTS_MODEL,
-  defaultVoice = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID,
+  env = process.env,
 }) {
   if (!apiKey) throw speechError('La voz de ElevenLabs no está configurada (falta ELEVENLABS_API_KEY en Vercel).', 503);
   const clean = typeof text === 'string' ? text.trim() : '';
   if (!clean) throw speechError('No hay texto para leer.', 400);
   if (clean.length > MAX_SPEECH_CHARS) throw speechError(`El fragmento es demasiado largo (máximo ${MAX_SPEECH_CHARS} caracteres).`, 400);
-  const voice = VOICE_ID_RE.test(voiceId || '') ? voiceId : defaultVoice;
+  // Only a voice from the configured list: nobody can make Eddie's key speak
+  // with any other voice. Anything else gets the default one.
+  const choices = voiceChoices(env);
+  const voice = (choices.find((v) => v.id === voiceId) || choices[0]).id;
 
   const body = { text: clean, model_id: model };
   // Flash/Turbo v2.5 accept a language hint, which keeps short Spanish
