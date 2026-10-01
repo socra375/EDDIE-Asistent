@@ -11,8 +11,10 @@ import { transcribeAudio, MAX_AUDIO_BYTES } from '../transcribe.js';
 import { synthesizeSpeech, MAX_SPEECH_CHARS } from '../speech.js';
 import { buildSystemPrompt } from '../../../src/services/personality.js';
 import { sendMessage, editMessage, answerCallback, sendAction, sendVoice, downloadFile, tg } from './api.js';
-import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistory, markUpdateSeen, addPending, takePending, latestPending } from './store.js';
+import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistory, markEpisodeSaved, markUpdateSeen, addPending, takePending, latestPending } from './store.js';
 import { loadUserContext, applyActionsForUser } from './serverActions.js';
+import { recallBlock, saveConversation } from '../episodes/recall.js';
+import { episodesEnabled } from '../episodes/handlers.js';
 import { safeYoutubeUrl } from '../connectors/youtube/index.js';
 import { buildBriefing } from '../reminders/briefing.js';
 import { listPendingReminders } from '../reminders/store.js';
@@ -39,6 +41,27 @@ const HELP = [
   '/nuevo — empezar una conversación nueva',
   '/desvincular — desconectar este chat de tu cuenta',
 ].join('\n');
+
+// Conversation memory for this thread: once it has gone quiet for a while (or
+// the user says /nuevo), what was said is summarized and kept, so Eddie can
+// bring it up later on the web or here. Never fails the message that triggered
+// it; a provider error leaves the thread unmarked so a later message retries.
+const COLD_MINUTES = 30;
+const MIN_HISTORY_TO_KEEP = 4;
+
+async function closeConversation(link, { force = false } = {}) {
+  try {
+    if (link.episodeSaved !== false || link.history.length < MIN_HISTORY_TO_KEEP) return;
+    if (!process.env.GEMINI_API_KEY) return;
+    const idleMinutes = link.historyAt ? (Date.now() - new Date(link.historyAt).getTime()) / 60000 : 0;
+    if (!force && !(idleMinutes > COLD_MINUTES)) return;
+    const ctx = await loadUserContext(link.userId);
+    if (episodesEnabled(ctx.settings)) await saveConversation({ userId: link.userId, messages: link.history, source: 'telegram' });
+    await markEpisodeSaved(link.userId);
+  } catch (err) {
+    console.error('[telegram] keeping the conversation failed:', err.message);
+  }
+}
 
 // What the model needs to know about this surface.
 const TELEGRAM_NOTE =
@@ -134,6 +157,7 @@ async function handleCommand(link, name, arg) {
   const { chatId } = link;
   if (name === 'ayuda' || name === 'help') return sendMessage(chatId, HELP);
   if (name === 'nuevo') {
+    await closeConversation(link, { force: true });
     await saveHistory(link.userId, []);
     return sendMessage(chatId, 'Conversación nueva. ¿En qué te ayudo?');
   }
@@ -240,6 +264,8 @@ async function runAssistant(link, text, viaVoice) {
   const wantsVoice = viaVoice || link.voiceReplies;
   await sendAction(chatId, wantsVoice ? 'record_voice' : 'typing');
   const typing = setInterval(() => sendAction(chatId, wantsVoice ? 'record_voice' : 'typing'), 4000);
+  // The previous conversation, if it went cold, is kept while this answer is prepared.
+  const closing = closeConversation(link);
   try {
     const ctx = await loadUserContext(userId);
     const s = ctx.settings;
@@ -248,6 +274,8 @@ async function runAssistant(link, text, viaVoice) {
     const language = /^[a-z]{2}$/.test(s.language || '') ? s.language : 'es';
     const off = sanitizeConnectorIds(s.disabledConnectors);
     const disabledConnectors = ctx.memoryOn ? off : [...new Set([...off, 'memory'])];
+    const messages0 = [...link.history, { role: 'user', content: text }];
+    const recalled = off.includes('conversations') || !ctx.memoryOn ? '' : await recallBlock({ userId, messages: messages0, timezone: link.timezone });
     const system = `${buildSystemPrompt({
       mode: 'asistente',
       language,
@@ -255,7 +283,7 @@ async function runAssistant(link, text, viaVoice) {
       query: text,
       tasks: ctx.tasks,
       disabledConnectors: off,
-    })}\n\n${TELEGRAM_NOTE}`;
+    })}${recalled ? `\n\n${recalled}` : ''}\n\n${TELEGRAM_NOTE}`;
     const messages = [...link.history, { role: 'user', content: text }].map((m) => ({ role: m.role, content: String(m.content) }));
 
     // The answer arrives as pieces through onChunk (the result only carries
@@ -298,8 +326,10 @@ async function runAssistant(link, text, viaVoice) {
       if (audio) await sendVoice(chatId, audio);
     }
     reply = reply + receipt;
+    await closing;
     await saveHistory(userId, [...link.history, { role: 'user', content: text }, { role: 'assistant', content: reply }]);
   } catch (err) {
+    await closing;
     console.error('[telegram] assistant failed:', err);
     await sendMessage(chatId, `No pude completar eso: ${err.message || 'error inesperado'}.`);
   } finally {

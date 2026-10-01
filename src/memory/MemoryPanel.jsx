@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
+import { deleteAllEpisodes, deleteEpisode, listEpisodes } from '../services/episodes';
 import { useWakeWord } from '../context/wakeWordState';
 import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, MAX_FOLLOW_UP_SECONDS } from '../services/wakeWord';
 import Icon from '../layout/Icon';
@@ -153,6 +155,117 @@ function WakeWordCard() {
   );
 }
 
+const fmtLongDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+
+// The notes Eddie keeps of past conversations (conversation memory): when
+// they are made, what they say, and the way to delete them. They are written
+// on the server and only exist for signed-in users.
+function ConversationMemoryCard() {
+  const { user } = useAuth();
+  const { settings, setConnectorEnabled } = useSettings();
+  const [state, setState] = useState({ status: 'loading', episodes: [], configured: true, error: '' });
+  const [confirmAll, setConfirmAll] = useState(false);
+  const memoryOn = settings.memoryEnabled !== false;
+  const enabled = memoryOn && !(settings.disabledConnectors || []).includes('conversations');
+
+  const apply = useCallback((data) => setState({ status: 'ready', episodes: data.episodes || [], configured: data.configured !== false, error: '' }), []);
+  const fail = useCallback((err) => setState((s) => ({ ...s, status: 'error', error: err.message })), []);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let alive = true;
+    listEpisodes().then((data) => alive && apply(data), (err) => alive && fail(err));
+    return () => {
+      alive = false;
+    };
+  }, [user, apply, fail]);
+
+  async function remove(id) {
+    setState((s) => ({ ...s, episodes: s.episodes.filter((e) => e.id !== id) }));
+    try {
+      await deleteEpisode(id);
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+      listEpisodes().then(apply, fail);
+    }
+  }
+
+  async function removeAll() {
+    setConfirmAll(false);
+    try {
+      await deleteAllEpisodes();
+      setState((s) => ({ ...s, episodes: [], error: '' }));
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+    }
+  }
+
+  const { episodes } = state;
+  return (
+    <section className="glass-panel memory__episodes" aria-label="Conversaciones recordadas">
+      <header className="memory-card__head">
+        <h3>Conversaciones recordadas</h3>
+        {user && <span className="chip">{episodes.length}</span>}
+      </header>
+      <p className="memory__wake-desc">
+        Cuando una conversación termina (5 minutos sin hablar, al cambiar de chat o al cerrar la pestaña), Eddie guarda un resumen corto, nunca la conversación
+        completa. Así, si más adelante vuelves a un tema, lo recuerda. También las de Telegram. Aquí las ves y las borras.
+      </p>
+      <label className="settings-toggle">
+        <input type="checkbox" checked={enabled} disabled={!memoryOn} onChange={(e) => setConnectorEnabled('conversations', e.target.checked)} />
+        <span>Recordar mis conversaciones</span>
+      </label>
+      {!memoryOn && <p className="memory__warn">La memoria está apagada, así que tampoco se guardan conversaciones.</p>}
+      {!user ? (
+        <p className="memory-card__empty">Inicia sesión con Google para que Eddie recuerde tus conversaciones (se guardan en tu cuenta).</p>
+      ) : state.status === 'loading' && episodes.length === 0 ? (
+        <p className="memory-card__empty">Cargando…</p>
+      ) : !state.configured ? (
+        <p className="memory-card__empty">El servidor todavía no tiene configurada esta función (faltan GEMINI_API_KEY o la base de datos en Vercel).</p>
+      ) : episodes.length === 0 ? (
+        <p className="memory-card__empty">Todavía no hay recuerdos. Se crean solos cuando conversas un rato con Eddie.</p>
+      ) : (
+        <>
+          <ul className="memory-card__list">
+            {episodes.map((e) => (
+              <li key={e.id} className="memory-item">
+                <div className="memory-item__body">
+                  <span className="memory-item__meta">
+                    {fmtLongDate(e.createdAt)}
+                    {e.source === 'telegram' ? ' · Telegram' : ''}
+                  </span>
+                  <span className="memory-item__row">{e.summary}</span>
+                </div>
+                <span className="memory-item__actions">
+                  <button type="button" className="btn tasks-delete" onClick={() => remove(e.id)} aria-label="Borrar este recuerdo">
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {confirmAll ? (
+            <span className="memory__confirm">
+              ¿Borrar todos?
+              <button type="button" className="btn btn-danger" onClick={removeAll}>
+                Sí, borrar
+              </button>
+              <button type="button" className="btn" onClick={() => setConfirmAll(false)}>
+                No
+              </button>
+            </span>
+          ) : (
+            <button type="button" className="btn btn-danger memory__episodes-clear" onClick={() => setConfirmAll(true)}>
+              Borrar todas las conversaciones recordadas
+            </button>
+          )}
+        </>
+      )}
+      {state.error && <p className="memory__warn" role="alert">{state.error}</p>}
+    </section>
+  );
+}
+
 // What Eddie knows about the user, by category, with everything visible and
 // deletable, plus a form to add things by hand. Eddie's own additions (the
 // remember / update_project tools) appear here as soon as the answer ends.
@@ -225,6 +338,8 @@ export default function MemoryPanel() {
         </div>
         {!settings.memoryEnabled && <p className="memory__warn">La memoria está apagada: Eddie no la consulta ni guarda nada nuevo.</p>}
       </div>
+
+      <ConversationMemoryCard />
 
       <WakeWordCard />
 

@@ -234,3 +234,29 @@
 .memory__wake-status--waiting {
   color: var(--accent);
 }
+
+/* Conversation memory card. */
+.memory__episodes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+}
+
+.memory__episodes h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.memory__episodes .memory-card__list {
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.memory__episodes-clear {
+  align-self: flex-start;
+}

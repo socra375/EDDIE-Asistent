@@ -42,7 +42,7 @@ export async function consumeLinkCode(code, chatId) {
 export async function getLinkByChat(chatId) {
   const sql = getDb();
   const rows = await sql`
-    select l.user_id, l.chat_id, l.timezone, l.voice_replies, l.history, u.email, u.name
+    select l.user_id, l.chat_id, l.timezone, l.voice_replies, l.history, l.history_at, l.episode_saved, u.email, u.name
     from telegram_links l join users u on u.id = l.user_id
     where l.chat_id = ${chatId}
   `;
@@ -52,7 +52,7 @@ export async function getLinkByChat(chatId) {
 export async function getLinkByUser(userId) {
   const sql = getDb();
   const rows = await sql`
-    select l.user_id, l.chat_id, l.timezone, l.voice_replies, l.history, u.email, u.name
+    select l.user_id, l.chat_id, l.timezone, l.voice_replies, l.history, l.history_at, l.episode_saved, u.email, u.name
     from telegram_links l join users u on u.id = l.user_id
     where l.user_id = ${userId}
   `;
@@ -66,6 +66,10 @@ function shapeLink(row) {
     timezone: row.timezone,
     voiceReplies: Boolean(row.voice_replies),
     history: Array.isArray(row.history) ? row.history : [],
+    // When the thread last moved, and whether its notes were already kept
+    // (conversation memory): undefined when the columns aren't there yet.
+    historyAt: row.history_at ? new Date(row.history_at).toISOString() : null,
+    episodeSaved: row.episode_saved === undefined ? undefined : Boolean(row.episode_saved),
     user: { id: row.user_id, email: row.email, name: row.name },
   };
 }
@@ -87,10 +91,16 @@ export async function setVoiceReplies(userId, on) {
   await sql`update telegram_links set voice_replies = ${Boolean(on)} where user_id = ${userId}`;
 }
 
+// The conversation's notes were kept (or there was nothing to keep).
+export async function markEpisodeSaved(userId) {
+  const sql = getDb();
+  await sql`update telegram_links set episode_saved = true where user_id = ${userId}`;
+}
+
 export async function saveHistory(userId, history) {
   const sql = getDb();
   const trimmed = history.slice(-HISTORY_MESSAGES).map((m) => ({ role: m.role, content: String(m.content).slice(0, HISTORY_CHARS) }));
-  await sql`update telegram_links set history = ${JSON.stringify(trimmed)} where user_id = ${userId}`;
+  await sql`update telegram_links set history = ${JSON.stringify(trimmed)}, history_at = now(), episode_saved = false where user_id = ${userId}`;
 }
 
 // Telegram resends an update when the webhook answers slowly; the first to

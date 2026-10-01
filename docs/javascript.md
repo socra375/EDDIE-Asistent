@@ -228,6 +228,11 @@ detalle del protocolo.
     instante en la zona del usuario (`dates.js`). El envío lo hace
     `reminders/run.js` desde `GET /api/connectors/cron` (ver
     `docs/eddie-2-arquitectura.md`).
+  - `conversations/`: `search_conversations({ query })` — busca por
+    significado en los resúmenes de conversaciones pasadas del usuario
+    (`episodes/recall.js#recallForTool`, umbral 0,5, hasta 5). Los resúmenes
+    se crean solos (`episodes/`, ver `docs/eddie-2-arquitectura.md`); el
+    conector también apaga el guardado y la recuperación automática.
   - `github/`: `github_list_repos`, `github_repo_activity`,
     `github_list_issues`, `github_get_issue` y, sensibles,
     `github_create_issue` y `github_comment` (la app las muestra en una
