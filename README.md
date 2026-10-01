@@ -500,7 +500,22 @@ directamente desde el navegador de ese mismo equipo.
    **Sonda local** (OFF → ON) arriba del chat: cada mensaje escrito o dictado va a `…/chat` de tu equipo (hasta
    90 s de espera) y la respuesta muestra las herramientas que usó. Elegir una habilidad o volver a pulsarlo lo apaga.
 
-Solo funciona en el equipo donde corre la sonda (no desde el teléfono, Telegram ni WhatsApp).
+Solo funciona en el equipo donde corre la sonda. Para el teléfono, Telegram o WhatsApp está EDDIE Prime (abajo).
+
+## Tu equipo desde cualquier lugar (EDDIE Prime)
+
+Con el agente `eddie_agent.py` en tu Chromebook, Eddie lo consulta y lo maneja desde la web, el teléfono, Telegram o
+WhatsApp: "¿cuánto disco me queda?", "¿qué está gastando memoria?", "abre la terminal". El agente no tiene IA
+propia (un solo cerebro: el de Eddie) y no abre puertos. Espera un aviso sin datos (ntfy) y va a buscar el trabajo con
+su token. Solo ejecuta su lista blanca de herramientas, y lo que cambia algo pide confirmación.
+
+1. **Conectores → Tu equipo (EDDIE Prime) → Vincular un equipo** (sesión del dueño).
+2. En la terminal de Linux pega los tres comandos que muestra la tarjeta (descargar, `pair CÓDIGO`, `run`). Usa el
+   mismo entorno de Python que tu sonda, o `pip install psutil`.
+3. `python3 eddie_agent.py install-service` para que arranque solo; luego **Probar desde la nube**.
+
+No necesita variables nuevas (usa `DATABASE_URL` y la migración `0006_computer.sql`). Opcional: `EDDIE_NTFY_URL` si
+usas tu propio servidor ntfy. Detalles, herramientas, contrato y seguridad: `docs/eddie-prime-agente.md`.
 
 ## Voz (Speech-to-Text / Text-to-Speech)
 

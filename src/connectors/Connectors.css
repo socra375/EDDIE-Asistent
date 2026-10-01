@@ -94,6 +94,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  min-width: 0; /* long commands or variable names must not widen the grid cell */
+  overflow-wrap: anywhere;
   padding: 1rem 1.1rem;
   transition: opacity 0.2s ease, border-color 0.2s ease;
 }
@@ -360,4 +362,52 @@
 .probe__result--bad {
   border-color: color-mix(in srgb, var(--danger) 60%, transparent);
   color: var(--danger);
+}
+
+/* EDDIE Prime card: the three commands to paste, each with a copy button. */
+.computer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.computer__steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.computer__steps li {
+  min-width: 0;
+}
+
+.computer__cmd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  min-width: 0;
+}
+
+.computer__cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.computer__cmd .btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.55rem;
 }

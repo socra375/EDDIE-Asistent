@@ -8,6 +8,7 @@ import { handleTelegramRoute } from './telegram/handlers.js';
 import { handleWhatsappRoute } from './whatsapp/handlers.js';
 import { handleCronRequest } from './reminders/cron.js';
 import { handleEpisodesRoute } from './episodes/handlers.js';
+import { handleComputerRoute } from './computer/handlers.js';
 import { getSessionUser, SESSION_COOKIE_NAME } from './session.js';
 
 // Works signed in or not: without a session (or without a database)
@@ -37,5 +38,6 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path[0] === 'episodes') return handleEpisodesRoute({ method, path, cookies, body });
   if (path[0] === 'whatsapp') return handleWhatsappRoute({ method, path, cookies, query, headers, body, rawBody });
   if (path[0] === 'telegram') return handleTelegramRoute({ method, path, cookies, headers, body });
+  if (path[0] === 'computer') return handleComputerRoute({ method, path, cookies, headers, body });
   return { status: 404, json: { error: 'Esta acción de conectores todavía no existe.' } };
 }

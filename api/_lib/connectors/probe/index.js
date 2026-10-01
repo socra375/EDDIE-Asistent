@@ -12,7 +12,7 @@ export default {
   category: 'asistente',
   auth: null,
   requiredEnv: [],
-  note: 'Solo funciona desde el navegador del mismo equipo donde corre la sonda (http://127.0.0.1:8000). La dirección y la clave se guardan solo en este navegador. Telegram y WhatsApp no pueden llegar a ella.',
+  note: 'Solo funciona desde el navegador del mismo equipo donde corre la sonda (http://127.0.0.1:8000). La dirección y la clave se guardan solo en este navegador. Para usar tu equipo desde el teléfono, Telegram o WhatsApp, vincula «Tu equipo (EDDIE Prime)».',
   tools: [],
   webhook: null,
 };
