@@ -36,6 +36,7 @@ const PROVIDER_MODELS = {
 const CUSTOM_MODEL = '__custom__';
 
 const CLOUD_VOICE = '__elevenlabs__';
+const GEMINI_VOICE = '__gemini__';
 
 // Browser voices for the chosen language, by name, for the picker.
 function voicesFor(voices, language) {
@@ -58,7 +59,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, updateVoiceSettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
-  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoiceError, speakWithSettings } =
+  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, geminiVoice, cloudVoiceError, speakWithSettings } =
     useVoice();
   const health = useProviderHealth();
   const [deleting, setDeleting] = useState(false);
@@ -73,6 +74,7 @@ export default function SettingsPanel({ onOpenConversation }) {
 
   function chooseVoice(value) {
     if (value === CLOUD_VOICE) updateVoiceSettings({ tts: 'elevenlabs' });
+    else if (value === GEMINI_VOICE) updateVoiceSettings({ tts: 'gemini' });
     else updateVoiceSettings({ tts: 'browser', voiceURI: value });
   }
 
@@ -276,9 +278,10 @@ export default function SettingsPanel({ onOpenConversation }) {
               <span className="field-label">Voz de Eddie</span>
               <select
                 className="select"
-                value={ttsEngine === 'elevenlabs' ? CLOUD_VOICE : settings.voice.voiceURI || ''}
+                value={ttsEngine === 'gemini' ? GEMINI_VOICE : ttsEngine === 'elevenlabs' ? CLOUD_VOICE : settings.voice.voiceURI || ''}
                 onChange={(e) => chooseVoice(e.target.value)}
               >
+                {geminiVoice && <option value={GEMINI_VOICE}>Voz de Gemini · {geminiVoice.label}</option>}
                 {cloudVoiceAvailable && <option value={CLOUD_VOICE}>Voz de Eddie · ElevenLabs</option>}
                 <option value="">Navegador · automática (la más natural)</option>
                 {voicesFor(voices, settings.language).map((v) => (
@@ -302,7 +305,13 @@ export default function SettingsPanel({ onOpenConversation }) {
             Para la voz propia de Eddie (ElevenLabs), agrega ELEVENLABS_API_KEY en las variables de entorno de Vercel y vuelve a desplegar.
           </p>
         )}
-        {ttsEngine === 'elevenlabs' && cloudVoiceError && <p className="settings-warning">{cloudVoiceError}</p>}
+        {ttsEngine === 'gemini' && (
+          <p className="settings-placeholder">
+            La voz de Gemini lee las respuestas en pocos fragmentos largos (el plan gratis da unos 100 audios al día).
+            {cloudVoiceAvailable ? ' Si falla o se acaba el límite, sigue la voz de ElevenLabs.' : ' Si falla, sigue la voz del navegador.'}
+          </p>
+        )}
+        {ttsEngine !== 'browser' && cloudVoiceError && <p className="settings-warning">{cloudVoiceError}</p>}
         {ttsSupported && (
           <button type="button" className="btn settings-voice-test" onClick={() => speakWithSettings('Hola, soy Eddie. Así suena mi voz.')}>
             Probar voz

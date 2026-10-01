@@ -27,13 +27,21 @@ export function VoiceProvider({ children }) {
   const whisperActive = sttEngine === 'whisper';
 
   // Eddie's ElevenLabs voice is the default whenever the server has
-  // ELEVENLABS_API_KEY; the browser's voices are the fallback or the
-  // user's choice.
+  // ELEVENLABS_API_KEY; the Gemini voice (GEMINI_TTS_VOICE) when the user
+  // picks it in Configuración, with ElevenLabs as its fallback; the
+  // browser's voices are the last fallback or the user's choice.
   const cloudVoiceAvailable = Boolean(health?.elevenlabs);
-  const ttsEngine = settings.voice.tts !== 'browser' && cloudVoiceAvailable ? 'elevenlabs' : 'browser';
+  const geminiVoice = health?.geminiVoice || null;
+  const ttsEngine =
+    settings.voice.tts === 'gemini' && geminiVoice
+      ? 'gemini'
+      : settings.voice.tts !== 'browser' && cloudVoiceAvailable
+        ? 'elevenlabs'
+        : 'browser';
+  const ttsFallback = ttsEngine === 'gemini' && cloudVoiceAvailable ? 'elevenlabs' : null;
 
   const speakWithSettings = (text, onEnd) => {
-    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, onEnd });
+    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, fallback: ttsFallback, onEnd });
   };
 
   // Named explicitly rather than spread — the hooks share key names
@@ -57,9 +65,10 @@ export function VoiceProvider({ children }) {
       start: whisperActive ? whisper.start : browser.start,
       stop: whisperActive ? whisper.stop : browser.stop,
       reset: whisperActive ? whisper.reset : browser.reset,
-      ttsSupported: synthesis.supported || ttsEngine === 'elevenlabs',
+      ttsSupported: synthesis.supported || ttsEngine !== 'browser',
       ttsEngine,
       cloudVoiceAvailable,
+      geminiVoice,
       cloudVoiceError: synthesis.cloudError,
       voices: synthesis.voices,
       speaking: synthesis.speaking,
@@ -68,7 +77,7 @@ export function VoiceProvider({ children }) {
       speakWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI, ttsEngine, cloudVoiceAvailable],
+    [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI, ttsEngine, ttsFallback, cloudVoiceAvailable, geminiVoice],
   );
 
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
