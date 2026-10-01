@@ -1,9 +1,11 @@
-// Everything under /api/connectors. The list for the hub, the "Hoy" panel's data; OAuth
+// Everything under /api/connectors. The list for the hub, the "Hoy" panel's data, the
+// scheduled job (cron) that sends reminders and the morning summary; OAuth
 // starts/callbacks and incoming webhooks (Telegram, WhatsApp) will be routed
 // here as their connectors arrive, all inside the same serverless function.
 import { describeConnectors } from './connectors/registry.js';
 import { getToday } from './todayHandlers.js';
 import { handleTelegramRoute } from './telegram/handlers.js';
+import { handleCronRequest } from './reminders/cron.js';
 import { getSessionUser, SESSION_COOKIE_NAME } from './session.js';
 
 // Works signed in or not: without a session (or without a database)
@@ -29,6 +31,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
     if (method === 'GET') return getToday({ query, cookies });
     return { status: 405, json: { error: 'Método no permitido.' } };
   }
+  if (path.length === 1 && path[0] === 'cron') return handleCronRequest({ method, headers });
   if (path[0] === 'telegram') return handleTelegramRoute({ method, path, cookies, headers, body });
   return { status: 404, json: { error: 'Esta acción de conectores todavía no existe.' } };
 }

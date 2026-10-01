@@ -3,8 +3,11 @@
 import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { handleWebhook } from './bot.js';
-import { botUsername, ensureBotSetup, webhookStatus } from './api.js';
+import { botUsername, ensureBotSetup, sendMessage, webhookStatus } from './api.js';
 import { createLinkCode, deleteLink, getLinkByUser, setVoiceReplies } from './store.js';
+import { getBriefing, setBriefing } from '../reminders/store.js';
+import { buildBriefing } from '../reminders/briefing.js';
+import { resolveTime } from '../connectors/dates.js';
 
 export const TELEGRAM_ENV = ['DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'APP_URL'];
 
@@ -60,6 +63,24 @@ export async function handleTelegramRoute({ method, path = [], cookies = {}, hea
     if (!(await getLinkByUser(user.id))) return { status: 409, json: { error: 'Telegram no está vinculado.' } };
     await setVoiceReplies(user.id, body.voiceReplies);
     return { status: 200, json: { ok: true, voiceReplies: body.voiceReplies } };
+  }
+  if (action === 'briefing') {
+    const user = await requireUser(cookies);
+    if (typeof body?.enabled !== 'boolean') return { status: 400, json: { error: 'Falta enabled (true o false).' } };
+    if (!(await getLinkByUser(user.id))) return { status: 409, json: { error: 'Telegram no está vinculado.' } };
+    const current = await getBriefing(user.id);
+    const time = body.time == null || body.time === '' ? current.time : resolveTime(body.time);
+    if (!time) return { status: 400, json: { error: 'La hora debe ser HH:MM (24 h).' } };
+    await setBriefing(user.id, { enabled: body.enabled, time });
+    return { status: 200, json: { ok: true, briefing: { enabled: body.enabled, time } } };
+  }
+  if (action === 'briefing-now') {
+    const user = await requireUser(cookies);
+    const link = await getLinkByUser(user.id);
+    if (!link) return { status: 409, json: { error: 'Telegram no está vinculado.' } };
+    const res = await sendMessage(link.chatId, await buildBriefing(link));
+    if (!res.ok) return { status: 502, json: { error: 'Telegram no aceptó el mensaje.' } };
+    return { status: 200, json: { ok: true } };
   }
   return { status: 404, json: { error: 'Esa acción de Telegram no existe.' } };
 }

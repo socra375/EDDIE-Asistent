@@ -221,6 +221,13 @@ detalle del protocolo.
     fragmento; `youtube.com.evil.com`, `javascript:` o `data:` se rechazan) y
     los ids deben ser de 11 caracteres seguros; la app vuelve a comprobarlo
     antes de abrir o reproducir. Sale por tema (`route`).
+  - `reminders/`: `set_reminder`, `list_reminders`, `cancel_reminder` y
+    `set_morning_briefing`. Escriben directamente en `reminders` /
+    `briefing_settings` (`reminders/store.js`) y exigen sesión y Telegram
+    vinculado. `resolveWhen` convierte `in_minutes` o `time` + `date` en un
+    instante en la zona del usuario (`dates.js`). El envío lo hace
+    `reminders/run.js` desde `GET /api/connectors/cron` (ver
+    `docs/eddie-2-arquitectura.md`).
   - `github/`: `github_list_repos`, `github_repo_activity`,
     `github_list_issues`, `github_get_issue` y, sensibles,
     `github_create_issue` y `github_comment` (la app las muestra en una
@@ -604,7 +611,7 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   eso en el texto que se envía como `system` a la API, con hasta 1400
   caracteres de memoria (solo lo relevante para `query`, el mensaje actual,
   ver `formatMemoryForPrompt`) y las 8 tareas pendientes más prioritarias. En el
-  peor caso queda por debajo de los 9000 caracteres que acepta el backend
+  peor caso queda por debajo de los 10000 caracteres que acepta el backend
   (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`). `CORE_PERSONALITY` incluye
   una instrucción de formato explícita: nada de asteriscos, guiones de
   viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se

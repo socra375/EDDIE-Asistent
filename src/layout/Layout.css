@@ -510,6 +510,23 @@
     display: none;
   }
 
+  /* Seven buttons plus the chat-list toggle must fit a 360–390 px phone
+     without pushing the whole page wider. */
+  .rail {
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .rail__group,
+  .rail__bottom {
+    gap: 0.15rem;
+  }
+
+  .rail__item {
+    width: 38px;
+    height: 38px;
+  }
+
   .rail__logo {
     display: none;
   }

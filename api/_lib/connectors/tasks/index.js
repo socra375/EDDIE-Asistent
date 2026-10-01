@@ -115,7 +115,7 @@ export default {
       declaration: {
         name: 'create_task',
         description:
-          'Crea una tarea en la lista del usuario cuando te pide anotar, recordar o agendar algo pendiente ("recuérdame comprar pan", "anota entregar el informe el viernes").',
+          'Crea una tarea en la lista del usuario cuando te pide anotar o agendar algo pendiente ("anota comprar pan", "tengo que entregar el informe el viernes"). Si pide que le AVISES a una hora o tras un tiempo ("recuérdame a las 5", "avísame en 20 minutos"), usa set_reminder en vez de una tarea.',
         parameters: {
           type: 'OBJECT',
           properties: {

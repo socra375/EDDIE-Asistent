@@ -3,6 +3,7 @@
 // describes it for the Conectores hub and says whether the user's chat is
 // linked. The card's buttons call /api/connectors/telegram/link|unlink|settings.
 import { getLinkByUser, hasTelegramLink } from '../../telegram/store.js';
+import { getBriefing, listPendingReminders } from '../../reminders/store.js';
 
 export default {
   id: 'telegram',
@@ -19,7 +20,11 @@ export default {
   // Extra fields for the card (whether voice replies are always on).
   details: async (user) => {
     const link = user ? await getLinkByUser(user.id) : null;
-    return link ? { voiceReplies: link.voiceReplies } : null;
+    if (!link) return null;
+    // The reminder tables come from a later migration: if they aren't there
+    // yet, the card still shows the voice setting.
+    const [briefing, pending] = await Promise.all([getBriefing(user.id).catch(() => null), listPendingReminders(user.id, 100).catch(() => [])]);
+    return { voiceReplies: link.voiceReplies, briefing: briefing || { enabled: false, time: '07:00' }, pendingReminders: pending.length };
   },
   tools: [],
   webhook: null,

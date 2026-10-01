@@ -28,6 +28,13 @@ export default function TelegramControls({ connector, signedIn, onConnect, onCha
   // Shown as soon as it is clicked; the server's value takes over if saving fails.
   const [voiceOverride, setVoiceOverride] = useState(null);
   const voiceReplies = voiceOverride ?? Boolean(connector.details?.voiceReplies);
+  // The morning summary: same idea, what was just clicked shows right away.
+  const [briefingOverride, setBriefingOverride] = useState(null);
+  const [timeDraft, setTimeDraft] = useState(null);
+  const [sentNow, setSentNow] = useState(false);
+  const briefing = connector.details?.briefing || { enabled: false, time: '07:00' };
+  const briefingOn = briefingOverride ?? briefing.enabled;
+  const briefingTime = timeDraft ?? briefing.time;
 
   useEffect(() => {
     if (!link || connected) return undefined;
@@ -83,7 +90,56 @@ export default function TelegramControls({ connector, signedIn, onConnect, onCha
           />
           <span>Contestar siempre con voz (si no, solo cuando le mandes una nota de voz)</span>
         </label>
-        <p className="connector__meta">En Telegram: /llamar abre su pantalla de voz, /voz on|off, /nuevo, /ayuda.</p>
+        <div className="telegram__briefing">
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={briefingOn}
+              disabled={busy}
+              onChange={async (e) => {
+                const wanted = e.target.checked;
+                setBriefingOverride(wanted);
+                if (await run('briefing', { enabled: wanted, time: briefingTime })) onChanged(true);
+                else setBriefingOverride(null);
+              }}
+            />
+            <span>Resumen de la mañana por Telegram (agenda, tareas, correos y titulares)</span>
+          </label>
+          <div className="telegram__briefing-row">
+            <label className="telegram__time">
+              <span>Hora</span>
+              <input
+                type="time"
+                value={briefingTime}
+                disabled={busy}
+                aria-label="Hora del resumen de la mañana"
+                onChange={(e) => setTimeDraft(e.target.value)}
+                onBlur={async () => {
+                  if (timeDraft && /^\d{2}:\d{2}$/.test(timeDraft) && timeDraft !== briefing.time) {
+                    if (await run('briefing', { enabled: briefingOn, time: timeDraft })) onChanged(true);
+                  }
+                  setTimeDraft(null);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={async () => setSentNow(Boolean(await run('briefing-now')))}
+            >
+              Enviarme uno ahora
+            </button>
+          </div>
+          {sentNow && <p className="connector__meta">Enviado: revisa tu Telegram.</p>}
+          <p className="connector__meta">
+            {connector.details?.pendingReminders
+              ? `Recordatorios pendientes: ${connector.details.pendingReminders}. `
+              : 'Pídele a Eddie "recuérdame llamar a mamá a las 5" y te avisa por aquí. '}
+            Los avisos los envía un trabajo programado y pueden tardar unos minutos.
+          </p>
+        </div>
+        <p className="connector__meta">En Telegram: /llamar abre su pantalla de voz, /resumen, /recordatorios, /voz on|off, /nuevo, /ayuda.</p>
         <button
           type="button"
           className="btn btn-danger connector__action"
