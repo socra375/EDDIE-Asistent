@@ -2,6 +2,7 @@
 // Both functions take a normalized shape and stream their answer out via
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
+import { hasImages } from './images.js';
 import { createToolset, intentFromMessages } from './connectors/registry.js';
 import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
@@ -169,7 +170,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   let contents = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
+    parts: [{ text: m.content }, ...(m.images || []).map((img) => ({ inline_data: { mime_type: img.mimeType, data: img.data } }))],
   }));
 
   // These "-latest" models have thinking enabled internally, and its tokens
@@ -335,7 +336,12 @@ export async function callClaude({ apiKey, model, system, messages, onChunk }) {
     max_tokens: 2048,
     system,
     stream: true,
-    messages: messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+    messages: messages.map((m) => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.images?.length
+        ? [...m.images.map((img) => ({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.data } })), { type: 'text', text: m.content }]
+        : m.content,
+    })),
   };
 
   const streamAbort = createStreamAbort();
@@ -740,7 +746,33 @@ const FALLBACKS = [
 // `disabledConnectors` lists the connectors the user switched off in the hub;
 // their tools are never offered to the model.
 // `onStep` hears every tool step as it starts and ends (see runTool).
-export async function callProvider({ provider, model, system, messages, context = {}, disabledConnectors = [], onChunk, onStep }) {
+// Who can look at pictures: only Gemini and Claude among the providers here
+// (the default Groq and OpenRouter models read text only).
+const VISION_PROVIDERS = [
+  { provider: 'gemini', name: 'Gemini', envVar: 'GEMINI_API_KEY' },
+  { provider: 'claude', name: 'Claude', envVar: 'ANTHROPIC_API_KEY' },
+];
+
+// With pictures in the request the provider the user picked may have to give
+// way: a text-only one hands over to the first vision provider with a key,
+// and backups are limited to vision providers too.
+export function planProviders(provider, messages) {
+  if (!hasImages(messages)) return { primary: provider, keepModel: true, backups: FALLBACKS.filter((f) => f.provider !== provider && process.env[f.envVar]) };
+  const available = VISION_PROVIDERS.filter((v) => process.env[v.envVar]);
+  const canSee = VISION_PROVIDERS.some((v) => v.provider === provider);
+  if (!canSee && !available.length) {
+    const err = new Error('Para ver imágenes necesito Gemini o Claude: configura GEMINI_API_KEY o ANTHROPIC_API_KEY en Vercel.');
+    err.code = 'PROVIDER_UNAVAILABLE';
+    throw err;
+  }
+  const primary = canSee ? provider : available[0].provider;
+  return { primary, keepModel: canSee, backups: available.filter((v) => v.provider !== primary) };
+}
+
+export async function callProvider({ provider: requestedProvider, model: requestedModel, system, messages, context = {}, disabledConnectors = [], onChunk, onStep }) {
+  const plan = planProviders(requestedProvider, messages);
+  const provider = plan.primary;
+  const model = plan.keepModel ? requestedModel : undefined;
   const startedAt = Date.now();
   const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages, context.memory) });
   const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
@@ -754,7 +786,7 @@ export async function callProvider({ provider, model, system, messages, context 
     return withToolOutput(await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk }));
   } catch (firstErr) {
     let err = firstErr;
-    const backups = FALLBACKS.filter((f) => f.provider !== provider && process.env[f.envVar]);
+    const backups = plan.backups;
     const canTry = () => err.code !== 'BAD_REQUEST' && !started && Date.now() - startedAt < FALLBACK_DEADLINE_MS;
 
     for (const backup of backups) {

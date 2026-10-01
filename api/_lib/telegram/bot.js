@@ -17,6 +17,7 @@ import { recallBlock, saveConversation } from '../episodes/recall.js';
 import { episodesEnabled } from '../episodes/handlers.js';
 import { safeYoutubeUrl } from '../connectors/youtube/index.js';
 import { buildBriefing } from '../reminders/briefing.js';
+import { MAX_IMAGE_CHARS } from '../images.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
 
@@ -29,6 +30,7 @@ const HELP = [
   'Soy Eddie, el mismo de la app, ahora en tu Telegram.',
   '',
   '• Escríbeme o mándame una nota de voz: te contesto con mi voz.',
+  '• Mándame una foto (con o sin pregunta) y te digo qué veo.',
   '• Puedo mirar tu agenda y tus correos, crear tareas, recordar cosas, buscar en internet, revisar tus repos…',
   '• Pídeme que te avise de algo ("recuérdame llamar a mamá a las 5") y te escribo a esa hora.',
   '• Lo delicado (enviar un correo, borrar algo) te llega con botones ✅ / ✖ para que tú decidas.',
@@ -111,6 +113,7 @@ async function processUpdate(update) {
   if (!msg || msg.chat?.type !== 'private' || msg.from?.is_bot) return undefined;
   const chatId = msg.chat.id;
   const text = String(msg.text || '').trim();
+  const photo = pickPhoto(msg);
 
   const command = /^\/([a-z_]+)(?:@\w+)?(?:\s+(.*))?$/i.exec(text);
   if (command && command[1].toLowerCase() === 'start') return handleStart(chatId, (command[2] || '').trim());
@@ -121,13 +124,20 @@ async function processUpdate(update) {
 
   let userText = text;
   let viaVoice = false;
+  let images = [];
   const voice = msg.voice || msg.audio;
   if (voice) {
     viaVoice = true;
     userText = await transcribeVoice(chatId, voice);
     if (!userText) return undefined;
+  } else if (photo) {
+    images = await downloadImage(chatId, photo);
+    if (!images.length) return undefined;
+    userText = String(msg.caption || '').trim() || IMAGE_PROMPT;
+  } else if (msg.document && !text) {
+    return sendMessage(chatId, 'Para que vea una imagen, mándala como foto (JPG, PNG, WebP o GIF de hasta unos 900 KB).');
   } else if (!text) {
-    return sendMessage(chatId, 'Por ahora entiendo texto y notas de voz.');
+    return sendMessage(chatId, 'Por ahora entiendo texto, fotos y notas de voz.');
   }
 
   // "Sí" / "no" after a confirmation card answers it, same as in the app.
@@ -137,7 +147,39 @@ async function processUpdate(update) {
     const decision = YES_RE.test(reply) ? 'ok' : NO_RE.test(reply) ? 'no' : null;
     if (decision) return resolvePending(link, pendingId, decision, null);
   }
-  return runAssistant(link, userText, viaVoice);
+  return runAssistant(link, userText, viaVoice, images);
+}
+
+// A photo (Telegram sends several sizes, smallest first) or an image sent as
+// a file, when it is one Eddie can read.
+const IMAGE_PROMPT = '¿Qué ves en esta imagen?';
+const IMAGE_MIME = /^image\/(jpeg|png|webp|gif)$/;
+// Telegram photos arrive as JPEG; keep under what a request may carry.
+const MAX_IMAGE_BYTES = Math.floor((MAX_IMAGE_CHARS * 3) / 4) - 1000;
+
+export function pickPhoto(msg) {
+  if (Array.isArray(msg.photo) && msg.photo.length) {
+    const fits = msg.photo.filter((p) => !p.file_size || p.file_size <= MAX_IMAGE_BYTES);
+    const best = fits.at(-1) || msg.photo[0];
+    return { file_id: best.file_id, file_size: best.file_size, mime_type: 'image/jpeg' };
+  }
+  const doc = msg.document;
+  if (doc && IMAGE_MIME.test(doc.mime_type || '') && (!doc.file_size || doc.file_size <= MAX_IMAGE_BYTES)) return { file_id: doc.file_id, file_size: doc.file_size, mime_type: doc.mime_type };
+  return null;
+}
+
+async function downloadImage(chatId, photo) {
+  await sendAction(chatId, 'typing');
+  const bytes = await downloadFile(photo.file_id);
+  if (!bytes) {
+    await sendMessage(chatId, 'No pude descargar tu foto. Inténtalo otra vez.');
+    return [];
+  }
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    await sendMessage(chatId, 'Esa imagen es muy pesada para que la vea. Mándala como foto normal (comprimida).');
+    return [];
+  }
+  return [{ mimeType: photo.mime_type, data: Buffer.from(bytes).toString('base64') }];
 }
 
 async function handleStart(chatId, arg) {
@@ -259,7 +301,7 @@ function cardText(confirmation) {
   return lines.join('\n');
 }
 
-async function runAssistant(link, text, viaVoice) {
+async function runAssistant(link, text, viaVoice, images = []) {
   const { chatId, userId } = link;
   const wantsVoice = viaVoice || link.voiceReplies;
   await sendAction(chatId, wantsVoice ? 'record_voice' : 'typing');
@@ -284,7 +326,7 @@ async function runAssistant(link, text, viaVoice) {
       tasks: ctx.tasks,
       disabledConnectors: off,
     })}${recalled ? `\n\n${recalled}` : ''}\n\n${TELEGRAM_NOTE}`;
-    const messages = [...link.history, { role: 'user', content: text }].map((m) => ({ role: m.role, content: String(m.content) }));
+    const messages = [...link.history.map((m) => ({ role: m.role, content: String(m.content) })), { role: 'user', content: text, ...(images.length ? { images } : {}) }];
 
     // The answer arrives as pieces through onChunk (the result only carries
     // the metadata), same as the web stream.
@@ -327,7 +369,7 @@ async function runAssistant(link, text, viaVoice) {
     }
     reply = reply + receipt;
     await closing;
-    await saveHistory(userId, [...link.history, { role: 'user', content: text }, { role: 'assistant', content: reply }]);
+    await saveHistory(userId, [...link.history, { role: 'user', content: images.length ? `📷 ${text}` : text }, { role: 'assistant', content: reply }]);
   } catch (err) {
     await closing;
     console.error('[telegram] assistant failed:', err);

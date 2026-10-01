@@ -18,6 +18,7 @@ import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
+import { IMAGE_PROMPT } from '../services/images';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -56,6 +57,22 @@ function disabledFor(settings) {
 function memoryContext(settings) {
   return settings.memoryEnabled === false ? [] : memoryForContext(getMemory());
 }
+// The full pictures of recent messages, kept in memory only: the saved
+// conversation keeps just a thumbnail, so after a reload Eddie can still be
+// asked about a picture seen in this session but not about an older one.
+const fullImages = new Map();
+
+// What goes to the server for each message: the full pictures of the last two
+// messages that have them (when still in memory), a note for the rest.
+function withImages(history) {
+  const recent = new Set(history.filter((m) => m.images?.length && fullImages.has(m.id)).slice(-2).map((m) => m.id));
+  return history.map(({ id, role, content, images }) => {
+    if (!images?.length) return { role, content };
+    if (recent.has(id)) return { role, content, images: fullImages.get(id) };
+    return { role, content: `${content}\n[Adjuntó ${images.length === 1 ? 'una imagen que ya no está disponible' : `${images.length} imágenes que ya no están disponibles`}.]` };
+  });
+}
+
 let idCounter = 0;
 function nextId() {
   idCounter += 1;
@@ -191,11 +208,15 @@ export function ChatProvider({ children }) {
     // `display` and `tag` let a chat skill send a full template to the AI
     // while the bubble shows only what the user typed; `skill` and `title`
     // ride along on the reply so it can be exported as a document.
-    async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title } = {}) => {
-      const trimmed = text.trim();
+    async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title, images = [] } = {}) => {
+      const trimmed = text.trim() || (images.length ? IMAGE_PROMPT : '');
       if (!trimmed) return;
 
       const userMessage = { id: nextId(), role: 'user', content: trimmed, timestamp: Date.now() };
+      if (images.length) {
+        userMessage.images = images.map(({ thumb, name }) => ({ thumb, name }));
+        fullImages.set(userMessage.id, images.map(({ mimeType, data }) => ({ mimeType, data })));
+      }
       if (display) userMessage.display = display;
       if (tag) userMessage.tag = tag;
       const replyMeta = {};
@@ -233,7 +254,7 @@ export function ChatProvider({ children }) {
       // Small talk and self-referential trivia (how are you, what day is
       // it) are answered by Eddie itself — no AI provider involved, so
       // these never fail even if Gemini/Claude is down or rate-limited.
-      const localAnswer = !tag && getLocalAnswer(trimmed, {
+      const localAnswer = !tag && !images.length && getLocalAnswer(trimmed, {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         language: settings.language,
       });
@@ -274,7 +295,7 @@ export function ChatProvider({ children }) {
           provider: settings.provider,
           model: settings.model || undefined,
           system,
-          messages: history.map(({ role, content }) => ({ role, content })),
+          messages: withImages(history),
           context: {
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             location: location || undefined,
