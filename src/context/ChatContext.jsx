@@ -20,7 +20,7 @@ import { isSleepCommand } from '../services/wakeWord';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
 import { askProbe, looksLikeSystemQuestion, stepsFromTools } from '../services/probeCore';
-import { getProbeConfig } from '../services/probe';
+import { autoDetectReady, getProbeConfig } from '../services/probe';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -215,11 +215,13 @@ export function ChatProvider({ children }) {
       if (!trimmed) return;
 
       // The local probe (Sonda Local) on the user's computer answers when the
-      // "Sonda" skill is picked, or — with "detect questions about the
-      // computer" on — when the message is about the machine itself.
+      // chat's "Sonda local" button is on (every message, typed or spoken,
+      // goes to it), or — once it's set up — when the message is about the
+      // machine itself (and then the cloud answers if the probe can't).
       const probeConfig = getProbeConfig();
-      const autoProbe = !probe && !tag && !images.length && probeConfig.enabled && probeConfig.auto && looksLikeSystemQuestion(trimmed);
-      const viaProbe = (probe && probeConfig.enabled) || autoProbe;
+      const forcedProbe = (probe || probeConfig.forced) && !tag && !images.length;
+      const autoProbe = !forcedProbe && !tag && !images.length && autoDetectReady(probeConfig) && looksLikeSystemQuestion(trimmed);
+      const viaProbe = forcedProbe || autoProbe;
 
       const userMessage = { id: nextId(), role: 'user', content: trimmed, timestamp: Date.now() };
       // Talks with the probe are kept out of the conversation memory (the notes saved on the server).

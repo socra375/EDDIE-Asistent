@@ -9,7 +9,9 @@
 
 export const DEFAULT_PROBE_URL = 'http://127.0.0.1:8000';
 export const PROBE_TIMEOUT_MS = 90_000; // the probe calls its own AI model and then its tools
-export const PING_TIMEOUT_MS = 5_000;
+// /health answers in milliseconds, but the first time Chrome may hold the
+// request while it asks for permission to reach this device's local network.
+export const PING_TIMEOUT_MS = 20_000;
 const MAX_MESSAGE = 4000;
 const MAX_TOOLS = 12;
 const MAX_RESPONSE = 20_000;
@@ -77,7 +79,12 @@ async function call(base, path, { fetchImpl, timeoutMs, ...init }) {
   try {
     return await fetchImpl(`${base}${path}`, { ...init, mode: 'cors', credentials: 'omit', cache: 'no-store', signal: controller.signal });
   } catch (err) {
-    if (controller.signal.aborted) throw new ProbeError(`La sonda tardó más de ${Math.round(timeoutMs / 1000)} s en responder.`, 'timeout');
+    if (controller.signal.aborted) {
+      throw new ProbeError(
+        `La sonda tardó más de ${Math.round(timeoutMs / 1000)} s en responder, así que no hubo conexión. Si Chrome te mostró un aviso para permitir el acceso a dispositivos de tu red local, acepta y vuelve a probar; si no, revisa que la sonda esté encendida.`,
+        'timeout',
+      );
+    }
     throw networkError(base, err);
   } finally {
     clearTimeout(timer);
@@ -134,8 +141,39 @@ const plain = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').to
 
 // Questions about the computer itself, which only the probe can answer
 // (used when "detect questions about the computer" is on).
-const SYSTEM_RE =
-  /\b(disco( duro)?|almacenamiento|espacio (libre|en disco|disponible)|particion|memoria ram|\bram\b|cpu|procesador|nucleos|bateria|cargador|temperatura|procesos?|uptime|tiempo encendid|uso del (sistema|equipo|procesador)|rendimiento del (sistema|equipo)|(mi|el|este) (computador|computadora|pc|chromebook|equipo|laptop|portatil|sistema operativo)|crostini)\b/;
+const SYSTEM_RE = new RegExp(
+  '\\b(' +
+    [
+      'disco( duro)?',
+      'discos',
+      'ssd',
+      'hdd',
+      'almacenamiento',
+      'espacio (libre|en disco|disponible|usado|ocupado|me queda|queda|tengo)',
+      'cuanto espacio',
+      'gigas? (libres?|disponibles?)',
+      'particion(es)?',
+      'memoria (ram|libre|disponible|usada|del (equipo|sistema|computador|pc))',
+      'cuanta memoria',
+      'ram',
+      'cpu',
+      'procesador',
+      'nucleos',
+      'bateria',
+      'cargador',
+      'temperatura',
+      'procesos?',
+      'uptime',
+      'tiempo encendid[oa]',
+      'lleva encendid[oa]',
+      '(uso|estado|rendimiento|salud) del (sistema|equipo|computador|pc|chromebook)',
+      '(mi|el|este|tu) (computador|computadora|ordenador|pc|chromebook|equipo|laptop|portatil|sistema operativo)',
+      'crostini',
+      'linux',
+      '(mi|la) (ip|direccion ip)',
+    ].join('|') +
+    ')\\b',
+);
 
 export function looksLikeSystemQuestion(text) {
   const t = plain(text);

@@ -88,9 +88,51 @@
   flex-shrink: 0;
 }
 
+/* "Sonda local" switch: when on, every message goes to the probe on this
+   computer, so it is lit in amber to stand apart from the cyan skills. */
+.skills--muted {
+  opacity: 0.5;
+}
+
+.probe-toggle {
+  flex-shrink: 0;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.66rem;
+  border-color: var(--panel-border);
+  color: var(--text-dim);
+}
+
+.probe-toggle__state {
+  padding: 0 0.3rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+}
+
+.probe-toggle--on,
+.probe-toggle--on:hover {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: rgba(255, 176, 32, 0.14);
+  box-shadow: 0 0 10px rgba(255, 176, 32, 0.35);
+}
+
+:root[data-theme='light'] .probe-toggle--on {
+  box-shadow: none;
+}
+
+.chat-panel__hint--probe {
+  color: var(--warning);
+  border-left: 2px solid var(--warning);
+  padding-left: 0.6rem;
+}
+
 /* Narrow spots (the Home side panel, phones): one compact row of skills,
    an icon-only "Nueva" button and selects without visible labels. */
 @container (max-width: 560px) {
+  .probe-toggle__label,
   .chat-new__label,
   .chat-send__label {
     display: none;
