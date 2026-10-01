@@ -7,6 +7,7 @@ import cors from 'cors';
 import { runChatStream } from '../api/_lib/chatStream.js';
 import { runTranscription, MAX_AUDIO_BYTES } from '../api/_lib/transcribe.js';
 import { runSpeech } from '../api/_lib/speech.js';
+import { geminiVoiceStatus } from '../api/_lib/geminiSpeech.js';
 import { runConfirm } from '../api/_lib/confirm.js';
 import { parseCookies } from '../api/_lib/cookies.js';
 import { applyResult, respondError } from '../api/_lib/respond.js';
@@ -43,6 +44,7 @@ app.get('/api/health', (_req, res) => {
     groq: Boolean(process.env.GROQ_API_KEY),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
+    geminiVoice: geminiVoiceStatus(),
     database: Boolean(process.env.DATABASE_URL),
     google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
   });

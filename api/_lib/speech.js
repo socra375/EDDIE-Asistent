@@ -1,6 +1,9 @@
 // Text to speech with ElevenLabs (POST /api/chat?action=speak). The browser
 // sends a piece of Eddie's answer and gets MP3 audio back; the
-// ELEVENLABS_API_KEY never leaves the server.
+// ELEVENLABS_API_KEY never leaves the server. With engine "gemini" the same
+// route speaks with the Gemini voice instead (see geminiSpeech.js).
+import { synthesizeGeminiSpeech } from './geminiSpeech.js';
+
 const ELEVENLABS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 // Eddie's voice, chosen by the user. ELEVENLABS_VOICE_ID overrides it.
 export const DEFAULT_VOICE_ID = 'bUQeiO7gn4ehGuSnZf26';
@@ -81,7 +84,13 @@ export async function runSpeech(req, res) {
     return;
   }
   try {
-    const { text, voiceId, language } = req.body || {};
+    const { text, voiceId, language, engine } = req.body || {};
+    if (engine === 'gemini') {
+      const wav = await synthesizeGeminiSpeech({ text });
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store', 'Content-Length': wav.length });
+      res.end(wav);
+      return;
+    }
     const upstream = await synthesizeSpeech({ text, voiceId, language: typeof language === 'string' ? language.slice(0, 2) : '' });
     res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
     const reader = upstream.body.getReader();
