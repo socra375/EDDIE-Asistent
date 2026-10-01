@@ -16,7 +16,7 @@ const STATUS = {
   planned: { label: 'Próximamente', tone: '' },
 };
 
-const CATEGORY = { asistente: 'Asistente', informacion: 'Información', comunicacion: 'Comunicación', agenda: 'Agenda', multimedia: 'Multimedia' };
+const CATEGORY = { asistente: 'Asistente', informacion: 'Información', comunicacion: 'Comunicación', agenda: 'Agenda', multimedia: 'Multimedia', productividad: 'Productividad' };
 
 const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
