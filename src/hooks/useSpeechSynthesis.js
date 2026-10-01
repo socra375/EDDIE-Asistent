@@ -103,11 +103,11 @@ export function splitForCloud(text) {
   return [first, ...splitForSpeech(rest.join(' '), CLOUD_CHUNK)];
 }
 
-async function fetchCloudAudio(text, language, signal) {
+async function fetchCloudAudio(text, language, signal, voiceId) {
   const res = await fetch(`${API_BASE}/api/chat?action=speak`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, language }),
+    body: JSON.stringify({ text, language, ...(voiceId ? { voiceId } : {}) }),
     signal,
   });
   if (!res.ok) {
@@ -182,7 +182,7 @@ export function useSpeechSynthesis() {
       const urls = [];
       const load = (i) => {
         if (i < chunks.length && !urls[i]) {
-          urls[i] = fetchCloudAudio(chunks[i], language, controller.signal);
+          urls[i] = fetchCloudAudio(chunks[i], language, controller.signal, options.cloudVoice);
           urls[i].catch(() => {}); // handled where it's awaited
         }
         return urls[i];
@@ -242,12 +242,12 @@ export function useSpeechSynthesis() {
   }, [browserSupported]);
 
   const speak = useCallback(
-    (text, { lang = 'es-ES', voiceURI, engine = 'browser', onEnd } = {}) => {
+    (text, { lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, onEnd } = {}) => {
       const clean = speakableText(text);
       if (!clean) return;
       stopAll();
       const run = runRef.current;
-      const options = { lang, voiceURI, onEnd };
+      const options = { lang, voiceURI, cloudVoice, onEnd };
       if (engine === 'elevenlabs' && !cloudOffRef.current) {
         speakCloud(clean, run, options);
       } else {

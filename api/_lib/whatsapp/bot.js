@@ -247,7 +247,7 @@ async function runAssistant(link, text, viaVoice, images = []) {
   // The previous conversation, if it went cold, is kept while this answer is prepared.
   const closing = closeConversation(link);
   try {
-    const { reply, receipt, confirmations, actions, language } = await askEddie({ link, text, images, note: WHATSAPP_NOTE });
+    const { reply, receipt, confirmations, actions, language, voiceId } = await askEddie({ link, text, images, note: WHATSAPP_NOTE });
     await sendText(waId, reply + receipt);
 
     for (const c of confirmations) {
@@ -266,7 +266,7 @@ async function runAssistant(link, text, viaVoice, images = []) {
     }
 
     if (wantsVoice) {
-      const audio = await voiceFor(reply, language, 'whatsapp');
+      const audio = await voiceFor(reply, language, 'whatsapp', voiceId);
       if (audio) await sendAudio(waId, audio);
     }
     await closing;

@@ -139,6 +139,11 @@ exclusivamente desde variables de entorno del backend:
   clave, si se acaban los créditos o si la voz no está permitida en tu plan
   (el plan gratis no puede usar voces de la biblioteca por API), Eddie
   sigue con la voz del navegador y Configuración → Voz explica por qué.
+- `ELEVENLABS_VOICES` — (opcional) **más voces para elegir** en Configuración → Voz, como pares `Nombre:VoiceID`
+  separados por comas (`Mayordomo:abc123…,Cercano:def456…`, hasta 12). La de `ELEVENLABS_VOICE_ID` sigue siendo la
+  de por defecto. El servidor solo habla con las voces de esa lista, y la que elijas también se usa en las notas de voz
+  de Telegram y WhatsApp. Usa voces creadas por ti (Voice Design o clonadas): el plan gratis no permite por API las de
+  la biblioteca.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
 proveedor sin clave, Eddie lo indicará claramente en lugar de fallar en

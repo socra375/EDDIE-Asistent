@@ -30,10 +30,14 @@ export function VoiceProvider({ children }) {
   // ELEVENLABS_API_KEY; the browser's voices are the fallback or the
   // user's choice.
   const cloudVoiceAvailable = Boolean(health?.elevenlabs);
+  // ElevenLabs voices to choose from (ELEVENLABS_VOICE_ID + ELEVENLABS_VOICES);
+  // the server only speaks with these, whatever the browser sends.
+  const cloudVoices = useMemo(() => (Array.isArray(health?.elevenVoices) ? health.elevenVoices : []), [health]);
+  const cloudVoice = cloudVoices.some((v) => v.id === settings.voice.elevenVoice) ? settings.voice.elevenVoice : undefined;
   const ttsEngine = settings.voice.tts !== 'browser' && cloudVoiceAvailable ? 'elevenlabs' : 'browser';
 
   const speakWithSettings = (text, onEnd) => {
-    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, onEnd });
+    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, onEnd });
   };
 
   // Named explicitly rather than spread — the hooks share key names
@@ -60,6 +64,8 @@ export function VoiceProvider({ children }) {
       ttsSupported: synthesis.supported || ttsEngine === 'elevenlabs',
       ttsEngine,
       cloudVoiceAvailable,
+      cloudVoices,
+      cloudVoice,
       cloudVoiceError: synthesis.cloudError,
       voices: synthesis.voices,
       speaking: synthesis.speaking,
@@ -68,7 +74,7 @@ export function VoiceProvider({ children }) {
       speakWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI, ttsEngine, cloudVoiceAvailable],
+    [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice],
   );
 
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
