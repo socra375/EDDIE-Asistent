@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, WhatsApp…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, WhatsApp, Sonda local…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -483,6 +483,23 @@ Pasos (los haces tú, una sola vez; necesitas una cuenta de Facebook/Meta):
 Seguridad: cada entrega del webhook se acepta solo si trae la firma `X-Hub-Signature-256` válida (HMAC-SHA256 con
 tu app secret); Eddie solo responde al número que vinculaste (si defines `EDDIE_OWNER_EMAIL`, solo el dueño puede
 vincular); los mensajes repetidos se ignoran y el token solo se envía a los servidores de Meta.
+
+## Sonda local (tu Chromebook)
+
+La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la
+memoria, el procesador o la batería, algo que el servidor de Eddie en la nube nunca puede hacer. La web le habla
+directamente desde el navegador de ese mismo equipo.
+
+1. Arranca la sonda en el equipo (`uvicorn main:app --host 127.0.0.1 --port 8000`) con CORS para este sitio, el
+   permiso de red privada, `GET /health` y la clave en `X-Eddie-Key` (ver `docs/sonda-local.md`).
+2. En Eddie → **Conectores → Sonda local**: deja la dirección `http://127.0.0.1:8000`, escribe la clave (la misma que
+   tiene la sonda; se guarda solo en este navegador) y pulsa **Probar conexión**. Si Chrome pregunta si el sitio
+   puede acceder a apps o dispositivos de este equipo, acepta.
+3. Activa **Usar la sonda en el chat**: aparece la habilidad **Sonda** en el chat. Pregúntale "revisa mi disco duro" y
+   verás su respuesta con el formato original y las herramientas que usó. Opcional: **Detectar solo las preguntas
+   sobre el equipo**, para que esas vayan solas a la sonda desde la habilidad General.
+
+Solo funciona en el equipo donde corre la sonda (no desde el teléfono, Telegram ni WhatsApp).
 
 ## Voz (Speech-to-Text / Text-to-Speech)
 

@@ -307,3 +307,57 @@
   flex-direction: column;
   gap: 0.7rem;
 }
+
+/* Local probe card. */
+.probe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.probe__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.probe__key {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.probe__key .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.probe__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.probe__result {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+.probe__result p {
+  margin: 0;
+}
+
+.probe__result--ok {
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+}
+
+.probe__result--bad {
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  color: var(--danger);
+}

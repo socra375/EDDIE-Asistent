@@ -32,11 +32,11 @@ export function addDays(isoDate, days) {
 // Accepts YYYY-MM-DD or everyday words ("hoy", "mañana", "pasado mañana",
 // "el viernes"). Returns null for "no date", undefined when the value
 // can't be understood.
-export function resolveDate(value, timezone) {
+// `today` (YYYY-MM-DD) can be given to resolve relative words against another day.
+export function resolveDate(value, timezone, today = todayIn(timezone)) {
   if (value == null || value === '') return null;
   const raw = String(value).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw) && !Number.isNaN(new Date(`${raw}T12:00:00Z`).getTime())) return raw;
-  const today = todayIn(timezone);
   const words = plain(raw).replace(/^(el|este|esta|para el|para)\s+/, '');
   if (words === 'hoy') return today;
   if (words === 'manana') return addDays(today, 1);

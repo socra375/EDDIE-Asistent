@@ -19,6 +19,8 @@ import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
+import { askProbe, looksLikeSystemQuestion, stepsFromTools } from '../services/probeCore';
+import { getProbeConfig } from '../services/probe';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -208,11 +210,20 @@ export function ChatProvider({ children }) {
     // `display` and `tag` let a chat skill send a full template to the AI
     // while the bubble shows only what the user typed; `skill` and `title`
     // ride along on the reply so it can be exported as a document.
-    async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title, images = [] } = {}) => {
+    async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title, images = [], probe = false } = {}) => {
       const trimmed = text.trim() || (images.length ? IMAGE_PROMPT : '');
       if (!trimmed) return;
 
+      // The local probe (Sonda Local) on the user's computer answers when the
+      // "Sonda" skill is picked, or — with "detect questions about the
+      // computer" on — when the message is about the machine itself.
+      const probeConfig = getProbeConfig();
+      const autoProbe = !probe && !tag && !images.length && probeConfig.enabled && probeConfig.auto && looksLikeSystemQuestion(trimmed);
+      const viaProbe = (probe && probeConfig.enabled) || autoProbe;
+
       const userMessage = { id: nextId(), role: 'user', content: trimmed, timestamp: Date.now() };
+      // Talks with the probe are kept out of the conversation memory (the notes saved on the server).
+      if (viaProbe) userMessage.local = true;
       if (images.length) {
         userMessage.images = images.map(({ thumb, name }) => ({ thumb, name }));
         fullImages.set(userMessage.id, images.map(({ mimeType, data }) => ({ mimeType, data })));
@@ -248,6 +259,34 @@ export function ChatProvider({ children }) {
         if (decision) {
           resolveConfirmation(pending.messageId, pending.card.id, decision);
           return null;
+        }
+      }
+
+      if (viaProbe) {
+        setStatus('processing');
+        setLiveSteps([{ id: 'p0', tool: 'probe', label: 'Sonda local', activity: 'Consultando la sonda de tu equipo…', status: 'running' }]);
+        try {
+          const { response, tools } = await askProbe({ url: probeConfig.url, key: probeConfig.key, message: trimmed });
+          const steps = stepsFromTools(tools);
+          const assistantMessage = { id: nextId(), role: 'assistant', content: response, timestamp: Date.now(), provider: 'probe', local: true, ...(steps.length ? { steps } : {}) };
+          setLiveSteps([]);
+          setMessages((prev) => [...prev, assistantMessage]);
+          setLastReply(assistantMessage);
+          setStatus('idle');
+          return assistantMessage;
+        } catch (err) {
+          setLiveSteps([]);
+          if (!autoProbe) {
+            const message = err?.message || 'No pude hablar con la sonda local.';
+            setStatus('error');
+            setErrorMessage(message);
+            setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: message, timestamp: Date.now(), isError: true, provider: 'probe', local: true }]);
+            window.setTimeout(() => setStatus((st) => (st === 'error' ? 'idle' : st)), 2500);
+            return null;
+          }
+          // Detected automatically and the probe isn't there: Eddie answers as usual.
+          setMessages((prev) => prev.map((m) => (m.id === userMessage.id ? { ...m, local: undefined } : m)));
+          userMessage.local = undefined;
         }
       }
 
