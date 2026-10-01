@@ -11,13 +11,8 @@ const MAX_CHUNK = 220;
 // short so Eddie starts talking sooner.
 const CLOUD_FIRST_CHUNK = 160;
 const CLOUD_CHUNK = 450;
-// The Gemini voice: the free tier counts requests (about 100 a day), so after
-// a short first piece the rest of the answer goes in few long ones.
-const GEMINI_FIRST_CHUNK = 260;
-const GEMINI_CHUNK = 1500;
-const CLOUD_SPLITS = { elevenlabs: [CLOUD_FIRST_CHUNK, CLOUD_CHUNK], gemini: [GEMINI_FIRST_CHUNK, GEMINI_CHUNK] };
 // Errors that won't fix themselves this session (no key, no credits, a voice
-// the plan can't use): stop trying that voice until the page reloads.
+// the plan can't use): stop trying ElevenLabs until the page reloads.
 const CLOUD_FATAL_STATUSES = [401, 402, 403, 503];
 
 // Higher is better. Network/neural voices sound far more natural than the
@@ -101,20 +96,18 @@ export function splitForSpeech(text, max = MAX_CHUNK) {
   return chunks;
 }
 
-// Server-voice pieces: a short first one (so Eddie starts talking sooner),
-// then longer ones.
-export function splitForCloud(text, engine = 'elevenlabs') {
-  const [firstMax, restMax] = CLOUD_SPLITS[engine] || CLOUD_SPLITS.elevenlabs;
-  const [first, ...rest] = splitForSpeech(text, firstMax);
+// ElevenLabs pieces: a short first one, then longer ones.
+export function splitForCloud(text) {
+  const [first, ...rest] = splitForSpeech(text, CLOUD_FIRST_CHUNK);
   if (!first) return [];
-  return [first, ...splitForSpeech(rest.join(' '), restMax)];
+  return [first, ...splitForSpeech(rest.join(' '), CLOUD_CHUNK)];
 }
 
-async function fetchCloudAudio(text, language, signal, engine) {
+async function fetchCloudAudio(text, language, signal) {
   const res = await fetch(`${API_BASE}/api/chat?action=speak`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, language, ...(engine === 'gemini' ? { engine } : {}) }),
+    body: JSON.stringify({ text, language }),
     signal,
   });
   if (!res.ok) {
@@ -126,12 +119,11 @@ async function fetchCloudAudio(text, language, signal, engine) {
   return URL.createObjectURL(await res.blob());
 }
 
-// Text to speech. Three engines behind one `speak`:
-// - "gemini" / "elevenlabs": a voice generated on the server (POST
+// Text to speech. Two engines behind one `speak`:
+// - "elevenlabs": Eddie's own voice, generated on the server (POST
 //   /api/chat?action=speak) piece by piece — the next piece is fetched while
-//   the current one plays. A failure hands the rest of the answer to the
-//   `fallback` server voice, if any, or to the browser voice, and
-//   `cloudError` says why.
+//   the current one plays. Any failure falls back to the browser voice for
+//   the rest of the answer, and `cloudError` says why.
 // - "browser": Web Speech API, with the most natural voice available for the
 //   language (or the one chosen in Configuración), read sentence by sentence
 //   so Chrome doesn't cut long answers off.
@@ -144,8 +136,7 @@ export function useSpeechSynthesis() {
   const runRef = useRef(0);
   const audioRef = useRef(null);
   const abortRef = useRef(null);
-  // Server voices that failed for good this session.
-  const cloudOffRef = useRef({});
+  const cloudOffRef = useRef(false);
 
   // Voices load asynchronously in Chrome.
   useEffect(() => {
@@ -183,16 +174,15 @@ export function useSpeechSynthesis() {
   );
 
   const speakCloud = useCallback(
-    // Named so the fallback can call it again with the other voice.
-    async function playCloud(clean, run, options, engine) {
+    async (clean, run, options) => {
       const language = options.lang.slice(0, 2);
-      const chunks = splitForCloud(clean, engine);
+      const chunks = splitForCloud(clean);
       const controller = new AbortController();
       abortRef.current = controller;
       const urls = [];
       const load = (i) => {
         if (i < chunks.length && !urls[i]) {
-          urls[i] = fetchCloudAudio(chunks[i], language, controller.signal, engine);
+          urls[i] = fetchCloudAudio(chunks[i], language, controller.signal);
           urls[i].catch(() => {}); // handled where it's awaited
         }
         return urls[i];
@@ -205,16 +195,11 @@ export function useSpeechSynthesis() {
           url = await load(i);
         } catch (err) {
           if (run !== runRef.current || err.name === 'AbortError') return release();
-          if (CLOUD_FATAL_STATUSES.includes(err.status)) cloudOffRef.current[engine] = true;
+          if (CLOUD_FATAL_STATUSES.includes(err.status)) cloudOffRef.current = true;
           setCloudError(err.message);
           release();
-          // Finish this answer with the other voice instead of going silent.
-          const rest = chunks.slice(i).join(' ');
-          const { fallback } = options;
-          if (fallback && fallback !== engine && !cloudOffRef.current[fallback]) {
-            return playCloud(rest, run, { ...options, fallback: null }, fallback);
-          }
-          speakBrowser(splitForSpeech(rest), run, options);
+          // Finish this answer with the browser voice instead of going silent.
+          speakBrowser(splitForSpeech(chunks.slice(i).join(' ')), run, options);
           return undefined;
         }
         if (run !== runRef.current) return release();
@@ -257,16 +242,14 @@ export function useSpeechSynthesis() {
   }, [browserSupported]);
 
   const speak = useCallback(
-    (text, { lang = 'es-ES', voiceURI, engine = 'browser', fallback = null, onEnd } = {}) => {
+    (text, { lang = 'es-ES', voiceURI, engine = 'browser', onEnd } = {}) => {
       const clean = speakableText(text);
       if (!clean) return;
       stopAll();
       const run = runRef.current;
-      const options = { lang, voiceURI, onEnd, fallback };
-      const off = cloudOffRef.current;
-      const server = [engine, fallback].find((e) => (e === 'gemini' || e === 'elevenlabs') && !off[e]);
-      if (server) {
-        speakCloud(clean, run, { ...options, fallback: server === engine ? fallback : null }, server);
+      const options = { lang, voiceURI, onEnd };
+      if (engine === 'elevenlabs' && !cloudOffRef.current) {
+        speakCloud(clean, run, options);
       } else {
         speakBrowser(splitForSpeech(clean), run, options);
       }
