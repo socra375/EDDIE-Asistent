@@ -14,6 +14,9 @@ import { sendMessage, editMessage, answerCallback, sendAction, sendVoice, downlo
 import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistory, markUpdateSeen, addPending, takePending, latestPending } from './store.js';
 import { loadUserContext, applyActionsForUser } from './serverActions.js';
 import { safeYoutubeUrl } from '../connectors/youtube/index.js';
+import { buildBriefing } from '../reminders/briefing.js';
+import { listPendingReminders } from '../reminders/store.js';
+import { whenLabel } from '../connectors/reminders/index.js';
 
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
@@ -25,11 +28,14 @@ const HELP = [
   '',
   '• Escríbeme o mándame una nota de voz: te contesto con mi voz.',
   '• Puedo mirar tu agenda y tus correos, crear tareas, recordar cosas, buscar en internet, revisar tus repos…',
+  '• Pídeme que te avise de algo ("recuérdame llamar a mamá a las 5") y te escribo a esa hora.',
   '• Lo delicado (enviar un correo, borrar algo) te llega con botones ✅ / ✖ para que tú decidas.',
   '',
   'Comandos:',
   '/llamar — abre mi pantalla de voz dentro de Telegram',
   '/voz on|off — que conteste siempre con voz, aunque me escribas',
+  '/resumen — el resumen de tu día ahora mismo',
+  '/recordatorios — tus avisos pendientes',
   '/nuevo — empezar una conversación nueva',
   '/desvincular — desconectar este chat de tu cuenta',
 ].join('\n');
@@ -143,6 +149,20 @@ async function handleCommand(link, name, arg) {
     return sendMessage(chatId, 'Toca el botón y háblame: se abre mi pantalla de voz dentro de Telegram. (Si tu teléfono no deja usar el micrófono ahí, mándame una nota de voz y te contesto igual.)', {
       reply_markup: { inline_keyboard: [[{ text: '📞 Llamar a Eddie', web_app: { url: appUrl } }]] },
     });
+  }
+  if (name === 'resumen') {
+    await sendAction(chatId, 'typing');
+    try {
+      return await sendMessage(chatId, await buildBriefing(link));
+    } catch (err) {
+      console.error('[telegram] briefing failed:', err);
+      return sendMessage(chatId, 'No pude armar tu resumen ahora. Inténtalo de nuevo en un momento.');
+    }
+  }
+  if (name === 'recordatorios') {
+    const pending = await listPendingReminders(link.userId);
+    if (!pending.length) return sendMessage(chatId, 'No tienes recordatorios pendientes. Pídeme uno, por ejemplo: "recuérdame llamar a mamá a las 5".');
+    return sendMessage(chatId, ['Tus recordatorios pendientes:', ...pending.slice(0, 20).map((r) => `• ${whenLabel(r.dueAt, link.timezone)} — ${r.text}`)].join('\n'));
   }
   if (name === 'desvincular') {
     await deleteLink(link.userId);

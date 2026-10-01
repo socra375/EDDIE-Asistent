@@ -1,0 +1,37 @@
+# Wakes Eddie up every 5 minutes so reminders and the morning summary arrive
+# on time: Vercel's free plan only runs its own cron once a day (vercel.json),
+# which is not enough for "remind me at 5:10 pm".
+#
+# Needs one repository secret: CRON_SECRET (Settings → Secrets and variables →
+# Actions), the same value as the CRON_SECRET variable in Vercel. Optional
+# secret EDDIE_APP_URL overrides the address below.
+name: Eddie cron
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: eddie-cron
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call Eddie
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.EDDIE_APP_URL || 'https://eddie-asistent.vercel.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::Falta el secreto CRON_SECRET en GitHub; no se envió nada."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/connectors/cron"

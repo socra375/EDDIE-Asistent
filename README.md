@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Telegram…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, YouTube, Recordatorios, Telegram…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -296,6 +296,40 @@ Chrome el audio lo procesa el servicio de voz de Google): funciona en Chrome y E
 pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagada ni en Firefox.
 Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
+## Recordatorios y resumen de la mañana (por Telegram)
+
+Eddie te avisa solo, por Telegram, aunque tengas la app cerrada:
+
+- **Recordatorios**: "recuérdame llamar a mamá a las 5", "avísame en 20 minutos que saque la comida",
+  "mañana a las 8 recuérdame la cita". Eddie lo guarda y a esa hora te escribe `⏰ Recordatorio: …`.
+  También puedes pedirle "¿qué recordatorios tengo?" o "cancela el de mamá" (o usar `/recordatorios`).
+  Si pides solo "anota comprar pan" (sin hora) crea una tarea, no un aviso.
+- **Resumen de la mañana**: "mándame un resumen cada mañana a las 7", o el interruptor en
+  Conectores → Telegram (con la hora y el botón "Enviarme uno ahora"; también `/resumen`). Trae tu agenda
+  de hoy, tus recordatorios, tareas pendientes, correos importantes sin leer y tres titulares. Se arma con
+  los mismos datos que el módulo Hoy, sin gastar IA; solo se manda si ese día aún no se mandó y no han
+  pasado más de 3 horas de la hora elegida.
+
+Necesita Telegram vinculado (ver abajo) y tres cosas más. **Los avisos pueden llegar con unos minutos de
+retraso**: el plan gratis de Vercel solo deja un trabajo programado al día, así que el que revisa cada 5
+minutos es un flujo de GitHub Actions.
+
+1. **Base de datos**: ejecuta `db/migrations/0003_reminders.sql` en el editor SQL de Neon.
+2. **`CRON_SECRET`**: una clave al azar de al menos 16 caracteres (por ejemplo, en una terminal:
+   `openssl rand -hex 32`). Va en **dos** sitios con el mismo valor, y nunca en un chat:
+   - Vercel → Settings → Environment Variables → `CRON_SECRET` (luego Redeploy).
+   - GitHub → tu repositorio → Settings → Secrets and variables → Actions → *New repository secret* →
+     nombre `CRON_SECRET`.
+3. **Activar el flujo de GitHub Actions**: ya está en `.github/workflows/eddie-cron.yml` (cada 5
+   minutos); en la pestaña *Actions* del repositorio puedes lanzarlo a mano con *Run workflow* para
+   probarlo. Si tu dominio no es `eddie-asistent.vercel.app`, agrega el secreto `EDDIE_APP_URL` con tu
+   dirección. Sin `CRON_SECRET` en GitHub el flujo no hace nada (avisa con una advertencia).
+
+`GET /api/connectors/cron` (con `Authorization: Bearer <CRON_SECRET>`) envía lo que toque; Vercel lo
+llama además una vez al día (11:00 UTC) desde `vercel.json`. Se puede llamar las veces que sea: cada
+aviso y cada resumen se reservan con una sola operación en la base antes de enviarse, así que no se
+repiten.
+
 ## Telegram (hablar con Eddie desde el celular)
 
 Eddie también vive en Telegram: le escribes o le mandas **notas de voz** y te
@@ -328,7 +362,7 @@ el bot sabe quién eres por el chat que vinculas.
    "Conectado" sola.
 5. Prueba: escríbele "hola", o mándale una nota de voz: "anota comprar pan".
 
-Comandos: `/llamar`, `/voz on|off` (contestar siempre con voz), `/nuevo`
+Comandos: `/llamar`, `/resumen`, `/recordatorios`, `/voz on|off` (contestar siempre con voz), `/nuevo`
 (conversación nueva), `/ayuda`, `/desvincular`. Si `EDDIE_OWNER_EMAIL` está
 definido, solo esa cuenta puede vincular Telegram. Eddie solo responde en tu
 chat privado vinculado; en grupos no contesta.
@@ -463,6 +497,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
+  migrations/0003_reminders.sql      Recordatorios y resumen de la mañana
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

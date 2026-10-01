@@ -46,10 +46,9 @@ async function section({ id, tool, args, disabled, toolset, user, extra }) {
   return { status: 'ok', ...result };
 }
 
-export async function getToday({ query = {}, cookies = {} }) {
-  const timezone = validTimezone(query.tz);
-  const disabled = sanitizeConnectorIds(typeof query.off === 'string' ? query.off.split(',') : []);
-  const getUser = lazySessionUser(cookies);
+// The three live sections for one user. Shared by the "Hoy" panel and the
+// morning summary the scheduled job sends on Telegram.
+export async function collectToday({ timezone, disabled = [], getUser }) {
   const toolset = createToolset({ disabled, context: { timezone, getUser } });
   const user = await getUser();
 
@@ -74,6 +73,13 @@ export async function getToday({ query = {}, cookies = {} }) {
     }),
     section({ id: 'news', tool: 'get_news', args: {}, disabled, toolset, user }),
   ]);
+  return { user, calendar, mail, news };
+}
+
+export async function getToday({ query = {}, cookies = {} }) {
+  const timezone = validTimezone(query.tz);
+  const disabled = sanitizeConnectorIds(typeof query.off === 'string' ? query.off.split(',') : []);
+  const { user, calendar, mail, news } = await collectToday({ timezone, disabled, getUser: lazySessionUser(cookies) });
 
   return {
     status: 200,

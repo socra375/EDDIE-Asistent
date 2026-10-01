@@ -277,3 +277,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Telegram card: morning summary controls. */
+.telegram__briefing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.telegram__briefing-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.telegram__time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.telegram {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}

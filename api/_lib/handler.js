@@ -3,7 +3,7 @@ import { callProvider } from './providers.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 9000;
+const MAX_SYSTEM_LENGTH = 10000;
 const MEMORY_CATEGORIES = new Set(['profile', 'preferences', 'projects', 'decisions', 'knowledge', 'context']);
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 

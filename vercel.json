@@ -2,9 +2,18 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/connectors/:path*", "destination": "/api/connectors?path=:path*" },
-    { "source": "/api/tasks/:id", "destination": "/api/tasks?id=:id" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/connectors/:path*",
+      "destination": "/api/connectors?path=:path*"
+    },
+    {
+      "source": "/api/tasks/:id",
+      "destination": "/api/tasks?id=:id"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ],
   "functions": {
     "api/chat.js": {
@@ -13,5 +22,11 @@
     "api/connectors.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/connectors/cron",
+      "schedule": "0 11 * * *"
+    }
+  ]
 }
