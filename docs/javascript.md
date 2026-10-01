@@ -861,3 +861,10 @@ endpoints.
 - **Botón "Drive" en las respuestas del chat** (`MessageActions.jsx`) —
   llama a `remoteDrive.save` con el contenido de la respuesta y abre el
   archivo creado.
+
+### Imágenes (visión)
+
+`api/_lib/images.js` valida y limita las imágenes de cada petición (`sanitizeImages`, `limitImages`), `providers.js`
+las envía a Gemini (`inline_data`) y Claude (bloques `image`) y `planProviders` reencamina a un proveedor que vea.
+En la app, `src/services/images.js` reduce las imágenes y `ChatPanel.jsx` las adjunta (botón, pegar, arrastrar).
+Detalles en `docs/eddie-2-arquitectura.md`.

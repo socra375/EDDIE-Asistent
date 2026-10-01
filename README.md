@@ -296,6 +296,25 @@ Chrome el audio lo procesa el servicio de voz de Google): funciona en Chrome y E
 pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagada ni en Firefox.
 Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
+## Visión (Eddie ve imágenes)
+
+En el chat puedes **adjuntar una imagen** (botón de la imagen; en el teléfono también hay botón de cámara),
+**pegarla** (Ctrl+V sobre el cuadro de texto) o **arrastrarla** encima del chat; hasta 3 por mensaje, con o sin
+pregunta ("¿qué planta es esta?", "resuelve este ejercicio", "lee este texto"). En **Telegram** basta con
+mandarle una foto (con la pregunta como pie de foto, o sin ella).
+
+- **Qué ve la IA**: las imágenes se leen con **Gemini o Claude** (los modelos de Groq y OpenRouter que usa Eddie
+  no ven imágenes). Si tienes elegido Groq u OpenRouter, para ese mensaje Eddie usa Gemini (o Claude si no hay
+  clave de Gemini); si ninguno está configurado, lo dice.
+- **Tu privacidad**: la imagen se reduce en tu navegador (JPEG, lado mayor de 1280 px) antes de salir; viaja
+  una sola vez con ese mensaje al proveedor de IA y **el servidor no la guarda**. En la conversación guardada
+  queda solo una miniatura. Eddie puede seguir hablando de las últimas imágenes mientras no recargues la página;
+  luego sabe que había una, pero pide que la vuelvas a mandar si hace falta verla de nuevo. La memoria de
+  conversaciones solo guarda el texto.
+- **Límites**: no se pueden leer las HEIC del iPhone (sácalas como JPG o captura de pantalla), 25 MB máximo de
+  origen, 3 imágenes por mensaje (Vercel solo acepta ~4,5 MB por petición). En Telegram, las imágenes
+  mandadas como archivo deben pesar menos de unos 900 KB; como foto normal no hay problema.
+
 ## Memoria de conversaciones (Eddie recuerda lo que hablaron)
 
 Además de lo que le pides recordar (perfil, preferencias, proyectos…), Eddie guarda **un resumen corto de

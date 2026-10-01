@@ -4,6 +4,7 @@ import { useSettings } from '../../context/SettingsContext';
 import { useVoice } from '../../context/VoiceContext';
 import { MODES, DEFAULT_MODE } from '../../services/personality';
 import { SKILLS, getSkill, buildSkillRequest } from '../../services/skills';
+import { MAX_IMAGES, prepareImage } from '../../services/images';
 import EddieCore from '../Core/EddieCore';
 import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
@@ -32,6 +33,14 @@ export default function ChatPanel({ showCore = true }) {
   const [skillId, setSkillId] = useState('general');
   const [actionId, setActionId] = useState('');
   const [option, setOption] = useState('');
+  // Pictures waiting to be sent with the next message.
+  const [attachments, setAttachments] = useState([]);
+  const [attachError, setAttachError] = useState('');
+  const [preparing, setPreparing] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef(null);
+  const cameraRef = useRef(null);
+  const canUseCamera = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const skill = getSkill(skillId);
@@ -72,15 +81,58 @@ export default function ChatPanel({ showCore = true }) {
     inputRef.current?.focus();
   }
 
+  // Shrinks and adds pictures (picked, pasted or dropped), up to MAX_IMAGES.
+  async function addFiles(fileList) {
+    const files = [...(fileList || [])].filter((f) => String(f.type).startsWith('image/'));
+    if (!files.length) {
+      if ((fileList || []).length) setAttachError('Eso no es una imagen.');
+      return;
+    }
+    setAttachError('');
+    const room = MAX_IMAGES - attachments.length;
+    if (room <= 0) {
+      setAttachError(`Máximo ${MAX_IMAGES} imágenes por mensaje.`);
+      return;
+    }
+    setPreparing(true);
+    const added = [];
+    for (const file of files.slice(0, room)) {
+      try {
+        added.push(await prepareImage(file));
+      } catch (err) {
+        setAttachError(err.message);
+      }
+    }
+    if (files.length > room) setAttachError(`Máximo ${MAX_IMAGES} imágenes por mensaje: agregué las primeras.`);
+    setAttachments((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
+    setPreparing(false);
+  }
+
+  function handlePaste(e) {
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    addFiles(files);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    addFiles(e.dataTransfer?.files);
+  }
+
   async function submit() {
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && !attachments.length) || busy || preparing) return;
     if (listening) stop();
+    const images = attachments;
     setInput('');
+    setAttachments([]);
+    setAttachError('');
     reset();
 
-    if (skill.id === 'general') {
-      sendMessage(text, { mode });
+    if (skill.id === 'general' || !text) {
+      sendMessage(text, { mode, images });
       return;
     }
     const request = buildSkillRequest(skill.id, actionId, text, option);
@@ -90,6 +142,7 @@ export default function ChatPanel({ showCore = true }) {
       tag: request.tag,
       skill: skill.id,
       title: request.title,
+      images,
     });
     if (reply && skill.id === 'study') {
       rememberFact({ category: 'profile', key: 'nivel académico', text: option });
@@ -128,7 +181,19 @@ export default function ChatPanel({ showCore = true }) {
         </div>
       )}
 
-      <div className="chat-panel__body glass-panel">
+      <div
+        className={`chat-panel__body glass-panel ${dragging ? 'chat-panel__body--drop' : ''}`}
+        onDragOver={(e) => {
+          if ([...(e.dataTransfer?.types || [])].includes('Files')) {
+            e.preventDefault();
+            setDragging(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false);
+        }}
+        onDrop={handleDrop}
+      >
         <div className="chat-panel__toolbar">
           <div className="skills" role="group" aria-label="Habilidades">
             {SKILLS.map((s) => (
@@ -226,6 +291,13 @@ export default function ChatPanel({ showCore = true }) {
                 )}
               </span>
               {m.role === 'assistant' && <StepTrace steps={m.steps} />}
+              {m.images?.length > 0 && (
+                <div className="bubble__images" aria-label="Imágenes adjuntas">
+                  {m.images.map((img, i) => (
+                    <img key={i} src={img.thumb} alt={img.name || 'Imagen adjunta'} />
+                  ))}
+                </div>
+              )}
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
               </div>
@@ -281,7 +353,39 @@ export default function ChatPanel({ showCore = true }) {
           sttError && <p className="chat-panel__hint chat-panel__hint--error">{sttError}</p>
         )}
 
+        {(attachments.length > 0 || preparing || attachError) && (
+          <div className="chat-attachments">
+            {attachments.map((a, i) => (
+              <span key={i} className="chat-attachment">
+                <img src={a.thumb} alt={a.name} />
+                <button type="button" className="chat-attachment__remove" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} aria-label={`Quitar ${a.name}`}>
+                  <Icon name="close" size={12} />
+                </button>
+              </span>
+            ))}
+            {preparing && <span className="chat-panel__hint">Preparando imagen…</span>}
+            {attachError && <span className="chat-panel__hint chat-panel__hint--error" role="alert">{attachError}</span>}
+          </div>
+        )}
+
         <form className="chat-panel__input" onSubmit={handleSubmit}>
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+          {canUseCamera && <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />}
+          <button
+            type="button"
+            className="btn mic-btn"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy || attachments.length >= MAX_IMAGES}
+            title="Adjuntar una imagen (también puedes pegarla o arrastrarla)"
+            aria-label="Adjuntar imagen"
+          >
+            <Icon name="image" size={18} />
+          </button>
+          {canUseCamera && (
+            <button type="button" className="btn mic-btn" onClick={() => cameraRef.current?.click()} disabled={busy || attachments.length >= MAX_IMAGES} title="Tomar una foto" aria-label="Tomar una foto">
+              <Icon name="camera" size={18} />
+            </button>
+          )}
           <button
             type="button"
             className={`btn mic-btn ${listening ? 'mic-btn--active' : ''}`}
@@ -299,10 +403,11 @@ export default function ChatPanel({ showCore = true }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={skill.placeholder}
+            onPaste={handlePaste}
+            placeholder={attachments.length ? 'Pregunta algo sobre la imagen (o envíala sola)…' : skill.placeholder}
             aria-label="Mensaje para Eddie"
           />
-          <button type="submit" className="btn btn-primary chat-send" disabled={!input.trim() || busy} aria-label="Enviar">
+          <button type="submit" className="btn btn-primary chat-send" disabled={(!input.trim() && !attachments.length) || busy || preparing} aria-label="Enviar">
             <Icon name="send" size={16} />
             <span className="chat-send__label">Enviar</span>
           </button>

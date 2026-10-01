@@ -338,3 +338,61 @@
     display: none;
   }
 }
+
+/* Pictures: waiting to be sent, and inside the bubbles. */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.2rem 0;
+}
+
+.chat-attachment {
+  position: relative;
+  display: inline-flex;
+}
+
+.chat-attachment img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+}
+
+.chat-attachment__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 50%;
+  background: var(--bg, #020b10);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bubble__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.3rem 0;
+}
+
+.bubble__images img {
+  max-width: 150px;
+  max-height: 150px;
+  object-fit: cover;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+}
+
+.chat-panel__body--drop {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}

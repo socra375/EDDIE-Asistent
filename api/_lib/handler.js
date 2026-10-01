@@ -1,6 +1,7 @@
 import { lazySessionUser } from './session.js';
 import { callProvider } from './providers.js';
 import { queryFrom, recallBlock } from './episodes/recall.js';
+import { limitImages, sanitizeImages } from './images.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
@@ -29,18 +30,17 @@ function sanitizeRequest(body) {
     throw new ValidationError(`Demasiados mensajes (máximo ${MAX_MESSAGES}).`);
   }
 
-  const messages = body.messages.map((m) => {
+  const messages = limitImages(body.messages.map((m) => {
     if (!m || typeof m.content !== 'string' || !m.content.trim()) {
       throw new ValidationError('Cada mensaje debe incluir contenido de texto.');
     }
     if (m.content.length > MAX_MESSAGE_LENGTH) {
       throw new ValidationError('Un mensaje excede la longitud máxima permitida.');
     }
-    return {
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content.trim(),
-    };
-  });
+    const role = m.role === 'assistant' ? 'assistant' : 'user';
+    const images = role === 'user' ? sanitizeImages(m.images) : [];
+    return { role, content: m.content.trim(), ...(images.length ? { images } : {}) };
+  }));
 
   const system = typeof body.system === 'string' ? body.system.slice(0, MAX_SYSTEM_LENGTH) : '';
   const model = typeof body.model === 'string' && body.model.length < 100 ? body.model : undefined;
