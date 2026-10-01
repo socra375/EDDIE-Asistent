@@ -1,6 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import TelegramControls from './TelegramControls';
+import WhatsAppControls from './WhatsAppControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
 import './Connectors.css';
@@ -83,6 +84,7 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onC
       )}
 
       {connector.id === 'telegram' && <TelegramControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
+      {connector.id === 'whatsapp' && <WhatsAppControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
 
       {connector.status === 'needs_setup' && (
         <p className="connector__setup">

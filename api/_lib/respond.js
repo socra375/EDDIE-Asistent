@@ -16,6 +16,13 @@ export function applyResult(res, result) {
     return;
   }
   res.statusCode = result.status || 200;
+  // `text` is for the rare caller that needs a plain-text body (Meta's webhook
+  // check wants its challenge echoed as is, not as JSON).
+  if (typeof result.text === 'string') {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end(result.text);
+    return;
+  }
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(result.json ?? {}));
 }

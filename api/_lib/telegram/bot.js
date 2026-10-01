@@ -4,24 +4,15 @@
 // spoke to it (a voice note in, a voice note out: the closest thing to a
 // call a bot can do; Telegram bots cannot place or receive phone calls).
 import { timingSafeEqual } from 'node:crypto';
-import { callProvider } from '../providers.js';
-import { confirmTool } from '../connectors/registry.js';
-import { sanitizeConnectorIds } from '../handler.js';
 import { transcribeAudio, MAX_AUDIO_BYTES } from '../transcribe.js';
-import { synthesizeSpeech, MAX_SPEECH_CHARS } from '../speech.js';
-import { buildSystemPrompt } from '../../../src/services/personality.js';
 import { sendMessage, editMessage, answerCallback, sendAction, sendVoice, downloadFile, tg } from './api.js';
 import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistory, markEpisodeSaved, markUpdateSeen, addPending, takePending, latestPending } from './store.js';
-import { loadUserContext, applyActionsForUser } from './serverActions.js';
-import { recallBlock, saveConversation } from '../episodes/recall.js';
-import { episodesEnabled } from '../episodes/handlers.js';
+import { askEddie, runConfirmed } from '../channels/brain.js';
+import { IMAGE_PROMPT, MAX_IMAGE_BYTES, cardText, closeConversation as closeThread, decisionFromText, speakable, voiceFor } from '../channels/common.js';
 import { safeYoutubeUrl } from '../connectors/youtube/index.js';
 import { buildBriefing } from '../reminders/briefing.js';
-import { MAX_IMAGE_CHARS } from '../images.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
-
-const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
 const NOT_LINKED =
   'Hola, soy Eddie. Este chat todavía no está vinculado a tu cuenta.\n\nAbre la app de Eddie → Conectores → Telegram → "Vincular Telegram" y pulsa el enlace que te dará.';
@@ -44,44 +35,12 @@ const HELP = [
   '/desvincular — desconectar este chat de tu cuenta',
 ].join('\n');
 
-// Conversation memory for this thread: once it has gone quiet for a while (or
-// the user says /nuevo), what was said is summarized and kept, so Eddie can
-// bring it up later on the web or here. Never fails the message that triggered
-// it; a provider error leaves the thread unmarked so a later message retries.
-const COLD_MINUTES = 30;
-const MIN_HISTORY_TO_KEEP = 4;
-
-async function closeConversation(link, { force = false } = {}) {
-  try {
-    if (link.episodeSaved !== false || link.history.length < MIN_HISTORY_TO_KEEP) return;
-    if (!process.env.GEMINI_API_KEY) return;
-    const idleMinutes = link.historyAt ? (Date.now() - new Date(link.historyAt).getTime()) / 60000 : 0;
-    if (!force && !(idleMinutes > COLD_MINUTES)) return;
-    const ctx = await loadUserContext(link.userId);
-    if (episodesEnabled(ctx.settings)) await saveConversation({ userId: link.userId, messages: link.history, source: 'telegram' });
-    await markEpisodeSaved(link.userId);
-  } catch (err) {
-    console.error('[telegram] keeping the conversation failed:', err.message);
-  }
-}
+// Conversation memory for this thread (see channels/common.js).
+const closeConversation = (link, options) => closeThread(link, { source: 'telegram', markSaved: markEpisodeSaved, ...options });
 
 // What the model needs to know about this surface.
 const TELEGRAM_NOTE =
   'Estás conversando con el usuario por Telegram, desde su teléfono: responde corto y directo (unas pocas frases), sin Markdown. Si te habla por nota de voz, contesta como si hablaras: frases cortas y naturales, sin listas ni enlaces. Las acciones delicadas le llegan como botones ✅ / ✖ en el chat.';
-
-const YES_RE = /^(si|sip|claro|dale|ok|okey|vale|de acuerdo|adelante|hazlo|procede|confirmo|confirmado|confirmalo|confirma|borrala|borralo|envialo|enviala|si por favor|si hazlo|si dale|si confirmo)$/;
-const NO_RE = /^(no|nop|cancela|cancelar|cancelalo|cancelala|dejalo|dejala|mejor no|olvidalo|no gracias|no lo hagas|para)$/;
-
-function normalizeReply(text) {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^(eddie )+|( eddie)+$/g, '');
-}
 
 function secretMatches(headers) {
   const expected = Buffer.from(String(process.env.TELEGRAM_WEBHOOK_SECRET || ''));
@@ -143,8 +102,7 @@ async function processUpdate(update) {
   // "Sí" / "no" after a confirmation card answers it, same as in the app.
   const pendingId = await latestPending(chatId);
   if (pendingId) {
-    const reply = normalizeReply(userText);
-    const decision = YES_RE.test(reply) ? 'ok' : NO_RE.test(reply) ? 'no' : null;
+    const decision = decisionFromText(userText);
     if (decision) return resolvePending(link, pendingId, decision, null);
   }
   return runAssistant(link, userText, viaVoice, images);
@@ -152,10 +110,7 @@ async function processUpdate(update) {
 
 // A photo (Telegram sends several sizes, smallest first) or an image sent as
 // a file, when it is one Eddie can read.
-const IMAGE_PROMPT = '¿Qué ves en esta imagen?';
 const IMAGE_MIME = /^image\/(jpeg|png|webp|gif)$/;
-// Telegram photos arrive as JPEG; keep under what a request may carry.
-const MAX_IMAGE_BYTES = Math.floor((MAX_IMAGE_CHARS * 3) / 4) - 1000;
 
 export function pickPhoto(msg) {
   if (Array.isArray(msg.photo) && msg.photo.length) {
@@ -263,44 +218,6 @@ async function transcribeVoice(chatId, voice) {
   }
 }
 
-// Text that reads well aloud: no links, symbols or emoji.
-export function speakable(text) {
-  return String(text || '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/[*_`#>~|]+/g, '')
-    .replace(/✓|✔|✅|✖|🎙|📞|▶/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Eddie's voice for the start of the answer (one request is capped, so a long
-// answer is voiced up to its last whole sentence within the cap; the full text
-// always goes out as a message too).
-async function voiceFor(text, language) {
-  if (!process.env.ELEVENLABS_API_KEY) return null;
-  let clean = speakable(text);
-  if (!clean) return null;
-  if (clean.length > MAX_SPEECH_CHARS) {
-    const cut = Math.max(clean.lastIndexOf('. ', MAX_SPEECH_CHARS), clean.lastIndexOf('? ', MAX_SPEECH_CHARS), clean.lastIndexOf('! ', MAX_SPEECH_CHARS));
-    clean = cut > 100 ? clean.slice(0, cut + 1) : clean.slice(0, MAX_SPEECH_CHARS);
-  }
-  try {
-    const res = await synthesizeSpeech({ text: clean, language });
-    return Buffer.from(await res.arrayBuffer());
-  } catch (err) {
-    console.error('[telegram] voice failed:', err.message);
-    return null;
-  }
-}
-
-function cardText(confirmation) {
-  const { preview = {} } = confirmation;
-  const lines = [preview.title || confirmation.label];
-  for (const f of preview.fields || []) lines.push(`${f.label}: ${String(f.value ?? '').slice(0, 300)}`);
-  lines.push('', '¿Lo hago? (Para cambiar algo, dímelo y lo preparo de nuevo.)');
-  return lines.join('\n');
-}
-
 async function runAssistant(link, text, viaVoice, images = []) {
   const { chatId, userId } = link;
   const wantsVoice = viaVoice || link.voiceReplies;
@@ -309,46 +226,10 @@ async function runAssistant(link, text, viaVoice, images = []) {
   // The previous conversation, if it went cold, is kept while this answer is prepared.
   const closing = closeConversation(link);
   try {
-    const ctx = await loadUserContext(userId);
-    const s = ctx.settings;
-    const provider = ALLOWED_PROVIDERS.has(s.provider) ? s.provider : 'gemini';
-    const model = typeof s.model === 'string' && s.model.length < 100 ? s.model : undefined;
-    const language = /^[a-z]{2}$/.test(s.language || '') ? s.language : 'es';
-    const off = sanitizeConnectorIds(s.disabledConnectors);
-    const disabledConnectors = ctx.memoryOn ? off : [...new Set([...off, 'memory'])];
-    const messages0 = [...link.history, { role: 'user', content: text }];
-    const recalled = off.includes('conversations') || !ctx.memoryOn ? '' : await recallBlock({ userId, messages: messages0, timezone: link.timezone });
-    const system = `${buildSystemPrompt({
-      mode: 'asistente',
-      language,
-      memory: ctx.memoryOn ? ctx.memory : null,
-      query: text,
-      tasks: ctx.tasks,
-      disabledConnectors: off,
-    })}${recalled ? `\n\n${recalled}` : ''}\n\n${TELEGRAM_NOTE}`;
-    const messages = [...link.history.map((m) => ({ role: m.role, content: String(m.content) })), { role: 'user', content: text, ...(images.length ? { images } : {}) }];
-
-    // The answer arrives as pieces through onChunk (the result only carries
-    // the metadata), same as the web stream.
-    let answer = '';
-    const result = await callProvider({
-      provider,
-      model,
-      system,
-      messages,
-      context: { timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
-      disabledConnectors,
-      onChunk: (piece) => {
-        answer += piece;
-      },
-    });
-
-    const changes = await applyActionsForUser(userId, result.actions, { memoryEnabled: ctx.memoryOn });
-    let reply = answer.trim() || (result.confirmations?.length ? 'Necesito tu confirmación:' : 'Listo.');
-    const receipt = changes.length ? `\n\n${changes.map((c) => `✓ ${c}`).join('\n')}` : '';
+    const { reply, receipt, confirmations, actions, language } = await askEddie({ link, text, images, note: TELEGRAM_NOTE });
     await sendMessage(chatId, reply + receipt);
 
-    for (const c of result.confirmations || []) {
+    for (const c of confirmations) {
       const id = await addPending(userId, chatId, { tool: c.tool, args: c.args, label: c.label });
       await sendMessage(chatId, cardText(c), {
         reply_markup: { inline_keyboard: [[{ text: `✅ ${c.preview?.confirmLabel || 'Confirmar'}`, callback_data: `ok:${id}` }, { text: '✖ Cancelar', callback_data: `no:${id}` }]] },
@@ -357,19 +238,18 @@ async function runAssistant(link, text, viaVoice, images = []) {
 
     // Pages Eddie meant to open (YouTube): a bot can't open a browser, so the
     // link goes out with a button that opens it on the phone (or in the app).
-    for (const action of (result.actions || []).filter((a) => a?.type === 'open_url' || a?.type === 'play_video').slice(0, 2)) {
+    for (const action of actions.filter((a) => a?.type === 'open_url' || a?.type === 'play_video').slice(0, 2)) {
       const url = safeYoutubeUrl(action.url);
       const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || 'YouTube';
       if (url) await sendMessage(chatId, `▶ ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : '▶ Abrir', url }]] } });
     }
 
     if (wantsVoice) {
-      const audio = await voiceFor(reply, language);
+      const audio = await voiceFor(reply, language, 'telegram');
       if (audio) await sendVoice(chatId, audio);
     }
-    reply = reply + receipt;
     await closing;
-    await saveHistory(userId, [...link.history, { role: 'user', content: images.length ? `📷 ${text}` : text }, { role: 'assistant', content: reply }]);
+    await saveHistory(userId, [...link.history, { role: 'user', content: images.length ? `📷 ${text}` : text }, { role: 'assistant', content: reply + receipt }]);
   } catch (err) {
     await closing;
     console.error('[telegram] assistant failed:', err);
@@ -408,20 +288,10 @@ async function resolvePending(link, pendingId, decision, via) {
   }
   if (via) await answerCallback(via.callbackId, 'Haciéndolo…');
   try {
-    const ctx = await loadUserContext(userId);
-    const off = sanitizeConnectorIds(ctx.settings.disabledConnectors);
-    const out = await confirmTool({
-      name: pending.tool,
-      args: pending.args,
-      disabled: ctx.memoryOn ? off : [...new Set([...off, 'memory'])],
-      context: { timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
-    });
+    const out = await runConfirmed({ link, pending });
     if (out.error) return finish(`No pude hacerlo: ${out.error}`);
-    const changes = await applyActionsForUser(userId, out.actions, { memoryEnabled: ctx.memoryOn });
-    const summary = out.result?.summary || 'Listo, hecho.';
-    const text = `✅ ${summary}${changes.length ? `\n${changes.map((c) => `✓ ${c}`).join('\n')}` : ''}`;
-    await finish(text);
-    await saveHistory(userId, [...link.history, { role: 'assistant', content: summary }]);
+    await finish(out.text);
+    await saveHistory(userId, [...link.history, { role: 'assistant', content: out.summary }]);
     return undefined;
   } catch (err) {
     console.error('[telegram] confirm failed:', err);
@@ -429,4 +299,4 @@ async function resolvePending(link, pendingId, decision, via) {
   }
 }
 
-export { tg };
+export { tg, speakable };

@@ -201,6 +201,10 @@ detalle del protocolo.
     `bot.js` (`handleWebhook`: secreto, comandos, notas de voz, el asistente,
     botones de confirmación); `handlers.js` enruta `link`, `unlink`,
     `settings` y `webhook`. La app lo controla desde `TelegramControls.jsx`.
+  - `whatsapp/`: entrada del hub para el canal de WhatsApp (sin herramientas
+    para el modelo). El bot vive en `api/_lib/whatsapp/` (`bot.js` webhook y
+    mensajes, `api.js` cliente de la Graph API, `store.js`, `handlers.js`,
+    `rawBody.js`) sobre el cerebro compartido de `api/_lib/channels/`.
   - `youtube/`: `open_youtube({ query?, url?, play? })` — sin argumentos abre
     la portada, con `query` los resultados de la búsqueda
     (`youtube.com/results?search_query=…`), con `url` el enlace que se dio.
