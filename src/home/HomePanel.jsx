@@ -38,6 +38,7 @@ const WAKE_REASONS = {
   'language-not-supported': 'El navegador no admite el idioma elegido para escuchar.',
   quick: 'El reconocimiento de voz del navegador se corta apenas empieza (la conexión o el micrófono fallan). Eddie sigue intentándolo.',
 };
+const WAKE_ANNOUNCE_MS = 2000;
 const CHAT_KEY = 'eddie.home.chat';
 const WIDE_QUERY = '(min-width: 1101px)';
 
@@ -63,6 +64,25 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
     useVoice();
   const [chatOpen, setChatOpen] = useState(initialChatOpen);
   useHudDirector();
+  // «Escuchando la palabra clave» is said for two seconds when you come in
+  // (once the microphone is really listening), then the orb goes back to its
+  // plain «En espera».
+  const [announceWake, setAnnounceWake] = useState(false);
+  const announcedWake = useRef(false);
+  const announceTimers = useRef([]);
+  useEffect(() => {
+    if (wake.status !== 'listening' || announcedWake.current) return;
+    announcedWake.current = true;
+    const on = window.setTimeout(() => {
+      setAnnounceWake(true);
+      announceTimers.current.push(window.setTimeout(() => setAnnounceWake(false), WAKE_ANNOUNCE_MS));
+    }, 0);
+    announceTimers.current.push(on);
+  }, [wake.status]);
+  useEffect(() => {
+    const timers = announceTimers.current;
+    return () => timers.forEach(window.clearTimeout);
+  }, []);
 
   // The "Hablar con Eddie" shortcut: the orb is ready, a tap (or Enter) starts listening.
   // (A page can't open the microphone or play sound before the user touches it.)
@@ -81,11 +101,14 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
     if (wasListeningRef.current && !listening && ringListenRef.current) {
       ringListenRef.current = false;
       const text = `${transcript} ${interimTranscript}`.trim();
-      if (text) sendMessage(text);
+      if (text) {
+        sendMessage(text);
+        wake.noteVoiceSend?.(); // with the wake word on, the answer is followed by the open microphone window
+      }
       reset();
     }
     wasListeningRef.current = listening;
-  }, [listening, transcript, interimTranscript, sendMessage, reset]);
+  }, [listening, transcript, interimTranscript, sendMessage, reset, wake]);
 
   let visual = 'idle';
   if (transcribing) visual = 'transcribing';
@@ -105,7 +128,9 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   let labelTitle;
   let labelAction;
   if (visual === 'idle' && wake.enabled) {
-    if (wake.status === 'listening') label = `ESCUCHANDO LA PALABRA CLAVE · «${wake.word.toUpperCase()}»`;
+    if (wake.status === 'listening') {
+      if (announceWake) label = `ESCUCHANDO LA PALABRA CLAVE · «${wake.word.toUpperCase()}»`;
+    }
     else if (wake.status === 'retrying') {
       label = 'PALABRA CLAVE SIN SEÑAL · REINTENTANDO';
       labelTitle = WAKE_REASONS[wake.reason] || WAKE_REASONS.quick;

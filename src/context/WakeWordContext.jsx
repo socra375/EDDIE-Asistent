@@ -25,7 +25,7 @@ const POLL_MS = 300;
 // was said, the microphone opens for the command and what is heard is sent when
 // the listen ends.
 //
-// A conversation started this way stays open: once Eddie has answered (and
+// A voice conversation (started with the word, or by tapping the orb) stays open: once Eddie has answered (and
 // finished speaking) the microphone opens for `followUpSeconds` (the "tiempo
 // de espera") so the user can answer without saying the word again. If they
 // start talking it is sent and the window opens again after the next answer; if
@@ -179,8 +179,11 @@ export function WakeWordProvider({ children }) {
       reason: listener.reason,
       heard: listener.heard,
       retry: listener.retry,
+      // A message was sent by voice from the orb: its answer opens the same
+      // follow-up window as one that started with the word.
+      noteVoiceSend: beginAwait,
     }),
-    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry],
+    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry, beginAwait],
   );
 
   return <WakeWordContext.Provider value={value}>{children}</WakeWordContext.Provider>;

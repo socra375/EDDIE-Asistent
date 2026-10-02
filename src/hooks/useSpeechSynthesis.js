@@ -169,6 +169,37 @@ export function useSpeechSynthesis() {
       }
       const voice = pickVoice(synth.getVoices(), options.lang, options.voiceURI);
       const announced = new Set();
+      // Some browser voices (ChromeOS network voices) sometimes never report
+      // that an utterance ended. Once everything has been handed over, if the
+      // engine is idle — or far longer than the text could take has passed —
+      // the reading is over, and the microphone must not stay locked out.
+      let chars = 0;
+      let watchdog = null;
+      const armWatchdog = () => {
+        if (watchdog) return;
+        const deadline = Date.now() + 8000 + chars * 110;
+        let idleSince = 0;
+        watchdog = window.setInterval(() => {
+          if (run !== runRef.current) {
+            window.clearInterval(watchdog);
+            return;
+          }
+          const idle = !synth.speaking && !synth.pending;
+          idleSince = idle ? idleSince || Date.now() : 0;
+          if ((idle && Date.now() - idleSince > 1500) || Date.now() > deadline) {
+            window.clearInterval(watchdog);
+            if (pending > 0) {
+              pending = 0;
+              try {
+                synth.cancel();
+              } catch {
+                /* nothing to cancel */
+              }
+              maybeEnd();
+            }
+          }
+        }, 500);
+      };
       return {
         // `tag` names the piece this chunk belongs to (see speakPieces).
         push(chunk, tag) {
@@ -177,6 +208,7 @@ export function useSpeechSynthesis() {
           utterance.rate = BROWSER_RATE;
           if (voice) utterance.voice = voice;
           pending += 1;
+          chars += chunk.length;
           utterance.onstart = () => {
             if (run !== runRef.current || started) return;
             started = true;
@@ -201,6 +233,7 @@ export function useSpeechSynthesis() {
         finish() {
           finished = true;
           maybeEnd();
+          if (pending > 0) armWatchdog();
         },
       };
     },
