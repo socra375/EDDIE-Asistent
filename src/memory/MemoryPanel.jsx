@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { deleteAllEpisodes, deleteEpisode, listEpisodes } from '../services/episodes';
@@ -21,6 +21,19 @@ function orbText(category, item) {
   return item.text;
 }
 
+// The fields of a project, for the pinned detail.
+function projectRows(item) {
+  return [
+    ['Estado', item.status],
+    ['Stack', item.stack],
+    ['Repo', item.repo],
+    ['Último cambio', item.lastChange],
+    ['Próximo objetivo', item.nextGoal],
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => ({ label, value }));
+}
+
 function orbItemsOf(memory, episodes) {
   const items = [];
   for (const c of CATEGORIES) {
@@ -33,6 +46,7 @@ function orbItemsOf(memory, episodes) {
         meta: c.id === 'context' ? `vigente hasta ${fmtDate(item.expiresAt)}` : '',
         kind: 'memory',
         forgettable: true,
+        ...(c.id === 'projects' ? { title: item.name, rows: projectRows(item), editable: true, raw: item } : {}),
       });
     }
   }
@@ -49,44 +63,6 @@ function orbItemsOf(memory, episodes) {
     });
   }
   return items;
-}
-
-function ItemBody({ category, item }) {
-  if (category === 'projects') {
-    const rows = [
-      ['Estado', item.status],
-      ['Stack', item.stack],
-      ['Repo', item.repo],
-      ['Último cambio', item.lastChange],
-      ['Próximo objetivo', item.nextGoal],
-    ].filter(([, v]) => v);
-    return (
-      <div className="memory-item__body">
-        <strong>{item.name}</strong>
-        {rows.map(([label, value]) => (
-          <span key={label} className="memory-item__row">
-            <span>{label}</span> {value}
-          </span>
-        ))}
-      </div>
-    );
-  }
-  if (category === 'profile' || category === 'preferences') {
-    return (
-      <div className="memory-item__body">
-        <span className="memory-item__row">
-          <span>{item.key}</span> {item.text}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="memory-item__body">
-      <span className="memory-item__row">{item.text}</span>
-      {category === 'decisions' && item.project && <span className="memory-item__meta">Proyecto: {item.project}</span>}
-      {category === 'context' && <span className="memory-item__meta">Vigente hasta {fmtDate(item.expiresAt)}</span>}
-    </div>
-  );
 }
 
 const WAKE_STATUS = {
@@ -196,8 +172,6 @@ function WakeWordCard() {
   );
 }
 
-const fmtLongDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
-
 // The notes of past conversations, loaded once for the orb and the card.
 function useEpisodes() {
   const { user } = useAuth();
@@ -240,82 +214,52 @@ function useEpisodes() {
   return { user, state, remove, removeAll };
 }
 
-// The notes Eddie keeps of past conversations (conversation memory): when
-// they are made, what they say, and the way to delete them. They are written
-// on the server and only exist for signed-in users.
-function ConversationMemoryCard({ episodes: data }) {
-  const { user, state, remove, removeAll: dropAll } = data;
+// Settings of the notes Eddie keeps of past conversations (written on the
+// server, only for signed-in users). The notes themselves are points of the
+// orb; here: on/off and "delete them all".
+function ConversationSettings({ episodes: data }) {
+  const { user, state, removeAll: dropAll } = data;
   const { settings, setConnectorEnabled } = useSettings();
   const [confirmAll, setConfirmAll] = useState(false);
   const memoryOn = settings.memoryEnabled !== false;
   const enabled = memoryOn && !(settings.disabledConnectors || []).includes('conversations');
+  const count = state.episodes.length;
 
   function removeAll() {
     setConfirmAll(false);
     dropAll();
   }
 
-  const { episodes } = state;
   return (
-    <section className="glass-panel memory__episodes" aria-label="Conversaciones recordadas">
-      <header className="memory-card__head">
-        <h3>Conversaciones recordadas</h3>
-        {user && <span className="chip">{episodes.length}</span>}
-      </header>
+    <section className="memory__settings-block" aria-label="Conversaciones recordadas">
+      <h3>Conversaciones recordadas</h3>
       <p className="memory__wake-desc">
         Cuando una conversación termina (5 minutos sin hablar, al cambiar de chat o al cerrar la pestaña), Eddie guarda un resumen corto, nunca la conversación
-        completa. Así, si más adelante vuelves a un tema, lo recuerda. También las de Telegram. Aquí las ves y las borras.
+        completa; también las de Telegram. Aparecen en el orbe.
       </p>
       <label className="settings-toggle">
         <input type="checkbox" checked={enabled} disabled={!memoryOn} onChange={(e) => setConnectorEnabled('conversations', e.target.checked)} />
         <span>Recordar mis conversaciones</span>
       </label>
       {!memoryOn && <p className="memory__warn">La memoria está apagada, así que tampoco se guardan conversaciones.</p>}
-      {!user ? (
-        <p className="memory-card__empty">Inicia sesión con Google para que Eddie recuerde tus conversaciones (se guardan en tu cuenta).</p>
-      ) : state.status === 'loading' && episodes.length === 0 ? (
-        <p className="memory-card__empty">Cargando…</p>
-      ) : !state.configured ? (
-        <p className="memory-card__empty">El servidor todavía no tiene configurada esta función (faltan GEMINI_API_KEY o la base de datos en Vercel).</p>
-      ) : episodes.length === 0 ? (
-        <p className="memory-card__empty">Todavía no hay recuerdos. Se crean solos cuando conversas un rato con Eddie.</p>
-      ) : (
-        <>
-          <ul className="memory-card__list">
-            {episodes.map((e) => (
-              <li key={e.id} className="memory-item">
-                <div className="memory-item__body">
-                  <span className="memory-item__meta">
-                    {fmtLongDate(e.createdAt)}
-                    {e.source === 'telegram' ? ' · Telegram' : ''}
-                  </span>
-                  <span className="memory-item__row">{e.summary}</span>
-                </div>
-                <span className="memory-item__actions">
-                  <button type="button" className="btn tasks-delete" onClick={() => remove(e.id)} aria-label="Borrar este recuerdo">
-                    <Icon name="close" size={14} />
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          {confirmAll ? (
-            <span className="memory__confirm">
-              ¿Borrar todos?
-              <button type="button" className="btn btn-danger" onClick={removeAll}>
-                Sí, borrar
-              </button>
-              <button type="button" className="btn" onClick={() => setConfirmAll(false)}>
-                No
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="btn btn-danger memory__episodes-clear" onClick={() => setConfirmAll(true)}>
-              Borrar todas las conversaciones recordadas
+      {!user && <p className="memory-card__empty">Inicia sesión con Google para que Eddie recuerde tus conversaciones (se guardan en tu cuenta).</p>}
+      {user && !state.configured && <p className="memory-card__empty">El servidor todavía no tiene configurada esta función (faltan GEMINI_API_KEY o la base de datos en Vercel).</p>}
+      {user && state.configured && count > 0 &&
+        (confirmAll ? (
+          <span className="memory__confirm">
+            ¿Borrar las {count}?
+            <button type="button" className="btn btn-danger" onClick={removeAll}>
+              Sí, borrar
             </button>
-          )}
-        </>
-      )}
+            <button type="button" className="btn" onClick={() => setConfirmAll(false)}>
+              No
+            </button>
+          </span>
+        ) : (
+          <button type="button" className="btn btn-danger memory__episodes-clear" onClick={() => setConfirmAll(true)}>
+            Borrar todas las conversaciones recordadas ({count})
+          </button>
+        ))}
       {state.error && <p className="memory__warn" role="alert">{state.error}</p>}
     </section>
   );
@@ -330,6 +274,7 @@ export default function MemoryPanel() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState('');
+  const formRef = useRef(null);
   const live = pruneExpired(memory);
   const total = countItems(live);
   const episodes = useEpisodes();
@@ -352,6 +297,7 @@ export default function MemoryPanel() {
     setCategory('projects');
     setForm({ ...EMPTY_FORM, name: project.name, status: project.status, stack: project.stack, repo: project.repo, lastChange: project.lastChange, nextGoal: project.nextGoal });
     setNotice('');
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   const keyed = category === 'profile' || category === 'preferences';
@@ -359,55 +305,15 @@ export default function MemoryPanel() {
 
   return (
     <section className="memory" aria-label="Memoria de Eddie">
-      <div className="glass-panel memory__summary">
-        <p>
-          Esto es lo que Eddie recuerda de ti entre conversaciones. Lo guarda cuando le cuentas algo que conviene recordar, y en cada respuesta usa solo lo que
-          viene al caso. Puedes añadir, revisar y borrar todo desde aquí.
-        </p>
-        <div className="memory__bar">
-          <label className="settings-toggle">
-            <input type="checkbox" checked={settings.memoryEnabled} onChange={(e) => updateSettings({ memoryEnabled: e.target.checked })} />
-            <span>Permitir que Eddie recuerde</span>
-          </label>
-          <span className="chip">{total} {total === 1 ? 'recuerdo' : 'recuerdos'}</span>
-          {confirmClear ? (
-            <span className="memory__confirm">
-              ¿Borrar todo?
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => {
-                  forgetEverything();
-                  setConfirmClear(false);
-                }}
-              >
-                Sí, borrar
-              </button>
-              <button type="button" className="btn" onClick={() => setConfirmClear(false)}>
-                No
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="btn btn-danger" onClick={() => setConfirmClear(true)} disabled={total === 0}>
-              Borrar toda la memoria
-            </button>
-          )}
-        </div>
-        {!settings.memoryEnabled && <p className="memory__warn">La memoria está apagada: Eddie no la consulta ni guarda nada nuevo.</p>}
-      </div>
-
       <MemoryOrb
         items={orbItems}
         categories={ORB_CATEGORIES}
         onForget={(item) => (item.kind === 'episode' ? episodes.remove(item.rawId) : forgetItem(item.id))}
+        onEdit={(item) => edit(item.raw)}
       />
 
-      <ConversationMemoryCard episodes={episodes} />
-
-      <WakeWordCard />
-
-      <form className="glass-panel memory__form" onSubmit={submit} aria-label="Añadir a la memoria">
-        <h3>Añadir a la memoria</h3>
+      <form className="glass-panel memory__form" onSubmit={submit} aria-label="Agregar memoria" ref={formRef}>
+        <h3>Agregar memoria</h3>
         <div className="memory__fields">
           <label className="memory__field">
             <span>Categoría</span>
@@ -480,43 +386,48 @@ export default function MemoryPanel() {
         </div>
         <div className="memory__actions">
           <button type="submit" className="btn btn-primary" disabled={!valid}>
-            <Icon name="plus" size={14} /> Guardar
+            <Icon name="plus" size={14} /> Guardar en el orbe
           </button>
           {notice && <span className="memory__notice" role="status">{notice}</span>}
         </div>
       </form>
 
-      <div className="memory__grid">
-        {CATEGORIES.map((c) => (
-          <article key={c.id} className="glass-panel memory-card" aria-label={c.label}>
-            <header className="memory-card__head">
-              <h3>{c.label}</h3>
-              <span className="chip">{live[c.id].length}</span>
-            </header>
-            {live[c.id].length === 0 ? (
-              <p className="memory-card__empty">{c.hint}</p>
+      <details className="glass-panel memory__settings">
+        <summary>Ajustes de la memoria y palabra clave</summary>
+        <div className="memory__settings-body">
+          <section className="memory__settings-block" aria-label="Memoria">
+            <label className="settings-toggle">
+              <input type="checkbox" checked={settings.memoryEnabled} onChange={(e) => updateSettings({ memoryEnabled: e.target.checked })} />
+              <span>Permitir que Eddie recuerde</span>
+            </label>
+            {!settings.memoryEnabled && <p className="memory__warn">La memoria está apagada: Eddie no la consulta ni guarda nada nuevo.</p>}
+            {confirmClear ? (
+              <span className="memory__confirm">
+                ¿Borrar todo?
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    forgetEverything();
+                    setConfirmClear(false);
+                  }}
+                >
+                  Sí, borrar
+                </button>
+                <button type="button" className="btn" onClick={() => setConfirmClear(false)}>
+                  No
+                </button>
+              </span>
             ) : (
-              <ul className="memory-card__list">
-                {live[c.id].map((item) => (
-                  <li key={item.id} className="memory-item">
-                    <ItemBody category={c.id} item={item} />
-                    <span className="memory-item__actions">
-                      {c.id === 'projects' && (
-                        <button type="button" className="btn" onClick={() => edit(item)} aria-label={`Editar ${item.name}`}>
-                          Editar
-                        </button>
-                      )}
-                      <button type="button" className="btn tasks-delete" onClick={() => forgetItem(item.id)} aria-label="Olvidar este recuerdo">
-                        <Icon name="close" size={14} />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <button type="button" className="btn btn-danger" onClick={() => setConfirmClear(true)} disabled={total === 0}>
+                Borrar toda la memoria ({total})
+              </button>
             )}
-          </article>
-        ))}
-      </div>
+          </section>
+          <ConversationSettings episodes={episodes} />
+          <WakeWordCard />
+        </div>
+      </details>
     </section>
   );
 }

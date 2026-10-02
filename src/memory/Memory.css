@@ -405,3 +405,68 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.memory-orb__tip b {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+}
+
+.memory-orb__rows {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.memory-orb__rows div {
+  display: flex;
+  flex-direction: column;
+}
+
+.memory-orb__rows dt {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.memory-orb__rows dd {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Everything that isn't the orb or "Agregar memoria" waits in here, closed. */
+.memory__settings {
+  padding: 0.8rem 1.2rem;
+}
+
+.memory__settings > summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.memory__settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  margin-top: 1rem;
+}
+
+.memory__settings-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.memory__settings-block h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
