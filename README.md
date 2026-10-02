@@ -45,9 +45,10 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 | Hoy | El día de un vistazo: saludo, agenda de hoy y mañana (Google Calendar), correos importantes sin leer (Gmail), tareas pendientes (vencidas primero), clima y titulares de noticias. Cada tarjeta explica qué falta si está vacía (iniciar sesión, conectar Gmail, conector apagado) y el botón "Resumen del día con Eddie" le pide que te lo cuente con sus herramientas, por voz si está activa. Se actualiza solo cada 5 minutos |
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
+| Notas | Una **hoja en blanco** que Eddie va escribiendo mientras hablas: el micrófono se queda abierto (dictado continuo) durante el tiempo que elijas (5, 10, 15, 30 min, 1 h, o cualquier valor de 1 a 180 min) con cuenta atrás, «+5 min» y «Detener»; ves el texto aparecer (y la frase a medias) en la hoja. Por voz: **«Eddie, toma notas durante 10 minutos»** (también «media hora», «una hora y media»; sin tiempo usa el elegido) abre Notas con una hoja nueva; **«fin de la nota»** o «termina la nota» la cierra. Puntuación hablada («coma», «punto», «punto y aparte», «nueva línea»…), título opcional, edición a mano, copiar y descargar `.txt`. Se guardan en este dispositivo |
 | Memoria | Todo lo que Eddie recuerda de ti vive en un **orbe**: una esfera de puntos donde cada recuerdo (perfil, preferencias, proyectos, decisiones, conocimientos, contexto temporal) y cada conversación recordada es un punto con otros pequeños alrededor y líneas a sus vecinos; al pasar el mouse dice qué recuerdo es, al hacer clic lo fija (con *Olvidar*, y *Editar* en los proyectos) y se arrastra para girarla; los nuevos aparecen creciendo; la leyenda aísla una categoría; con Modo ligero o «reducir movimiento» no gira sola. Debajo, **Agregar memoria** para escribir cosas que se guardan en el orbe (nunca contraseñas ni tarjetas). Eddie también guarda lo que le cuentas sin que se lo pidas (y te avisa) y usa solo lo que viene al caso en cada respuesta. Al final, plegado, *Ajustes de la memoria y palabra clave*: permitir que Eddie recuerde, borrar toda la memoria, recordar conversaciones y su borrado, y la **palabra clave de activación** (por defecto "Eddie"): dila y Eddie te escucha sin tocar nada |
 | Conectores | Qué servicios puede usar Eddie y en qué estado están (listo, conectado, por conectar, falta configurar, próximamente). Cada conector se enciende o apaga: al apagarlo, sus herramientas dejan de ofrecerse en el chat. Se ve como una **órbita**: el reactor de Eddie al centro y cada conector como un icono en dos anillos que giran al entrar, van apareciendo y se detienen (tocar un icono abre su tarjeta); el botón *Lista* muestra las tarjetas de siempre y se recuerda. Con Modo ligero o «reducir movimiento» no gira |
-| Configuración | Con menú a la izquierda (01 Voz y audio, 02 Motor de IA, 03 Interfaz HUD, 04 Cuenta, 05 Privacidad), tarjetas en dos columnas, interruptores y deslizadores; en Voz: leer respuestas, **activar con la palabra clave**, **volumen** (20–100 %) y **velocidad** (0,8–1,2; ElevenLabs la aplica en el servidor, la voz del navegador en su propio ritmo); en Interfaz HUD: **color del núcleo** del orbe (cian, azul, verde, ámbar). Los cambios se guardan al instante y hay «Restablecer ajustes». Contiene: proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (activar/borrar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
+| Configuración | Con menú a la izquierda (01 Voz y audio, 02 Motor de IA, 03 Interfaz HUD, 04 Cuenta, 05 Dispositivos, 06 Privacidad), tarjetas en dos columnas, interruptores y deslizadores; en Voz: leer respuestas, **activar con la palabra clave**, **volumen** (20–100 %) y **velocidad** (0,8–1,2; ElevenLabs la aplica en el servidor, la voz del navegador en su propio ritmo); en Interfaz HUD: **color del núcleo** del orbe (cian, azul, verde, ámbar). Los cambios se guardan al instante y hay «Restablecer ajustes». Contiene: proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (activar/borrar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
 Además, Eddie tiene acceso a datos reales en tiempo real (no inventados):
 un reloj en vivo en la barra superior, y herramientas que Gemini puede
@@ -375,6 +376,42 @@ el chip rojo **● VIGILANCIA · ON** del encabezado (se ve en cualquier pantall
   una persona ni deduce nombre, edad, etnia ni emociones.
 - **Cuota**: el detector local no gasta cuota. La descripción por IA (Gemini/Groq) se pide como mucho cada 20 s y solo si la
   escena cambió, así que un uso normal queda muy por debajo de los planes gratis (Groq: 30 por minuto).
+
+## Notas (dictado con el micrófono abierto)
+
+Abre **Notas** en la barra lateral, o di **«Eddie, toma notas durante 10 minutos»** desde cualquier pantalla.
+
+- **Hoja en blanco que ves**: a la izquierda, tus hojas; a la derecha, la hoja de papel rayado. Lo que dices aparece en ella
+  en cuanto el navegador lo entiende (la frase a medias se ve abajo en cursiva). Puedes escribir encima a mano.
+- **Cuánto dura**: eliges 5, 10, 15, 30 min, 1 h u otro valor (1–180 min) antes de pulsar «Dictar», o lo dices: «durante
+  20 minutos», «por media hora», «una hora y media». Hay cuenta atrás, «+5 min» para alargarla y «Detener». Al acabar el tiempo
+  se cierra el micrófono solo y Eddie avisa («Se acabó el tiempo de la nota»). Sin tiempo en la orden usa el último elegido y
+  lo dice.
+- **Terminar antes**: «fin de la nota», «termina la nota» o «deja de tomar notas» (al final de una frase, esa frase se guarda).
+- **Puntuación hablada** (se puede apagar en la hoja): «coma», «punto», «punto y aparte», «punto y coma», «dos puntos», «nueva
+  línea», «nuevo párrafo», «abre/cierra interrogación», «abre/cierra paréntesis». Las frases empiezan con mayúscula.
+- **Mientras dicta**: el micrófono de la palabra clave se pausa (no pueden compartirlo) y, si Eddie habla, el dictado espera a que
+  termine para no escribir su voz. Tocar el orbe para hablar con Eddie corta el dictado.
+- **Dónde se guardan**: en este navegador (`localStorage`), no en el servidor. Copiar o «Descargar .txt» para llevarlas.
+- **Límites**: usa el reconocimiento de voz del navegador (Chrome/Edge; necesita conexión) y la pestaña debe seguir abierta y
+  visible; sin permiso de micrófono lo dice en la hoja.
+
+## Dispositivos (una cuenta, varios equipos)
+
+**Configuración → Dispositivos** lista los equipos donde abriste Eddie con tu cuenta (Chromebook, teléfono, tablet…), con un
+punto verde si Eddie está abierto ahora, más Telegram y EDDIE Prime. Desde cualquiera puedes **activar o apagar el Modo
+Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la vigilancia en el Chromebook»; pide confirmación).
+
+- **Solo si está encendido**: un equipo cuenta como encendido mientras Eddie siga abierto en él (late cada 2 min, ventana de 4 min);
+  si está apagado o sin conexión, el botón se deshabilita y Eddie lo dice, sin dejar la orden en espera.
+- **Control remoto opt-in, por equipo**: está **apagado por defecto**; hay que activarlo en ese equipo (tarjeta «Este dispositivo»).
+  Mientras está apagado ni siquiera se guarda el tema del «timbre».
+- **Cómo llega la orden** (sin sondeo constante, para cuidar la cuota de Neon): la orden se guarda en `device_commands` y se toca un
+  timbre sin datos en un tema secreto de ntfy; el equipo lo oye, pide la orden con su cookie de sesión y responde (`done`,
+  `consent` o `error`); si no hay timbre, la recoge en su siguiente latido. Las órdenes caducan a los 2 min.
+- **Privacidad de la cámara**: encender la cámara en otro equipo no se salta nada: la primera vez ese equipo pide permiso
+  (la orden queda en «necesita tu permiso») y el chip rojo «VIGILANCIA · ON» se ve siempre. Una pestaña oculta pausa la vigilancia.
+- **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
 
 ## Notion (buscar, leer y escribir tus páginas)
 
@@ -738,6 +775,7 @@ db/
   migrations/0003_reminders.sql      Recordatorios y resumen de la mañana
   migrations/0004_episodes.sql       Memoria de conversaciones (pgvector)
   migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya no se usan)
+  migrations/0008_devices.sql        Dispositivos de la cuenta y sus órdenes
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

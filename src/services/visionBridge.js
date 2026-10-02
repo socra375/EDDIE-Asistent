@@ -13,4 +13,6 @@ export const visionBridge = {
   engine: () => 'auto',
   // What the camera sees now, in words, from the detector's list ("¿qué ves?").
   describe: () => '',
+  // 'off' | 'consent' | 'starting' | 'watching' | 'error' (and the error text), for remote commands.
+  status: () => ({ phase: 'off', error: '' }),
 };

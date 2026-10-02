@@ -13,6 +13,7 @@ import { EddieMark } from '../../layout/EddieLogo';
 import { countItems } from '../../services/memory';
 import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../../services/wakeWord';
 import { BOOT_REPLAY_EVENT } from '../../services/boot';
+import DevicesCard from './DevicesCard';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -67,6 +68,7 @@ const SECTIONS = [
   { id: 'engine', label: 'Motor de IA' },
   { id: 'hud', label: 'Interfaz HUD' },
   { id: 'account', label: 'Cuenta' },
+  { id: 'devices', label: 'Dispositivos' },
   { id: 'privacy', label: 'Privacidad' },
 ];
 
@@ -578,6 +580,12 @@ export default function SettingsPanel({ onOpenConversation }) {
           Última respuesta · transcribir: {formatSeconds(timings.transcribe)} · primeras palabras: {formatSeconds(timings.firstToken)} · primera voz: {formatSeconds(timings.firstVoice)} · total desde que
           dejaste de hablar: {formatSeconds(timings.total)}
         </p>
+      </div>
+
+      <div className="glass-panel settings-card settings-card--wide" data-section="devices">
+        <h2>Dispositivos de tu cuenta</h2>
+        <p className="settings-card__sub">Dónde está abierto Eddie y a cuál le activas el Modo Vigilancia.</p>
+        <DevicesCard />
       </div>
 
       <div className="glass-panel settings-card" data-section="privacy">

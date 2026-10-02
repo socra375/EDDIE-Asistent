@@ -57,6 +57,8 @@ export function VisionProvider({ children }) {
       speaking,
       chatIdle: chatStatus === 'idle',
       speak: speakWithSettings,
+      phase,
+      error,
     };
   });
 
@@ -381,6 +383,7 @@ export function VisionProvider({ children }) {
       getFrame: async () => (run.current.video ? captureFrame(run.current.video, { withThumb: true }) : null),
       engine: () => live.current.engine || 'auto',
       describe: () => describeScene(run.current.scene),
+      status: () => ({ phase: live.current.phase, error: live.current.error }),
     });
     return () =>
       Object.assign(visionBridge, {
@@ -390,6 +393,7 @@ export function VisionProvider({ children }) {
         getFrame: async () => null,
         engine: () => 'auto',
         describe: () => '',
+        status: () => ({ phase: 'off', error: '' }),
       });
   }, []);
 

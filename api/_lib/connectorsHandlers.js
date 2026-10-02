@@ -8,6 +8,7 @@ import { handleTelegramRoute } from './telegram/handlers.js';
 import { handleCronRequest } from './reminders/cron.js';
 import { handleEpisodesRoute } from './episodes/handlers.js';
 import { handleComputerRoute } from './computer/handlers.js';
+import { handleDevicesRoute } from './devices/handlers.js';
 import { handleSpotifyRoute } from './spotify/auth.js';
 import { getSessionUser, SESSION_COOKIE_NAME } from './session.js';
 
@@ -38,6 +39,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path[0] === 'episodes') return handleEpisodesRoute({ method, path, cookies, body });
   if (path[0] === 'telegram') return handleTelegramRoute({ method, path, cookies, headers, body });
   if (path[0] === 'computer') return handleComputerRoute({ method, path, cookies, headers, body });
+  if (path[0] === 'devices') return handleDevicesRoute({ method, path, cookies, query, body });
   if (path[0] === 'spotify') return handleSpotifyRoute({ method, path, cookies, query });
   return { status: 404, json: { error: 'Esta acción de conectores todavía no existe.' } };
 }
