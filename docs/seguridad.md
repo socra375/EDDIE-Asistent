@@ -39,7 +39,6 @@ Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el có
 3. **Datos que salen a terceros por diseño**: el texto de los mensajes (Gemini, Claude, Groq, OpenRouter), el audio (Groq, ElevenLabs),
    los fotogramas de la cámara (Gemini/Claude, sin guardarse), la ubicación (Open-Meteo, Nominatim) y búsquedas (Tavily).
    Apaga el conector que no quieras en Conectores.
-4. **Tablas `whatsapp_*` sin uso** en Neon tras quitar WhatsApp: se pueden borrar (`drop table whatsapp_pending, whatsapp_messages,
-   whatsapp_link_codes, whatsapp_links;`) cuando se quiera; no se hizo para no ejecutar SQL destructivo sin permiso.
+4. **Tablas `whatsapp_*`**: ya no se usaban tras quitar WhatsApp; el usuario autorizó borrarlas y se eliminaron de Neon (vacías) el 2 oct 2026.
 5. **El servidor local de desarrollo** (`npm run server`) usa CORS abierto y no aplica estos límites: es solo para tu equipo.
 6. **Rotar la clave de la Sonda** que se pegó en un chat al principio del proyecto, y no pegar nunca claves en conversaciones.

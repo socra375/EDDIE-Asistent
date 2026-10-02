@@ -131,7 +131,7 @@ La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`
 
 ### WhatsApp (retirado)
 
-Se construyó con la API oficial de Meta (WhatsApp Cloud API) y se quitó: exige una cuenta de WhatsApp Business y un número propio de empresa, lo que no encaja con un asistente personal. El cerebro compartido (`api/_lib/channels/`) quedó para Telegram. Las tablas `whatsapp_*` de `0005_whatsapp.sql` ya no se usan.
+Se construyó con la API oficial de Meta (WhatsApp Cloud API) y se quitó: exige una cuenta de WhatsApp Business y un número propio de empresa, lo que no encaja con un asistente personal. El cerebro compartido (`api/_lib/channels/`) quedó para Telegram. Las tablas `whatsapp_*` de `0005_whatsapp.sql` se borraron de Neon (el archivo queda solo como historial).
 
 ### Sonda Local (EDDIE Prime, fase 1)
 

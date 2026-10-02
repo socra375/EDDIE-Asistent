@@ -12,7 +12,7 @@ const STT_LANG_MAP = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', de: 'de-DE', it: '
 const HANDOFF_MS = 250;
 // With the browser's recognizer a listen doesn't end by itself when the user
 // stops talking, so after speech this much quiet ends it.
-const END_OF_SPEECH_MS = 1600;
+const END_OF_SPEECH_MS = 1300;
 // Safety net: the voice counts as "speaking" from the moment it is asked for,
 // so normally the window just waits for it. If the answer arrived and the
 // voice never showed up for this long, assume it is not going to speak.

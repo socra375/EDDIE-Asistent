@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { markVoice } from '../services/voiceTiming';
 import { CLOUD_FIRST_CHUNK, MAX_CHUNK, pickVoice, speakableText, splitForCloud, splitForSpeech } from '../services/speechText';
 import { createSentenceStreamer } from '../services/speechStream';
+import { soundBounds } from '../services/audioTrim';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -109,8 +110,9 @@ function createChunkQueue() {
 }
 
 // While an answer streams in, pieces are sized for the engine in use.
-const STREAM_CLOUD = { firstMin: 20, firstMax: CLOUD_FIRST_CHUNK, min: 80, max: 260 };
-const STREAM_BROWSER = { firstMin: 25, firstMax: 120, min: 70, max: MAX_CHUNK };
+const STREAM_CLOUD = { firstMin: 20, firstMax: CLOUD_FIRST_CHUNK, min: 90, max: 260, ramp: [40, 65], softAt: 45 };
+// The browser voice has a gap at every piece: fewer, longer ones.
+const STREAM_BROWSER = { firstMin: 25, firstMax: 120, min: 100, max: MAX_CHUNK, softAt: 60 };
 
 // Text to speech. Two engines behind one `speak` (or `speakStream`, which
 // starts talking while the answer is still being written):
@@ -331,12 +333,16 @@ export function useSpeechSynthesis() {
         if (run !== runRef.current) return undefined;
         load(i + 1);
 
+        // Only the sound itself is played: the silence ElevenLabs leaves at both
+        // ends would be a pause between sentences.
+        const { start: from, end: upTo } = soundBounds(Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c)), buffer.sampleRate);
+        const length = upTo - from;
         const source = ctx.createBufferSource();
         const gain = ctx.createGain();
         source.buffer = buffer;
         source.connect(gain).connect(ctx.destination);
         const when = Math.max(ctx.currentTime + 0.03, clock);
-        const end = when + buffer.duration;
+        const end = when + length;
         gain.gain.setValueAtTime(0, when);
         gain.gain.linearRampToValueAtTime(peak, when + FADE_S);
         gain.gain.setValueAtTime(peak, Math.max(when + FADE_S, end - FADE_S));
@@ -351,7 +357,7 @@ export function useSpeechSynthesis() {
           };
         });
         session.sources.push(source);
-        source.start(when);
+        source.start(when, from, length);
         if (options.onPiece) {
           const id = session.pieceIds ? session.pieceIds[i] : i;
           window.setTimeout(() => run === runRef.current && options.onPiece(id), Math.max(0, (when - ctx.currentTime) * 1000));
