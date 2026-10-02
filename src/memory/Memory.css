@@ -260,3 +260,148 @@
 .memory__episodes-clear {
   align-self: flex-start;
 }
+
+/* ---- Memory orb: what Eddie remembers as a sphere of points ---- */
+.memory-orb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+}
+
+.memory-orb .memory-card__head {
+  align-self: stretch;
+}
+
+.memory-orb__stage {
+  position: relative;
+  width: min(100%, 520px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(70, 90, 255, 0.2) 0%, rgba(63, 232, 255, 0.07) 48%, transparent 70%);
+}
+
+.memory-orb__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: pan-y; /* sideways drag turns the sphere, vertical still scrolls the page */
+}
+
+.memory-orb__canvas:active {
+  cursor: grabbing;
+}
+
+.memory-orb__empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 55%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.memory-orb__tip {
+  position: absolute;
+  z-index: 2;
+  width: max-content;
+  max-width: 220px;
+  padding: 0.5rem 0.7rem;
+  transform: translate(-50%, calc(-100% - 14px));
+  border: 1px solid var(--panel-border-strong);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  pointer-events: none;
+}
+
+.memory-orb__tip span {
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.memory-orb__tip p {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.memory-orb__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-orb__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.memory-orb__key i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.memory-orb__key:hover,
+.memory-orb__key--on {
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+.memory-orb__hint {
+  margin: 0;
+  font-size: 0.74rem;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.memory-orb__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  align-self: stretch;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--panel-border);
+}
+
+.memory-orb__detail > span {
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.memory-orb__detail p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.memory-orb__detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
