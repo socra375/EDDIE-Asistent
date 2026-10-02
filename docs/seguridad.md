@@ -1,0 +1,45 @@
+# Auditoría de cierre (2 oct 2026)
+
+Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el código de cada punto de entrada
+(`api/**`), los conectores y el navegador, con pruebas automáticas para lo corregido (`test_guard`, `test_vision_api`,
+`test_spotify`). No hubo pruebas contra los servicios reales ni un pentest externo.
+
+## Lo que se encontró y se corrigió
+
+| # | Hallazgo | Riesgo | Arreglo |
+|---|---|---|---|
+| 1 | `/api/chat` y sus acciones respondían `Access-Control-Allow-Origin: *`: cualquier página podía llamar desde el navegador de un visitante y gastar la cuota de Gemini, Claude, Groq, Whisper o ElevenLabs del dueño. | Alto (coste y cuota) | Solo la propia página (o `ALLOWED_ORIGINS`) puede llamar; sin comodín. `requestGuard.js` |
+| 2 | Sin límite de uso por dirección en chat, transcripción, voz ni confirmaciones. | Medio | Límites por minuto y dirección (`rateLimit.js`), con 429 y `Retry-After`, ajustables por variable. |
+| 3 | El navegador elegía libremente el nombre del modelo (hasta 100 caracteres) y ese texto entraba en la dirección de la petición a Gemini (que lleva la clave en la URL). | Medio (cambiar la ruta de la petición; elegir un modelo caro) | `cleanModel`: solo nombres simples; el resto se ignora y se usa el modelo por defecto. |
+| 4 | Los endpoints que actúan con la cookie de sesión (tareas, memoria, ajustes, calendario, Drive, cuenta, conectores) dependían solo de `SameSite=Lax` contra CSRF. | Bajo (defensa en profundidad) | Rechazan POST/PUT/PATCH/DELETE con `Sec-Fetch-Site` de otro sitio. |
+| 5 | Suites de pruebas antiguas (`test_connectors`, `test_sanitize`, `test_gemini_*`) quedaron desactualizadas y fallaban en `main`. | Calidad | Puestas al día con el comportamiento actual (riesgo por herramienta, confirmaciones, 5 rondas de herramientas). |
+
+## Lo que se revisó y estaba bien
+
+- **Secretos**: ninguna clave en el repositorio ni en el navegador (búsqueda de patrones de claves), `.env*` ignorado, `/api/health`
+  solo dice sí/no y los nombres de las voces.
+- **Sesión**: id aleatorio opaco en cookie `HttpOnly; Secure; SameSite=Lax`, revocable borrando la fila.
+- **Tokens de terceros** (Google, Spotify): cifrados con AES-256-GCM (`CONNECTOR_SECRET`) y, si falta el secreto, no se guardan en claro.
+- **OAuth**: `state` aleatorio en cookie de 10 min; el callback de Spotify exige además la sesión de Eddie.
+- **Webhooks y tareas programadas**: Telegram (`TELEGRAM_WEBHOOK_SECRET`) y cron (`CRON_SECRET`) comparan con `timingSafeEqual`;
+  EDDIE Prime solo guarda el hash de su token y no abre puertos.
+- **Inyección por contenido externo** (correos, páginas, Notion): las herramientas delicadas (enviar, borrar, mover, crear en
+  Notion/GitHub, acciones del equipo) nunca corren desde el modelo: esperan tu confirmación en una tarjeta, con los datos visibles.
+- **XSS**: sin `innerHTML` ni `eval`; el Markdown se pinta con elementos de React; la exportación a PDF escapa el contenido.
+- **Salida del modelo en la cámara**: se recorta a una forma fija antes de llegar a la página y solo se muestra como texto.
+- **Dependencias**: `npm audit --omit=dev` sin vulnerabilidades.
+
+## Riesgos que quedan (y qué hacer)
+
+1. **Uso anónimo de la cuota por llamadas que no son de navegador** (curl, scripts): pueden omitir las cabeceras `Sec-Fetch-*`.
+   Los límites por dirección lo frenan, pero viven en la memoria de cada instancia (no son globales). Si algún día se abusa:
+   exigir sesión para la IA o poner un límite global en una tabla.
+2. **Datos en el navegador sin cifrar** (`localStorage`: chats, tareas, memoria, clave y dirección de la Sonda local): en un
+   equipo compartido, cierra sesión y borra los datos desde Configuración. La clave de la Sonda abre un programa de tu propio equipo.
+3. **Datos que salen a terceros por diseño**: el texto de los mensajes (Gemini, Claude, Groq, OpenRouter), el audio (Groq, ElevenLabs),
+   los fotogramas de la cámara (Gemini/Claude, sin guardarse), la ubicación (Open-Meteo, Nominatim) y búsquedas (Tavily).
+   Apaga el conector que no quieras en Conectores.
+4. **Tablas `whatsapp_*` sin uso** en Neon tras quitar WhatsApp: se pueden borrar (`drop table whatsapp_pending, whatsapp_messages,
+   whatsapp_link_codes, whatsapp_links;`) cuando se quiera; no se hizo para no ejecutar SQL destructivo sin permiso.
+5. **El servidor local de desarrollo** (`npm run server`) usa CORS abierto y no aplica estos límites: es solo para tu equipo.
+6. **Rotar la clave de la Sonda** que se pegó en un chat al principio del proyecto, y no pegar nunca claves en conversaciones.

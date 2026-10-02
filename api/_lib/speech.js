@@ -1,6 +1,8 @@
 // Text to speech with ElevenLabs (POST /api/chat?action=speak). The browser
 // sends a piece of Eddie's answer and gets MP3 audio back; the
 // ELEVENLABS_API_KEY never leaves the server.
+import { isTrustedRequest } from './requestGuard.js';
+
 const ELEVENLABS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 // Eddie's voice, chosen by the user. ELEVENLABS_VOICE_ID overrides it.
 export const DEFAULT_VOICE_ID = 'bUQeiO7gn4ehGuSnZf26';
@@ -158,8 +160,7 @@ export async function synthesizeSpeech({
 export async function runSpeech(req, res) {
   // Only Eddie's own pages may spend the ElevenLabs credits; browsers mark
   // cross-site requests, so another site can't use this as a free TTS.
-  const site = req.headers['sec-fetch-site'];
-  if (site && site !== 'same-origin' && site !== 'none') {
+  if (!isTrustedRequest(req)) {
     res.status(403).json({ error: 'Origen no permitido.' });
     return;
   }

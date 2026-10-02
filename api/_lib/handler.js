@@ -11,6 +11,17 @@ const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
 class ValidationError extends Error {}
 
+// A model name goes into the provider's URL or request body, so only plain
+// names pass: letters, digits and . _ : - (and a / for Groq's and OpenRouter's
+// "vendor/model"), never ".." or anything that could change the address.
+// Anything else is ignored and the provider's default model is used.
+export function cleanModel(value, provider) {
+  if (typeof value !== 'string') return undefined;
+  const slash = provider === 'groq' || provider === 'openrouter' ? '/' : '';
+  const ok = new RegExp(`^[A-Za-z0-9][A-Za-z0-9._:${slash}-]{0,98}$`).test(value) && !value.includes('..');
+  return ok ? value : undefined;
+}
+
 // Strips the request down to only what the provider needs, validates shape
 // and size so we never forward oversized or malformed payloads upstream.
 function sanitizeRequest(body) {
@@ -43,7 +54,7 @@ function sanitizeRequest(body) {
   }));
 
   const system = typeof body.system === 'string' ? body.system.slice(0, MAX_SYSTEM_LENGTH) : '';
-  const model = typeof body.model === 'string' && body.model.length < 100 ? body.model : undefined;
+  const model = cleanModel(body.model, provider);
   const context = sanitizeContext(body.context);
   const disabledConnectors = sanitizeConnectorIds(body.disabledConnectors);
 

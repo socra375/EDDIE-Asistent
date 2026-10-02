@@ -3,6 +3,7 @@
 // confirmTool in connectors/registry.js) runs now, with the card's
 // arguments. The model isn't called again; the answer is the tool's result
 // plus any app changes (actions) for the browser to apply.
+import { isTrustedRequest } from './requestGuard.js';
 import { confirmTool } from './connectors/registry.js';
 import { sanitizeConnectorIds, sanitizeContext } from './handler.js';
 import { parseCookies } from './cookies.js';
@@ -13,8 +14,7 @@ const TOOL_NAME_RE = /^[a-z0-9_]{1,64}$/;
 export async function runConfirm(req, res) {
   // Only Eddie's own pages can confirm an action; browsers flag cross-site
   // requests, so another site can't trigger one with the user's session.
-  const site = req.headers['sec-fetch-site'];
-  if (site && site !== 'same-origin' && site !== 'none') {
+  if (!isTrustedRequest(req)) {
     res.status(403).json({ error: 'Origen no permitido.' });
     return;
   }

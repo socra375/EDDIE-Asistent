@@ -1,9 +1,10 @@
 // GET /api/health — lets the frontend show which providers/integrations
 // are configured without ever exposing the underlying secrets.
 import { voiceListStatus } from './_lib/speech.js';
+import { applyCors } from './_lib/requestGuard.js';
 
 export default function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  applyCors(req, res, { methods: 'GET, OPTIONS' });
   res.status(200).json({
     ok: true,
     gemini: Boolean(process.env.GEMINI_API_KEY),
