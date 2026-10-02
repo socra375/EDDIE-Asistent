@@ -1,6 +1,8 @@
 // Spoken/typed commands Eddie handles by himself, without asking an AI:
-// "Modo Vigilancia" turns the camera analysis on and off, and "¿qué ves?"
-// asks about the camera while it is on. Pure helpers (no browser APIs).
+// "Modo Vigilancia" turns the camera analysis on and off, "¿qué ves?"
+// asks about the camera while it is on, "Activa sistema" / "Desactiva
+// sistema" show and hide the info panels and "Dame los datos de hoy" shows
+// them one by one while Eddie reads the day out. Pure helpers (no browser APIs).
 // Only a whole message counts, so talking *about* surveillance ("me gusta la
 // vigilancia", "vigilancia del barrio") does nothing. The wake word (or
 // "Eddie") may come first, "por favor" / "ya" last.
@@ -48,4 +50,20 @@ const SEE_QUESTION = /^(?:(?:y )?(?:que|qué) (?:ves|estas viendo|observas|detec
 // "¿Qué ves?" and its everyday variants (whole message).
 export function isSeeQuestion(text, word) {
   return SEE_QUESTION.test(core(text, word));
+}
+
+// The info panels (clima, tareas, sistema, tiempo activo) are off the home
+// screen until asked for.
+const HUD_SHOW = /^(?:activa|activar|activame|enciende|encender|muestra|mostrar|muestrame|abre|abrir|pon|poner) (?:el |los |mi |tu )?(?:sistema|paneles|panel)$/;
+const HUD_HIDE = /^(?:desactiva|desactivar|desactivame|apaga|apagar|oculta|ocultar|esconde|esconder|quita|quitar|cierra|cerrar|retira|retirar) (?:el |los |mi |tu )?(?:sistema|paneles|panel)$/;
+const HUD_TODAY = /^(?:(?:dame|dime|muestrame|ensename|quiero ver|quiero saber|ver|pasame) )?(?:los |mis |el )?(?:datos|resumen|informacion|estado)(?: de| del| para)? (?:hoy|dia|el dia)$/;
+
+// 'show' | 'hide' | 'today' | null
+export function parseHudCommand(text, word) {
+  const t = core(text, word);
+  if (!t) return null;
+  if (HUD_TODAY.test(t)) return 'today';
+  if (HUD_SHOW.test(t)) return 'show';
+  if (HUD_HIDE.test(t)) return 'hide';
+  return null;
 }

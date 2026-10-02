@@ -17,7 +17,8 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
-import { isSeeQuestion, parseVigilanceCommand } from '../services/commands';
+import { isSeeQuestion, parseHudCommand, parseVigilanceCommand } from '../services/commands';
+import { HUD_EVENT } from '../services/hudBridge';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
@@ -151,6 +152,12 @@ export function ChatProvider({ children }) {
     setLastReply(message);
   }, []);
 
+  // A line in the conversation that is not read aloud (the briefing says it
+  // piece by piece itself).
+  const addNote = useCallback((content) => {
+    setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content, timestamp: Date.now(), provider: 'eddie' }]);
+  }, []);
+
   const updateConfirmation = useCallback((messageId, confirmationId, patch) => {
     setMessages((prev) =>
       prev.map((m) =>
@@ -270,6 +277,18 @@ export function ChatProvider({ children }) {
         } else {
           addEddieMessage(wasActive ? 'Vigilancia desactivada. Apagué la cámara.' : 'La vigilancia ya estaba apagada.');
         }
+        return null;
+      }
+
+      // "Activa sistema" / "Desactiva sistema" / "Dame los datos de hoy": the
+      // info panels of the home screen (context/HudContext.jsx). The briefing
+      // is spoken by the home screen (it has the weather and the system), so
+      // Eddie answers by himself only to the other two.
+      const hud = !tag && !images.length && parseHudCommand(trimmed, settings.wake?.word);
+      if (hud) {
+        window.dispatchEvent(new CustomEvent(HUD_EVENT, { detail: { action: hud } }));
+        if (hud === 'show') addEddieMessage('Sistema activado. Dejo los paneles a la vista hasta que digas «desactiva sistema».');
+        else if (hud === 'hide') addEddieMessage('Sistema desactivado. Paneles ocultos.');
         return null;
       }
 
@@ -522,6 +541,7 @@ export function ChatProvider({ children }) {
       status,
       errorMessage,
       sendMessage,
+      addNote,
       resetConversation,
       lastReply,
       activity,
@@ -534,7 +554,7 @@ export function ChatProvider({ children }) {
       deleteConversation,
       clearAllConversations,
     }),
-    [messages, status, errorMessage, sendMessage, resetConversation, lastReply, activity, liveSteps, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
+    [messages, status, errorMessage, sendMessage, addNote, resetConversation, lastReply, activity, liveSteps, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

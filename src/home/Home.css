@@ -2,23 +2,61 @@
 .home {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) 1fr minmax(300px, 380px);
+  grid-template-columns: 1fr minmax(300px, 380px);
   gap: 1.4rem;
   min-height: 0;
 }
 
-.home__col {
+/* The info panels float over the left of the screen while they are asked
+   for ("Activa sistema", "Dame los datos de hoy"); the orb never moves. */
+.home__hud {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 1.4rem;
-  min-height: 0;
-  overflow-y: auto;
+  width: min(240px, 24%);
   padding: 10px 4px 4px 2px;
+  overflow-y: auto;
+  pointer-events: none;
   scrollbar-width: none;
 }
 
-.home__col::-webkit-scrollbar {
+.home__hud::-webkit-scrollbar {
   display: none;
+}
+
+.hud-slot {
+  flex-shrink: 0;
+  pointer-events: auto;
+  animation: hud-slot-in 0.4s ease-out both;
+}
+
+.home__hud--leaving {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+@keyframes hud-slot-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-slot,
+  .home__hud--leaving {
+    animation: none;
+    transition: none;
+  }
+}
+
+:root[data-perf='lite'] .hud-slot,
+:root[data-perf='lite'] .home__hud--leaving {
+  animation: none;
+  transition: none;
 }
 
 .home__center {
@@ -610,7 +648,7 @@
 
 /* Closed: the column goes away and the orb gets the room. */
 .home--chat-closed {
-  grid-template-columns: minmax(240px, 300px) 1fr;
+  grid-template-columns: 1fr;
 }
 
 .home__conversation:not(.home__conversation--open) {
@@ -627,8 +665,26 @@
    (the keyboard button opens it) and the two columns stay narrow. */
 @media (max-width: 1100px) {
   .home {
-    grid-template-columns: minmax(220px, 280px) 1fr;
+    grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  /* Not enough room beside the orb: the page grows and the panels go under it. */
+  .home--hud {
+    height: auto !important;
+    padding-bottom: 6rem;
+  }
+
+  .home--hud .home__center {
+    order: -1;
+  }
+
+  .home__hud {
+    position: static;
+    order: 2;
+    width: auto;
+    padding: 0.5rem 0 0;
+    overflow: visible;
   }
 
   .home__conversation {
@@ -664,10 +720,6 @@
 
   .home__center {
     order: -1;
-  }
-
-  .home__col {
-    overflow: visible;
   }
 
   .eddie-orb {

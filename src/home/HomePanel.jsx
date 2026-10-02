@@ -4,14 +4,15 @@ import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useWakeWord } from '../context/wakeWordState';
 import { useVision } from '../context/visionState';
+import { useHud } from '../context/hudState';
 import { exportTxt } from '../utils/export';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
 import ConfirmCard from '../components/Chat/ConfirmCard';
 import StepTrace from '../components/Chat/StepTrace';
-import CameraPanel from './CameraPanel';
 import EddieOrb from './EddieOrb';
-import { SystemPanel, TasksSummary, UptimePanel, WeatherPanel } from './InfoPanels';
+import HudLayer from './HudLayer';
+import { useHudDirector } from './useHudDirector';
 import './Home.css';
 
 const LABELS = {
@@ -56,10 +57,12 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
   const vision = useVision();
+  const hud = useHud();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
   const [chatOpen, setChatOpen] = useState(initialChatOpen);
+  useHudDirector();
 
   // The "Hablar con Eddie" shortcut: the orb is ready, a tap (or Enter) starts listening.
   // (A page can't open the microphone or play sound before the user touches it.)
@@ -185,14 +188,8 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const replyPreview = expanded || reply.length <= PREVIEW_CHARS ? reply : `${reply.slice(0, PREVIEW_CHARS)}…`;
 
   return (
-    <section className={`home ${chatOpen ? '' : 'home--chat-closed'}`}>
-      <div className="home__col">
-        <SystemPanel />
-        <WeatherPanel />
-        <CameraPanel />
-        <UptimePanel />
-        <TasksSummary onOpenTasks={onOpenTasks} />
-      </div>
+    <section className={`home ${chatOpen ? '' : 'home--chat-closed'} ${hud.visible.length || vision.phase !== 'off' ? 'home--hud' : ''}`}>
+      <HudLayer onOpenTasks={onOpenTasks} />
 
       <div className="home__center">
         <EddieOrb state={RING_STATE[visual] || visual} label={label} labelTitle={labelTitle} onLabelClick={labelAction} onActivate={activate} actionLabel={actionLabel} />

@@ -43,6 +43,10 @@ export function VoiceProvider({ children }) {
     synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd, ...extra });
   };
 
+  // Reads pieces one after another and reports each one's start (onPiece).
+  const speakPiecesWithSettings = (pieces, onPiece, onEnd) =>
+    synthesis.speakPieces(pieces, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onPiece, onEnd });
+
   // Starts talking right away and takes the answer as it is written:
   // { push(textSoFar), end(finalText) }.
   const streamWithSettings = (onEnd) =>
@@ -82,6 +86,7 @@ export function VoiceProvider({ children }) {
       speak: synthesis.speak,
       stopSpeaking: synthesis.stop,
       speakWithSettings,
+      speakPiecesWithSettings,
       streamWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

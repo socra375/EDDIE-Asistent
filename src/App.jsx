@@ -19,7 +19,9 @@ import MemoryPanel from './memory/MemoryPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import { VisionProvider } from './context/VisionContext';
+import { HudProvider } from './context/HudContext';
 import { VIGILANCE_EVENT } from './services/visionBridge';
+import { HUD_EVENT } from './services/hudBridge';
 import { readLaunch } from './services/pwa';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
@@ -186,6 +188,15 @@ function AppShell() {
     return () => window.removeEventListener(VIGILANCE_EVENT, goHome);
   }, []);
 
+  // "Activa sistema" / "Dame los datos de hoy": the panels live in Inicio.
+  useEffect(() => {
+    const goHome = (e) => {
+      if (e.detail?.action === 'show' || e.detail?.action === 'today') setActiveModule('home');
+    };
+    window.addEventListener(HUD_EVENT, goHome);
+    return () => window.removeEventListener(HUD_EVENT, goHome);
+  }, []);
+
   function closeListIfNarrow() {
     if (window.matchMedia(NARROW_QUERY).matches) setChatListOpen(false);
   }
@@ -249,7 +260,9 @@ export default function App() {
             <ChatProvider>
               <WakeWordProvider>
                 <VisionProvider>
-                  <AppShell />
+                  <HudProvider>
+                    <AppShell />
+                  </HudProvider>
                 </VisionProvider>
               </WakeWordProvider>
             </ChatProvider>
