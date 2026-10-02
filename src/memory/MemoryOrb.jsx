@@ -20,8 +20,8 @@ const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` 
 // with a few small points around it, linked to its neighbours. New memories
 // grow in. Point at one to read it; click to pin it (and forget it);
 // drag to turn the sphere.
-// items: [{ id, category, label, text, meta?, forgettable }]
-export default function MemoryOrb({ items, categories, onForget }) {
+// items: [{ id, category, label, text, meta?, title?, rows?: [{ label, value }], forgettable, editable }]
+export default function MemoryOrb({ items, categories, onForget, onEdit }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const layout = useMemo(() => layoutOrb(items), [items]);
@@ -297,6 +297,7 @@ export default function MemoryOrb({ items, categories, onForget }) {
         {hovered && (
           <div className="memory-orb__tip" style={{ left: hover.x, top: hover.y }} role="status">
             <span style={{ color: ORB_COLORS[hovered.category] }}>{hovered.label}</span>
+            {hovered.title && <b>{hovered.title}</b>}
             <p>{clip(hovered.text, 160)}</p>
           </div>
         )}
@@ -326,8 +327,25 @@ export default function MemoryOrb({ items, categories, onForget }) {
             {selected.label}
             {selected.meta ? ` · ${selected.meta}` : ''}
           </span>
-          <p>{selected.text}</p>
+          {selected.title && <strong>{selected.title}</strong>}
+          {selected.rows?.length ? (
+            <dl className="memory-orb__rows">
+              {selected.rows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>{selected.text}</p>
+          )}
           <div className="memory-orb__detail-actions">
+            {selected.editable && (
+              <button type="button" className="btn" onClick={() => onEdit(selected)}>
+                Editar
+              </button>
+            )}
             {selected.forgettable && (
               <button
                 type="button"
