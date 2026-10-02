@@ -24,6 +24,7 @@ import { VIGILANCE_EVENT } from './services/visionBridge';
 import { HUD_EVENT } from './services/hudBridge';
 import { readLaunch } from './services/pwa';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
+import BootSplash from './boot/BootSplash';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
 
@@ -268,6 +269,8 @@ export default function App() {
                 <VisionProvider>
                   <HudProvider>
                     <AppShell />
+                    {/* Outside the app shell, whose children are all made `position: relative`. */}
+                    <BootSplash />
                   </HudProvider>
                 </VisionProvider>
               </WakeWordProvider>

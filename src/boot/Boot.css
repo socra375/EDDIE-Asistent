@@ -1,0 +1,463 @@
+/* The start-up animation. Smooth on purpose (it lasts four seconds and is
+   skippable), but still cheap: it only moves `transform` and `opacity`, apart
+   from the thin strokes of the reactor drawing themselves; no filters, no
+   blurs, no shadows — the glow is a plain radial gradient. */
+@property --boot-n {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.boot {
+  --b: var(--core, var(--accent, #3fe8ff));
+  --bs: var(--core-soft, var(--accent-2, #b9f7ff));
+  --bd: var(--core-dim, var(--accent-dim, #0a7f99));
+  --size: min(50vh, 46vw, 420px);
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  overflow: hidden;
+  background: #010609;
+  color: var(--bs);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  cursor: pointer;
+  transition: opacity 0.65s ease, transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.boot--leave {
+  opacity: 0;
+  transform: scale(1.1);
+  pointer-events: none;
+}
+
+/* ---- Background: hex grid, vignette, scan line, corner brackets ---- */
+.boot__grid {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97'%3E%3Cpath d='M28 0 56 16v32L28 64 0 48V16zM28 64v33M0 48v33l28 16 28-16V48' fill='none' stroke='%233fe8ff' stroke-opacity='.16'/%3E%3C/svg%3E");
+  opacity: 0;
+  animation: boot-fade 1.2s ease-out 0.1s forwards;
+}
+
+.boot__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(1, 6, 9, 0) 0%, rgba(1, 6, 9, 0.55) 55%, #010609 100%);
+}
+
+.boot__scan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--b) 30%, var(--bs) 50%, var(--b) 70%, transparent);
+  opacity: 0;
+  animation: boot-scan 1.5s cubic-bezier(0.4, 0, 0.6, 1) 0.25s both;
+}
+
+.boot__corner {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  border: 0 solid var(--b);
+  opacity: 0;
+  animation: boot-corner 0.7s ease-out 0.25s forwards;
+}
+
+.boot__corner--tl { top: 24px; left: 24px; border-top-width: 2px; border-left-width: 2px; transform-origin: top left; }
+.boot__corner--tr { top: 24px; right: 24px; border-top-width: 2px; border-right-width: 2px; transform-origin: top right; }
+.boot__corner--bl { bottom: 24px; left: 24px; border-bottom-width: 2px; border-left-width: 2px; transform-origin: bottom left; }
+.boot__corner--br { bottom: 24px; right: 24px; border-bottom-width: 2px; border-right-width: 2px; transform-origin: bottom right; }
+
+.boot__top {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.5em;
+  color: var(--bd);
+  opacity: 0;
+  animation: boot-fade 0.8s ease-out 0.5s forwards;
+}
+
+/* ---- The reactor ---- */
+.boot__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  margin-bottom: 0.4rem;
+}
+
+.boot__stage::after {
+  /* The flash of ignition. */
+  content: '';
+  position: absolute;
+  inset: -45%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, var(--bs) 12%, transparent 48%);
+  opacity: 0;
+  animation: boot-flash 0.9s ease-out 1.9s both;
+  pointer-events: none;
+}
+
+.boot__halo {
+  position: absolute;
+  inset: -25%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--b) 55%, transparent) 0%, color-mix(in srgb, var(--b) 18%, transparent) 38%, transparent 66%);
+  opacity: 0;
+  animation: boot-halo 1.6s ease-out 1.9s forwards, boot-breathe 2.4s ease-in-out 3.5s infinite;
+}
+
+.boot__reactor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--b);
+}
+
+.boot__ring {
+  transform-origin: 200px 200px;
+  opacity: 0;
+}
+
+.boot__ring circle {
+  fill: none;
+}
+
+.boot__ring--ticks {
+  animation: boot-fade-to 0.8s ease-out 0.45s forwards, boot-spin 40s linear 0.45s infinite;
+}
+
+.boot__ring--ticks circle {
+  stroke-width: 7;
+  stroke-dasharray: 0.25 0.55;
+  opacity: 0.6;
+}
+
+.boot__ring--segments {
+  animation: boot-fade-to 0.8s ease-out 0.65s forwards, boot-spin-rev 26s cubic-bezier(0.1, 0.6, 0.3, 1) 0.65s infinite;
+}
+
+.boot__ring--segments circle {
+  stroke-width: 10;
+  stroke-dasharray: 7 3;
+}
+
+.boot__draw {
+  fill: none;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  stroke-linejoin: round;
+  animation: boot-draw 1.1s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+}
+
+.boot__draw--outer { stroke-width: 2.5; animation-delay: 0.85s; stroke: var(--bs); }
+.boot__draw--inner { stroke-width: 4; animation-delay: 1.35s; }
+.boot__draw--triangle { stroke-width: 3; animation-delay: 1.5s; stroke: var(--bs); }
+
+.boot__coils rect {
+  fill: color-mix(in srgb, var(--b) 22%, transparent);
+  stroke: var(--b);
+  stroke-width: 2;
+  opacity: 0;
+  animation: boot-fade-to 0.4s ease-out forwards;
+  animation-delay: calc(1.05s + var(--i) * 0.07s);
+}
+
+.boot__core {
+  stroke: none;
+  transform-origin: 200px 200px;
+  transform: scale(0);
+  animation: boot-ignite 1.2s cubic-bezier(0.2, 0.9, 0.3, 1) 1.9s forwards, boot-breathe 2.4s ease-in-out 3.3s infinite;
+}
+
+.boot__shock {
+  position: absolute;
+  width: 55%;
+  aspect-ratio: 1;
+  border: 2px solid var(--bs);
+  border-radius: 50%;
+  opacity: 0;
+  animation: boot-shock 1.3s cubic-bezier(0.1, 0.7, 0.3, 1) calc(1.9s + var(--i) * 0.18s) both;
+}
+
+.boot__sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boot__sparks i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, transparent, var(--bs));
+  opacity: 0;
+  transform-origin: 0 50%;
+  animation: boot-spark 0.9s ease-out calc(1.9s + var(--delay)) both;
+}
+
+/* ---- Title and greeting ---- */
+.boot__title {
+  display: flex;
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.6rem, 5.4vw, 3.2rem);
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  color: #fff;
+  text-shadow: 0 0 18px var(--b);
+}
+
+.boot__title span {
+  display: inline-block;
+  opacity: 0;
+  animation: boot-letter 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) calc(2.25s + var(--i) * 0.065s) forwards;
+}
+
+.boot__greeting {
+  margin: 0.5rem 0 0;
+  font-size: clamp(0.9rem, 2.2vw, 1.25rem);
+  letter-spacing: 0.18em;
+  opacity: 0;
+  animation: boot-rise 0.7s ease-out 3s forwards;
+}
+
+.boot__sub {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--bd);
+  opacity: 0;
+  animation: boot-rise 0.7s ease-out 3.25s forwards;
+}
+
+/* ---- Boot log (left) and gauges (right) ---- */
+.boot__log {
+  position: absolute;
+  top: 50%;
+  left: 5vw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(300px, 26vw);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  transform: translateY(-50%);
+}
+
+.boot__log li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  clip-path: inset(0 100% 0 0);
+  animation: boot-type 0.55s steps(22) calc(1s + var(--i) * 0.34s) forwards;
+}
+
+.boot__log li i {
+  flex: 1;
+  min-width: 8px;
+  border-bottom: 1px dotted var(--bd);
+}
+
+.boot__log li b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.boot__gauges {
+  position: absolute;
+  top: 50%;
+  right: 5vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: min(210px, 20vw);
+  transform: translateY(-50%);
+}
+
+.boot__gauge {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.2em;
+  color: var(--bd);
+  opacity: 0;
+  animation: boot-fade 0.5s ease-out calc(1.3s + var(--i) * 0.2s) forwards;
+}
+
+.boot__num {
+  color: #fff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: boot-count 2.2s cubic-bezier(0.3, 0.1, 0.2, 1) calc(1.4s + var(--i) * 0.2s) forwards;
+  counter-reset: boot-n var(--boot-n);
+}
+
+.boot__num::after {
+  content: counter(boot-n) '%';
+}
+
+.boot__gauge em {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: color-mix(in srgb, var(--bd) 35%, transparent);
+}
+
+.boot__gauge em i {
+  display: block;
+  height: 100%;
+  background: var(--b);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: boot-grow 2.2s cubic-bezier(0.3, 0.1, 0.2, 1) calc(1.4s + var(--i) * 0.2s) forwards;
+}
+
+/* ---- Progress and hint ---- */
+.boot__bar {
+  position: absolute;
+  bottom: 12vh;
+  left: 50%;
+  width: min(420px, 60vw);
+  height: 3px;
+  margin-left: calc(min(420px, 60vw) / -2);
+  background: color-mix(in srgb, var(--bd) 35%, transparent);
+  opacity: 0;
+  animation: boot-fade 0.5s ease-out 0.6s forwards;
+}
+
+.boot__bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--b), #fff);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: boot-grow 3.2s cubic-bezier(0.35, 0.1, 0.25, 1) 0.6s forwards;
+}
+
+.boot__hint {
+  position: absolute;
+  bottom: 5vh;
+  margin: 0;
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--bd);
+  opacity: 0;
+  animation: boot-fade 0.8s ease-out 1.5s forwards;
+}
+
+/* ---- Keyframes ---- */
+@keyframes boot-fade { to { opacity: 1; } }
+@keyframes boot-fade-to { to { opacity: 1; } }
+@keyframes boot-spin { to { transform: rotate(360deg); } }
+@keyframes boot-spin-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+@keyframes boot-draw { to { stroke-dashoffset: 0; } }
+@keyframes boot-corner { from { opacity: 0; transform: scale(0.2); } to { opacity: 0.9; transform: scale(1); } }
+@keyframes boot-scan {
+  0% { opacity: 0; transform: translateY(0); }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(100vh); }
+}
+@keyframes boot-flash {
+  0% { opacity: 0; transform: scale(0.3); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+@keyframes boot-halo {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0.65; transform: scale(1); }
+}
+@keyframes boot-breathe {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+@keyframes boot-ignite {
+  0% { transform: scale(0); }
+  45% { transform: scale(1.7); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1.15); }
+}
+@keyframes boot-shock {
+  0% { opacity: 0.95; transform: scale(0.15); }
+  100% { opacity: 0; transform: scale(2.5); }
+}
+@keyframes boot-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(40px) scaleX(0.3); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--reach)) scaleX(1.6); }
+}
+@keyframes boot-letter {
+  0% { opacity: 0; transform: translateY(14px) scale(1.5); }
+  60% { opacity: 1; transform: translateY(-2px) scale(0.97) skewX(-8deg); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes boot-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes boot-type { to { clip-path: inset(0 0 0 0); } }
+@keyframes boot-count { from { --boot-n: 0; } to { --boot-n: 100; } }
+@keyframes boot-grow { to { transform: scaleX(1); } }
+
+/* ---- Small screens ---- */
+@media (max-width: 900px) {
+  .boot__gauges { display: none; }
+  .boot__log { left: 4vw; width: 36vw; font-size: 0.6rem; }
+}
+
+@media (max-width: 700px) {
+  .boot { --size: min(42vh, 74vw); }
+  .boot__log { display: none; }
+  .boot__bar { bottom: 14vh; }
+}
+
+/* Less motion: everything simply there, then it leaves. */
+@media (prefers-reduced-motion: reduce) {
+  .boot *,
+  .boot *::after {
+    animation: none !important;
+  }
+
+  .boot__grid,
+  .boot__top,
+  .boot__ring,
+  .boot__coils rect,
+  .boot__gauge,
+  .boot__bar,
+  .boot__hint,
+  .boot__title span,
+  .boot__greeting,
+  .boot__sub,
+  .boot__corner {
+    opacity: 1;
+  }
+
+  .boot__draw { stroke-dashoffset: 0; }
+  .boot__log li { clip-path: none; }
+  .boot__shock, .boot__sparks, .boot__scan { display: none; }
+  .boot__halo { opacity: 0.6; }
+  .boot__core { transform: none; }
+  .boot__bar i, .boot__gauge em i { transform: none; }
+  .boot__num::after { content: '100%'; }
+}

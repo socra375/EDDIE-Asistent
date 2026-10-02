@@ -12,6 +12,7 @@ import Icon from '../../layout/Icon';
 import { EddieMark } from '../../layout/EddieLogo';
 import { countItems } from '../../services/memory';
 import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../../services/wakeWord';
+import { BOOT_REPLAY_EVENT } from '../../services/boot';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -370,6 +371,13 @@ export default function SettingsPanel({ onOpenConversation }) {
             <option value="full">Completo</option>
           </select>
         </label>
+        <label className="settings-toggle">
+          <input type="checkbox" checked={settings.display?.boot !== false} onChange={(e) => updateDisplaySettings({ boot: e.target.checked })} />
+          <span>Animación de inicio al abrir Eddie</span>
+        </label>
+        <button type="button" className="btn" onClick={() => window.dispatchEvent(new Event(BOOT_REPLAY_EVENT))}>
+          Ver la animación de inicio
+        </button>
         <p className="settings-placeholder">
           El modo ligero apaga la rejilla, las líneas y las animaciones del orbe para que la pantalla no pese en equipos modestos.
           {(settings.display?.perf || 'auto') === 'auto' &&
