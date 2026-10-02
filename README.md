@@ -500,10 +500,12 @@ directamente desde el navegador de ese mismo equipo.
 2. En Eddie → **Conectores → Sonda local**: deja la dirección `http://127.0.0.1:8000`, escribe la clave (la misma que
    tiene la sonda; se guarda solo en este navegador) y pulsa **Probar conexión**. Si Chrome pregunta si el sitio
    puede acceder a apps o dispositivos de este equipo, acepta.
-3. Guarda la clave: desde ese momento las preguntas sobre el equipo ("revisa mi disco duro", "¿cuánta RAM me
-   queda?") van solas a la sonda, y si no responde contesta Eddie en la nube. Para mandarle **todo**, pulsa el botón
-   **Sonda local** (OFF → ON) arriba del chat: cada mensaje escrito o dictado va a `…/chat` de tu equipo (hasta
-   90 s de espera) y la respuesta muestra las herramientas que usó. Elegir una habilidad o volver a pulsarlo lo apaga.
+3. Eddie **no depende** de la sonda: el botón **Sonda local** del chat arranca apagado en cada carga (no se guarda),
+   y la voz, el anillo y la palabra clave nunca le hablan a ella. Pulsa el botón (OFF → ON) para mandarle lo que
+   **escribas** en el chat (hasta 90 s de espera; la respuesta muestra las herramientas que usó); mientras esté en ON
+   aparece «SONDA · ON» en el encabezado. Opcional: en la tarjeta, activa que las preguntas claras sobre el hardware
+   («disco duro», RAM, CPU, batería) vayan solas a la sonda (si no responde en 8 s, contesta Eddie). Todo lo demás
+   sobre tu equipo lo responde EDDIE Prime desde la nube.
 
 Solo funciona en el equipo donde corre la sonda. Para el teléfono, Telegram o WhatsApp está EDDIE Prime (abajo).
 

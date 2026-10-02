@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useLocation } from '../context/LocationContext';
+import { useProbeConfig } from '../services/probe';
 import LiveClock from './LiveClock';
 import { EddieWordmark } from './EddieLogo';
 
@@ -34,6 +35,7 @@ export default function Header({ section }) {
   const { ttsSupported, stopSpeaking } = useVoice();
   const { status: gpsStatus } = useLocation();
   const online = useOnline();
+  const probe = useProbeConfig();
   const voiceOn = settings.voice.autoRead;
   const [gpsLabel, gpsClass] = GPS_CHIP[gpsStatus] || GPS_CHIP.idle;
 
@@ -50,6 +52,7 @@ export default function Header({ section }) {
         </span>
         <span className={`chip ${online ? 'on' : 'bad'}`}>RED · {online ? 'EN LÍNEA' : 'SIN RED'}</span>
         <span className={`chip ${gpsClass}`}>{gpsLabel}</span>
+        {probe.forced && <span className="chip warn" title="Lo que escribes en el chat va a la Sonda local, no a Eddie. Apágalo en el chat.">SONDA · ON</span>}
       </div>
 
       <div className="header__brand">

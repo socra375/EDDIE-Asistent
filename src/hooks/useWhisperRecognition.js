@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { markVoice } from '../services/voiceTiming';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
 // Stop on its own after this much quiet once the user has spoken, give up
 // if nobody speaks at all, and never record longer than the server accepts.
-const SILENCE_MS = 1400;
+const SILENCE_MS = 900;
 const NO_SPEECH_MS = 8000;
 const MAX_RECORD_MS = 60000;
 const CALIBRATION_MS = 300;
@@ -63,6 +64,7 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
         const text = (data?.text || '').trim();
         if (!text) setError('No se entendió lo que dijiste. Inténtalo de nuevo.');
         setTranscript(text);
+        if (text) markVoice('transcript');
       } catch (err) {
         setError(err.message || 'No se pudo transcribir el audio.');
       } finally {
@@ -151,6 +153,7 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
     };
     recorder.onstop = () => {
       const spoke = session.heardSpeech;
+      if (spoke) markVoice('recordEnd');
       cleanup(session);
       setRecording(false);
       if (!spoke) {

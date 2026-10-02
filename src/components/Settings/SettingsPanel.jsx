@@ -3,6 +3,7 @@ import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
+import { formatSeconds, useVoiceTimings } from '../../services/voiceTiming';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import Icon from '../../layout/Icon';
 import { countItems } from '../../services/memory';
@@ -61,6 +62,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, speakWithSettings } =
     useVoice();
   const health = useProviderHealth();
+  const timings = useVoiceTimings();
   const [deleting, setDeleting] = useState(false);
   const [customModel, setCustomModel] = useState(false);
 
@@ -317,6 +319,10 @@ export default function SettingsPanel({ onOpenConversation }) {
             Probar voz
           </button>
         )}
+        <p className="settings-placeholder" aria-live="polite">
+          Última respuesta · transcribir: {formatSeconds(timings.transcribe)} · primeras palabras: {formatSeconds(timings.firstToken)} · primera voz: {formatSeconds(timings.firstVoice)} · total desde que
+          dejaste de hablar: {formatSeconds(timings.total)}
+        </p>
       </div>
 
       <div className="glass-panel settings-card">

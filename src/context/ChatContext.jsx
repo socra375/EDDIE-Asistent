@@ -19,8 +19,9 @@ import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
-import { askProbe, looksLikeSystemQuestion, stepsFromTools } from '../services/probeCore';
+import { askProbe, looksLikeSystemQuestion, PROBE_AUTO_TIMEOUT_MS, stepsFromTools } from '../services/probeCore';
 import { autoDetectReady, getProbeConfig } from '../services/probe';
+import { markVoice } from '../services/voiceTiming';
 import { getMemory } from '../utils/storage';
 import { memoryForContext } from '../services/memory';
 
@@ -213,13 +214,15 @@ export function ChatProvider({ children }) {
     async (text, { mode = DEFAULT_MODE, silent = false, display, tag, skill, title, images = [], probe = false } = {}) => {
       const trimmed = text.trim() || (images.length ? IMAGE_PROMPT : '');
       if (!trimmed) return;
+      markVoice('send');
 
-      // The local probe (Sonda Local) on the user's computer answers when the
-      // chat's "Sonda local" button is on (every message, typed or spoken,
-      // goes to it), or — once it's set up — when the message is about the
-      // machine itself (and then the cloud answers if the probe can't).
+      // The local probe (Sonda Local) on the user's computer answers only when
+      // the chat panel's «Sonda local» switch is on (`probe: true`, typed
+      // messages only — the voice ring and the wake word never use it), or,
+      // if the user turned that on, for clear questions about the machine's
+      // hardware (and then the cloud answers if the probe doesn't in time).
       const probeConfig = getProbeConfig();
-      const forcedProbe = (probe || probeConfig.forced) && !tag && !images.length;
+      const forcedProbe = probe && !tag && !images.length;
       const autoProbe = !forcedProbe && !tag && !images.length && autoDetectReady(probeConfig) && looksLikeSystemQuestion(trimmed);
       const viaProbe = forcedProbe || autoProbe;
 
@@ -268,7 +271,8 @@ export function ChatProvider({ children }) {
         setStatus('processing');
         setLiveSteps([{ id: 'p0', tool: 'probe', label: 'Sonda local', activity: 'Consultando la sonda de tu equipo…', status: 'running' }]);
         try {
-          const { response, tools } = await askProbe({ url: probeConfig.url, key: probeConfig.key, message: trimmed });
+          const { response, tools } = await askProbe({ url: probeConfig.url, key: probeConfig.key, message: trimmed, ...(autoProbe ? { timeoutMs: PROBE_AUTO_TIMEOUT_MS } : {}) });
+          markVoice('firstToken');
           const steps = stepsFromTools(tools);
           const assistantMessage = { id: nextId(), role: 'assistant', content: response, timestamp: Date.now(), provider: 'probe', local: true, ...(steps.length ? { steps } : {}) };
           setLiveSteps([]);
@@ -300,6 +304,7 @@ export function ChatProvider({ children }) {
         language: settings.language,
       });
       if (localAnswer) {
+        markVoice('firstToken');
         const assistantMessage = { id: nextId(), role: 'assistant', content: localAnswer, timestamp: Date.now(), provider: 'eddie' };
         setMessages((prev) => [...prev, assistantMessage]);
         setLastReply(assistantMessage);
@@ -308,7 +313,9 @@ export function ChatProvider({ children }) {
 
       setStatus('processing');
 
-      const history = [...messages, userMessage].slice(-MAX_HISTORY_SENT);
+      // What was said with the local probe stays out of what the cloud sees:
+      // its answers ("no puedo, pero puedo revisar el disco duro") would be imitated.
+      const history = [...messages, userMessage].filter((m) => !m.local).slice(-MAX_HISTORY_SENT);
       const system = buildSystemPrompt({
         mode,
         language: settings.language,
@@ -351,6 +358,7 @@ export function ChatProvider({ children }) {
           },
           onChunk: (fullTextSoFar) => {
             if (!responseStarted) {
+              markVoice('firstToken');
               setLiveSteps([]);
               responseStarted = true;
               setStatus('responding');

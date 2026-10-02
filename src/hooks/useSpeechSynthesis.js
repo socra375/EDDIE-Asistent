@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { markVoice } from '../services/voiceTiming';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -14,6 +15,9 @@ const CLOUD_CHUNK = 450;
 // Errors that won't fix themselves this session (no key, no credits, a voice
 // the plan can't use): stop trying ElevenLabs until the page reloads.
 const CLOUD_FATAL_STATUSES = [401, 402, 403, 503];
+// A server voice that doesn't answer in this long counts as failed, so Eddie
+// doesn't stay "about to speak" forever.
+const CLOUD_FETCH_TIMEOUT_MS = 20000;
 
 // Higher is better. Network/neural voices sound far more natural than the
 // local eSpeak-style ones Linux and ChromeOS ship by default.
@@ -104,19 +108,32 @@ export function splitForCloud(text) {
 }
 
 async function fetchCloudAudio(text, language, signal, voiceId) {
-  const res = await fetch(`${API_BASE}/api/chat?action=speak`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, language, ...(voiceId ? { voiceId } : {}) }),
-    signal,
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    const err = new Error(data?.error || `No se pudo generar la voz (${res.status}).`);
-    err.status = res.status;
+  // The caller's `signal` stops everything; ours adds the time limit.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CLOUD_FETCH_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  signal.addEventListener('abort', onAbort);
+  try {
+    const res = await fetch(`${API_BASE}/api/chat?action=speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language, ...(voiceId ? { voiceId } : {}) }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      const err = new Error(data?.error || `No se pudo generar la voz (${res.status}).`);
+      err.status = res.status;
+      throw err;
+    }
+    return URL.createObjectURL(await res.blob());
+  } catch (err) {
+    if (err.name === 'AbortError' && !signal.aborted) throw new Error('La voz de Eddie tardó demasiado en responder.');
     throw err;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
   }
-  return URL.createObjectURL(await res.blob());
 }
 
 // Text to speech. Two engines behind one `speak`:
@@ -158,7 +175,13 @@ export function useSpeechSynthesis() {
         const utterance = new SpeechSynthesisUtterance(chunk);
         utterance.lang = voice?.lang || lang;
         if (voice) utterance.voice = voice;
-        if (i === 0) utterance.onstart = () => run === runRef.current && setSpeaking(true);
+        if (i === 0) {
+          utterance.onstart = () => {
+            if (run !== runRef.current) return;
+            markVoice('audioStart');
+            setSpeaking(true);
+          };
+        }
         if (i === chunks.length - 1) {
           utterance.onend = () => {
             if (run !== runRef.current) return;
@@ -194,7 +217,7 @@ export function useSpeechSynthesis() {
         try {
           url = await load(i);
         } catch (err) {
-          if (run !== runRef.current || err.name === 'AbortError') return release();
+          if (run !== runRef.current) return release();
           if (CLOUD_FATAL_STATUSES.includes(err.status)) cloudOffRef.current = true;
           setCloudError(err.message);
           release();
@@ -218,6 +241,7 @@ export function useSpeechSynthesis() {
           return release();
         }
         if (run !== runRef.current) return release();
+        markVoice('audioStart');
         setSpeaking(true);
         await ended;
         if (run !== runRef.current) return release();
@@ -247,6 +271,10 @@ export function useSpeechSynthesis() {
       if (!clean) return;
       stopAll();
       const run = runRef.current;
+      // "Speaking" from the moment the voice is asked for, not when the first
+      // sound plays: the wake-word window and the ring wait for it instead of
+      // opening the microphone first.
+      setSpeaking(true);
       const options = { lang, voiceURI, cloudVoice, onEnd };
       if (engine === 'elevenlabs' && !cloudOffRef.current) {
         speakCloud(clean, run, options);

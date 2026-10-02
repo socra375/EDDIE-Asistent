@@ -12,9 +12,10 @@ const HANDOFF_MS = 250;
 // With the browser's recognizer a listen doesn't end by itself when the user
 // stops talking, so after speech this much quiet ends it.
 const END_OF_SPEECH_MS = 1600;
-// A spoken answer should start within this long of the reply; past it, assume
-// it is not going to speak and open the window anyway.
-const SPEECH_GRACE_MS = 6000;
+// Safety net: the voice counts as "speaking" from the moment it is asked for,
+// so normally the window just waits for it. If the answer arrived and the
+// voice never showed up for this long, assume it is not going to speak.
+const SPEECH_GRACE_MS = 10000;
 // Let the end of Eddie's voice (and its echo) die away before listening.
 const ECHO_TAIL_MS = 500;
 const POLL_MS = 300;

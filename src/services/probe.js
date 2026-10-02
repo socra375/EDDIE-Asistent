@@ -1,47 +1,63 @@
 // The local probe's settings, kept only in this browser (localStorage): the
-// address, the key and how the chat uses it. They are never synced to
-// Eddie's server — the key opens a program on the user's own computer.
+// address, the key and whether questions about the computer are detected
+// automatically. They are never synced to Eddie's server — the key opens a
+// program on the user's own computer.
+//
+// "forced" (the chat's «Sonda local» switch, which sends the typed messages
+// there) is NOT saved: it lives in memory and starts off on every load, so a
+// forgotten switch can never leave Eddie depending on the probe.
 import { useEffect, useState } from 'react';
 import { DEFAULT_PROBE_URL, cleanProbeUrl } from './probeCore';
 
 const STORAGE_KEY = 'eddie.probe';
+// Version 2: autoDetect is off by default and an older saved `forced`/`autoDetect` is ignored.
+const STORAGE_VERSION = 2;
 export const PROBE_CHANGED_EVENT = 'eddie:probe-changed';
-// forced: "Sonda" mode in the chat — every message goes to the probe.
-// autoDetect: questions about the computer go to the probe on their own
-// (once a key is saved), and to the cloud if the probe doesn't answer.
-export const DEFAULT_PROBE_CONFIG = { url: DEFAULT_PROBE_URL, key: '', forced: false, autoDetect: true };
+export const DEFAULT_PROBE_CONFIG = { url: DEFAULT_PROBE_URL, key: '', forced: false, autoDetect: false };
 
-export function getProbeConfig() {
+let forced = false;
+
+function readStored() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!stored || typeof stored !== 'object') return { ...DEFAULT_PROBE_CONFIG };
-    // Only the current fields (older versions stored `enabled` and `auto`).
-    const config = { ...DEFAULT_PROBE_CONFIG };
-    if (typeof stored.url === 'string') config.url = stored.url;
-    if (typeof stored.key === 'string') config.key = stored.key;
-    if (typeof stored.forced === 'boolean') config.forced = stored.forced;
-    if (typeof stored.autoDetect === 'boolean') config.autoDetect = stored.autoDetect;
-    return config;
+    return stored && typeof stored === 'object' ? stored : null;
   } catch {
-    return { ...DEFAULT_PROBE_CONFIG };
+    return null;
   }
 }
 
+export function getProbeConfig() {
+  const config = { ...DEFAULT_PROBE_CONFIG, forced };
+  const stored = readStored();
+  if (!stored) return config;
+  if (typeof stored.url === 'string') config.url = stored.url;
+  if (typeof stored.key === 'string') config.key = stored.key;
+  if (stored.v === STORAGE_VERSION && typeof stored.autoDetect === 'boolean') config.autoDetect = stored.autoDetect;
+  return config;
+}
+
 // Whether questions about the computer go to the probe by themselves: only
-// once it has been set up here (a valid address and a saved key).
+// when the user turned it on and the probe is set up here (a valid address and a saved key).
 export function autoDetectReady(config) {
   return Boolean(config.autoDetect && config.key && cleanProbeUrl(config.url));
 }
 
 export function saveProbeConfig(patch) {
-  const next = { ...getProbeConfig(), ...patch };
+  if (typeof patch.forced === 'boolean') forced = patch.forced;
+  const current = getProbeConfig();
+  const next = {
+    url: patch.url ?? current.url,
+    key: patch.key ?? current.key,
+    autoDetect: patch.autoDetect ?? current.autoDetect,
+  };
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: STORAGE_VERSION, url: next.url, key: next.key, autoDetect: next.autoDetect }));
   } catch {
     // Without storage the setting lasts until the page reloads.
   }
-  window.dispatchEvent(new CustomEvent(PROBE_CHANGED_EVENT, { detail: next }));
-  return next;
+  const config = { ...next, forced };
+  window.dispatchEvent(new CustomEvent(PROBE_CHANGED_EVENT, { detail: config }));
+  return config;
 }
 
 // The current settings, updated when they change anywhere in the app.
