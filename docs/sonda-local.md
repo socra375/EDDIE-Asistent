@@ -82,6 +82,6 @@ escuchar solo en `127.0.0.1` (`uvicorn main:app --host 127.0.0.1 --port 8000`), 
 
 ## Límites
 
-- Solo desde el navegador del mismo equipo donde corre la sonda; ni el teléfono, ni Telegram, ni WhatsApp llegan a ella.
+- Solo desde el navegador del mismo equipo donde corre la sonda; ni el teléfono ni Telegram llegan a ella.
 - La sonda tiene su propio modelo de IA (sin la memoria de Eddie). Más adelante: fase 2 (la sonda se conecta a Eddie
   y recibe trabajos, para usarla desde Telegram) y fase 3 (la sonda solo expone herramientas y piensa el cerebro de Eddie).

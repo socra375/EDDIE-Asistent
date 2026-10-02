@@ -201,10 +201,6 @@ detalle del protocolo.
     `bot.js` (`handleWebhook`: secreto, comandos, notas de voz, el asistente,
     botones de confirmación); `handlers.js` enruta `link`, `unlink`,
     `settings` y `webhook`. La app lo controla desde `TelegramControls.jsx`.
-  - `whatsapp/`: entrada del hub para el canal de WhatsApp (sin herramientas
-    para el modelo). El bot vive en `api/_lib/whatsapp/` (`bot.js` webhook y
-    mensajes, `api.js` cliente de la Graph API, `store.js`, `handlers.js`,
-    `rawBody.js`) sobre el cerebro compartido de `api/_lib/channels/`.
   - `youtube/`: `open_youtube({ query?, url?, play? })` — sin argumentos abre
     la portada, con `query` los resultados de la búsqueda
     (`youtube.com/results?search_query=…`), con `url` el enlace que se dio.
@@ -291,7 +287,7 @@ detalle del protocolo.
   - `dates.js`: fechas en la zona del usuario ("hoy", "mañana", "el
     viernes", "3pm"), compartidas por Tareas y Calendario.
   - `planned.js`: solo metadatos de los conectores que llegan en próximas
-    sesiones (Telegram, Spotify, Notion, WhatsApp y el Chromebook), para
+    sesiones (Telegram, Spotify, Notion y el Chromebook), para
     mostrarlos en el hub.
   - `registry.js`: `createToolset({ disabled, context })` arma, para cada
     petición de chat, las declaraciones a ofrecer (solo conectores
@@ -328,7 +324,7 @@ detalle del protocolo.
   — `GET /api/connectors` devuelve esa lista (funciona con o sin sesión).
   Es una sola función (`vercel.json` reescribe `/api/connectors/<id>/...`
   a `/api/connectors?path=<id>/...`) para que el OAuth y los webhooks de los
-  próximos conectores (Telegram, WhatsApp) quepan sin superar el límite
+  próximos conectores (Telegram) quepan sin superar el límite
   de 12 funciones del plan Hobby de Vercel (hoy hay 11).
 - **`api/_lib/todayHandlers.js`** — `GET /api/connectors/today?tz=…&off=…`
   (enrutado por `connectorsHandlers.js`, así que sigue siendo la misma

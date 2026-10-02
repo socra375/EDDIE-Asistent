@@ -4,7 +4,7 @@ Guía de referencia para las 35 sesiones del plan de Eddie 2.0 (asistente person
 
 ## Principios
 
-1. **Un solo cerebro en la nube.** La web, Telegram, WhatsApp y la app de escritorio hablan con el mismo backend (`api/`). Ningún canal tiene lógica propia de IA.
+1. **Un solo cerebro en la nube.** La web, Telegram y la app de escritorio hablan con el mismo backend (`api/`). Ningún canal tiene lógica propia de IA.
 2. **Conectores como plugins.** Cada servicio externo (Gmail, Spotify, Notion…) es una carpeta autocontenida que declara su autorización y sus herramientas. Agregar uno nuevo no toca el resto.
 3. **Nada irreversible sin confirmación.** Enviar, borrar, publicar o gastar pasa siempre por una confirmación explícita del usuario.
 4. **Todo gratis por defecto.** Gemini como proveedor principal, Groq y OpenRouter como respaldo; cada conector usa el plan gratuito de su servicio.
@@ -33,7 +33,6 @@ api/
       gmail/                   ← (sesiones 9–11) buscar, leer y enviar/responder con confirmación (permisos incrementales)
       google/                  ← (sesión 12) Calendario: ver, crear, y mover/borrar con confirmación (+ Drive y Tareas → Calendario)
       telegram/
-      whatsapp/
       spotify/
       notion/
     memory/                    ← NUEVO: memoria vectorial (pgvector)
@@ -81,7 +80,7 @@ export default {
       run: async (args, ctx) => { … },  // ctx: timezone, ubicación y tareas del usuario, y emit(acción) para cambios en la app
     },
   ],
-  webhook: null,               // Telegram/WhatsApp: handler de mensajes entrantes
+  webhook: null,               // Telegram: handler de mensajes entrantes
 };
 ```
 
@@ -109,7 +108,7 @@ Implementado en la sesión 8.
 4. Al confirmar, la app llama a `POST /api/chat?action=confirm` con `{ tool, args, context }`. El servidor comprueba que la herramienta siga activa y sea `sensitive`, valida los argumentos (pueden venir editados), vuelve a correr `prepare` y luego `run`; responde `{ result, actions }` sin volver a llamar a la IA. Solo acepta peticiones de la propia app (`Sec-Fetch-Site`).
 5. Si el proveedor falla y responde un respaldo (Groq u OpenRouter), las tarjetas del intento fallido se descartan.
 
-Los canales Telegram y WhatsApp usarán botones del propio mensaje para lo mismo.
+El canal Telegram usa botones del propio mensaje para lo mismo.
 
 ### Agente de varios pasos
 
@@ -130,13 +129,9 @@ La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`
 - **"Llamar"**: la API de bots no permite llamadas de teléfono. `/llamar` y el botón de menú abren la app de Eddie como Web App dentro de Telegram (necesita `APP_URL` con https; el micrófono depende del teléfono; la sesión de Google es la del navegador de Telegram, así que puede pedir iniciar sesión otra vez).
 - Tablas en `db/migrations/0002_telegram.sql`. Los recordatorios y avisos que Eddie envía por su cuenta salen del trabajo programado (sección siguiente) usando `sendMessage` y `telegram_links`.
 
-### WhatsApp (Meta Cloud API)
+### WhatsApp (retirado)
 
-- **Cerebro compartido** (`api/_lib/channels/`): `brain.js#askEddie` (prompt, memoria, tareas, recuerdos de conversaciones, proveedor y acciones del usuario) y `runConfirmed` (ejecuta una tarjeta confirmada) más `common.js` (sí/no escrito, voz de Eddie, texto de las tarjetas, cierre de conversaciones frías) los usan Telegram y WhatsApp; cada canal solo pone su "nota de superficie", sus botones y su manera de enviar.
-- **Webhook** (`/api/connectors/whatsapp/webhook`): `GET` verifica la dirección (`hub.verify_token` en tiempo constante; la respuesta es texto plano, `respond.js` admite `text`); `POST` exige `X-Hub-Signature-256` (HMAC-SHA256 con `WHATSAPP_APP_SECRET`). Meta firma los bytes exactos y Vercel parsea el JSON, así que `api/connectors.js` lee el cuerpo crudo solo en esta ruta (`rawBody.js`; si no hay bytes crudos, se reconstruyen como Meta los escribe —`\uXXXX`, `\/`—: cualquier reconstrucción que coincida prueba que el emisor conocía el secreto). Responde 200 tras validar y deduplica por `wamid` (`whatsapp_messages`).
-- **Vinculación**: `POST whatsapp/link` (solo el dueño si hay `EDDIE_OWNER_EMAIL`) crea un código de 8 caracteres (10 min) y devuelve un enlace `wa.me/<número>?text=VINCULAR CÓDIGO` (el número sale de `GET /{phone-number-id}?fields=display_phone_number`); el mensaje `VINCULAR CÓDIGO` desde un teléfono lo liga a la cuenta (`whatsapp_links`, un teléfono por usuario). Cualquier otro mensaje de un número sin vincular solo recibe cómo vincular.
-- **Mensajes**: texto, notas de voz (descarga con el token → Whisper → respuesta; si habló, Eddie contesta con su voz subiendo un MP3 como medio), fotos (JPEG/PNG/WebP ≤ ~900 KB, a la visión de Gemini/Claude) y botones de respuesta (`ok:<id>` / `no:<id>`, título ≤ 20 caracteres) para las confirmaciones, con las mismas reglas que Telegram (24 h, ligadas al teléfono, también por "sí"/"no"). La descarga de medios solo acepta los servidores de Meta y solo a ellos se envía el token.
-- **Límites de la plataforma**: sin llamadas; texto libre solo dentro de las 24 h posteriores al último mensaje del usuario (siempre se cumple al responder), por eso los avisos de recordatorios y el resumen matutino siguen saliendo por Telegram (para WhatsApp harían falta plantillas aprobadas). Versión de la Graph API `v23.0` (`WHATSAPP_GRAPH_VERSION`).
+Se construyó con la API oficial de Meta (WhatsApp Cloud API) y se quitó: exige una cuenta de WhatsApp Business y un número propio de empresa, lo que no encaja con un asistente personal. El cerebro compartido (`api/_lib/channels/`) quedó para Telegram. Las tablas `whatsapp_*` de `0005_whatsapp.sql` ya no se usan.
 
 ### Sonda Local (EDDIE Prime, fase 1)
 
@@ -200,7 +195,6 @@ Seis herramientas en `api/_lib/connectors/github/`: `github_list_repos`, `github
 | `TAVILY_API_KEY` | 13 | Búsqueda web con Tavily (opcional: funciona sin clave con un límite bajo) |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | 23 | Spotify |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | 25 | Notion |
-| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` / `WHATSAPP_VERIFY_TOKEN` | 27 | WhatsApp Cloud API |
 | `CRON_SECRET` | 16 | Protege las tareas programadas |
 
 ## Claves que hay que crear (sesión 1)
