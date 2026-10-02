@@ -36,14 +36,17 @@ export function VoiceProvider({ children }) {
   const cloudVoice = cloudVoices.some((v) => v.id === settings.voice.elevenVoice) ? settings.voice.elevenVoice : undefined;
   const ttsEngine = settings.voice.tts !== 'browser' && cloudVoiceAvailable ? 'elevenlabs' : 'browser';
 
-  const speakWithSettings = (text, onEnd) => {
-    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, onEnd });
+  // Why the browser voice would be the one speaking (shown in Configuración).
+  const browserReason = settings.voice.tts === 'browser' ? 'chosen' : 'unconfigured';
+
+  const speakWithSettings = (text, onEnd, extra = {}) => {
+    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd, ...extra });
   };
 
   // Starts talking right away and takes the answer as it is written:
   // { push(textSoFar), end(finalText) }.
   const streamWithSettings = (onEnd) =>
-    synthesis.speakStream({ lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, onEnd });
+    synthesis.speakStream({ lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd });
 
   // Named explicitly rather than spread — the hooks share key names
   // (`supported`, `stop`), and a flat spread once let synthesis's `stop`
@@ -72,6 +75,8 @@ export function VoiceProvider({ children }) {
       cloudVoices,
       cloudVoice,
       cloudVoiceError: synthesis.cloudError,
+      engineInfo: synthesis.engineInfo,
+      sttLang,
       voices: synthesis.voices,
       speaking: synthesis.speaking,
       speak: synthesis.speak,

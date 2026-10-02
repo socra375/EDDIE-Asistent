@@ -12,6 +12,16 @@ export const DEFAULT_TTS_MODEL = 'eleven_flash_v2_5';
 // so a single call can't burn a big slice of the monthly credits.
 export const MAX_SPEECH_CHARS = 600;
 
+// How the voice is delivered. A bit less "stable" than ElevenLabs' default
+// and a touch of style make the intonation vary like a person's instead of
+// reading in a flat line; ELEVENLABS_STABILITY / _SIMILARITY / _STYLE (0 to 1)
+// change them.
+export const DEFAULT_VOICE_SETTINGS = { stability: 0.45, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true };
+// Neighbouring text sent along so each piece continues the previous one
+// instead of starting its intonation from scratch.
+const MAX_CONTEXT_CHARS = 300;
+const OUTPUT_FORMAT = 'mp3_44100_128';
+
 const VOICE_ID_RE = /^[A-Za-z0-9]{10,40}$/;
 const MAX_VOICES = 12;
 
@@ -50,6 +60,26 @@ export function voiceListStatus(env = process.env) {
   return voiceChoices(env).map(({ id, name, default: isDefault }) => ({ id, name, ...(isDefault ? { default: true } : {}) }));
 }
 
+function unit(value, fallback) {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
+}
+
+export function voiceSettings(env = process.env) {
+  return {
+    ...DEFAULT_VOICE_SETTINGS,
+    stability: unit(env.ELEVENLABS_STABILITY, DEFAULT_VOICE_SETTINGS.stability),
+    similarity_boost: unit(env.ELEVENLABS_SIMILARITY, DEFAULT_VOICE_SETTINGS.similarity_boost),
+    style: unit(env.ELEVENLABS_STYLE, DEFAULT_VOICE_SETTINGS.style),
+  };
+}
+
+function contextText(value, side) {
+  const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+  if (!text) return '';
+  return side === 'end' ? text.slice(-MAX_CONTEXT_CHARS) : text.slice(0, MAX_CONTEXT_CHARS);
+}
+
 function speechError(message, status) {
   const err = new Error(message);
   err.status = status;
@@ -79,6 +109,8 @@ export async function synthesizeSpeech({
   text,
   voiceId,
   language,
+  previousText,
+  nextText,
   apiKey = process.env.ELEVENLABS_API_KEY,
   model = process.env.ELEVENLABS_MODEL || DEFAULT_TTS_MODEL,
   env = process.env,
@@ -92,17 +124,29 @@ export async function synthesizeSpeech({
   const choices = voiceChoices(env);
   const voice = (choices.find((v) => v.id === voiceId) || choices[0]).id;
 
-  const body = { text: clean, model_id: model };
+  const body = { text: clean, model_id: model, voice_settings: voiceSettings(env) };
   // Flash/Turbo v2.5 accept a language hint, which keeps short Spanish
   // phrases from being read with an English accent.
   if (/v2_5/.test(model) && /^[a-z]{2}$/.test(language || '')) body.language_code = language;
+  const previous = contextText(previousText, 'end');
+  const next = contextText(nextText, 'start');
+  if (previous) body.previous_text = previous;
+  if (next) body.next_text = next;
 
-  const res = await fetch(`${ELEVENLABS_URL}/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_64`, {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
-  });
+  const send = (payload) =>
+    fetch(`${ELEVENLABS_URL}/${encodeURIComponent(voice)}/stream?output_format=${OUTPUT_FORMAT}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20000),
+    });
+  let res = await send(body);
+  // A model that doesn't take the neighbouring text answers 400/422: say it
+  // once more without it rather than staying silent.
+  if ((res.status === 400 || res.status === 422) && (previous || next)) {
+    const { previous_text: _p, next_text: _n, ...plain } = body;
+    res = await send(plain);
+  }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     throw elevenLabsError(res.status, data);
@@ -120,8 +164,8 @@ export async function runSpeech(req, res) {
     return;
   }
   try {
-    const { text, voiceId, language } = req.body || {};
-    const upstream = await synthesizeSpeech({ text, voiceId, language: typeof language === 'string' ? language.slice(0, 2) : '' });
+    const { text, voiceId, language, previousText, nextText } = req.body || {};
+    const upstream = await synthesizeSpeech({ text, voiceId, language: typeof language === 'string' ? language.slice(0, 2) : '', previousText, nextText });
     res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
     const reader = upstream.body.getReader();
     for (;;) {

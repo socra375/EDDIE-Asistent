@@ -59,7 +59,7 @@ function readyEnd(raw) {
 // firstMin/firstMax: the first piece goes out as soon as it has `firstMin`
 // characters and is at most `firstMax` long. Later pieces wait until they
 // have `min` characters (fewer, longer requests) and are cut at `max`.
-export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80, max = 260 } = {}) {
+export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80, max = 260, lang = 'es' } = {}) {
   let consumed = 0; // characters of the raw text already taken
   let pending = ''; // speakable text waiting to be handed out
   let sent = 0; // pieces handed out so far
@@ -85,13 +85,13 @@ export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80,
       const cut = readyEnd(raw);
       if (cut <= 0) return [];
       consumed += cut;
-      const spoken = speakableText(raw.slice(0, cut));
+      const spoken = speakableText(raw.slice(0, cut), lang);
       if (spoken) pending = pending ? `${pending} ${spoken}` : spoken;
       return pending.length >= (sent === 0 ? firstMin : min) ? release(pieces(pending)) : [];
     },
     end(finalText) {
       if (typeof finalText === 'string') lastText = finalText;
-      const spoken = speakableText(lastText.slice(consumed));
+      const spoken = speakableText(lastText.slice(consumed), lang);
       consumed = lastText.length;
       const rest = [pending, spoken].filter(Boolean).join(' ');
       return release(pieces(rest));

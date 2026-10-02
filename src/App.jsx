@@ -22,26 +22,34 @@ import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
 
+const FILLERS = ['Un momento, lo reviso.', 'Déjame ver.', 'Dame un segundo.', 'Ahora mismo lo miro.'];
+const FILLER_AFTER_MS = 1500;
+const FILLER_MAX_MS = 6000;
+
 // Reads Eddie's answers aloud when the voice is on. An answer that streams in
 // is spoken sentence by sentence while it is still being written; anything
 // that arrives whole (small talk, the probe, an error) is read in one go.
 function AutoReadBridge() {
-  const { messages, status, lastReply } = useChat();
+  const { messages, status, lastReply, liveSteps } = useChat();
   const { speakWithSettings, streamWithSettings } = useVoice();
   const { settings } = useSettings();
   const autoRead = settings.voice.autoRead;
   const streamRef = useRef(null); // { id, controller }
+  // A short "un momento" said while tools run (see below); the answer waits
+  // for it to end instead of cutting it off.
+  const fillerRef = useRef({ spoken: false, busy: false, pending: null });
+  const [fillerTick, setFillerTick] = useState(0);
 
   // The answer being written: the last message while Eddie is responding.
   const writing = status === 'responding' ? messages.at(-1) : null;
   const writingId = writing?.role === 'assistant' && !writing.isError ? writing.id : null;
   const writingText = writingId ? writing.content : '';
   useEffect(() => {
-    if (!autoRead || !writingId) return;
+    if (!autoRead || !writingId || fillerRef.current.busy) return;
     if (streamRef.current?.id !== writingId) streamRef.current = { id: writingId, controller: streamWithSettings() };
     streamRef.current.controller.push(writingText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [writingId, writingText, autoRead]);
+  }, [writingId, writingText, autoRead, fillerTick]);
 
   // The answer is complete: finish the stream, or read it whole if it never streamed.
   useEffect(() => {
@@ -50,6 +58,8 @@ function AutoReadBridge() {
     if (stream?.id === lastReply.id) {
       stream.controller.end(lastReply.content);
       streamRef.current = null;
+    } else if (fillerRef.current.busy) {
+      fillerRef.current.pending = lastReply;
     } else {
       speakWithSettings(lastReply.content);
     }
@@ -62,6 +72,42 @@ function AutoReadBridge() {
     streamRef.current.controller.end();
     streamRef.current = null;
   }, [status]);
+
+  // Tools take a few seconds with nothing to hear: after 1.5 s of them
+  // running, Eddie says one short line (Spanish only, once per turn).
+  const working = status === 'processing' && liveSteps.length > 0;
+  useEffect(() => {
+    if (!liveSteps.length) fillerRef.current.spoken = false;
+  }, [liveSteps.length]);
+  useEffect(() => {
+    const filler = fillerRef.current;
+    if (!autoRead || !working || filler.spoken || settings.language !== 'es') return undefined;
+    const timer = setTimeout(() => {
+      filler.spoken = true;
+      filler.busy = true;
+      const line = FILLERS[Math.floor(Math.random() * FILLERS.length)];
+      // Called when the line ends — or after FILLER_MAX_MS if it never does
+      // (audio blocked, stopped by something else) — so the answer is never held back.
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        clearTimeout(failsafe);
+        filler.busy = false;
+        if (filler.pending) {
+          const reply = filler.pending;
+          filler.pending = null;
+          speakWithSettings(reply.content);
+        } else {
+          setFillerTick((n) => n + 1);
+        }
+      };
+      const failsafe = setTimeout(release, FILLER_MAX_MS);
+      speakWithSettings(line, release, { filler: true });
+    }, FILLER_AFTER_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [working, autoRead]);
 
   return null;
 }
