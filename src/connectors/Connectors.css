@@ -411,3 +411,413 @@
   flex-shrink: 0;
   padding: 0.35rem 0.55rem;
 }
+
+/* ---- Orbit view: connectors as nodes around a reactor ---- */
+.connectors__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.connectors__views {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.connectors__orbit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.connectors__detail {
+  min-width: 0;
+}
+
+.connectors__hint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.2rem;
+}
+
+.connectors__hint h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.connectors__hint p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.connectors__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.orbit__dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 0.5rem;
+  border: 1px solid var(--text-faint);
+  border-radius: 50%;
+}
+
+.orbit__dot--on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.orbit__dot--warn {
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+.orbit__dot--bad {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.orbit {
+  --orbit-spin: 3.4s;
+  --orbit-ease: cubic-bezier(0.1, 0.65, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+/* Everything inside is sized from the stage's own width (cqw). */
+.orbit__stage {
+  position: relative;
+  width: min(100%, 600px);
+  aspect-ratio: 1;
+  container-type: inline-size;
+}
+
+.orbit__track {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.orbit__track--outer {
+  width: 84cqw;
+  height: 84cqw;
+}
+
+.orbit__track--inner {
+  width: 52cqw;
+  height: 52cqw;
+}
+
+/* Reactor in the middle. */
+.orbit__reactor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 36cqw;
+  height: 36cqw;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(63, 232, 255, 0.22) 0%, rgba(63, 232, 255, 0.06) 45%, transparent 70%);
+}
+
+.orbit__reactor-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--accent);
+}
+
+.orbit__r-track {
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.orbit__r-dash {
+  stroke-width: 3;
+  stroke-dasharray: 34 12;
+  opacity: 0.8;
+}
+
+.orbit__r-ticks {
+  stroke-width: 6;
+  stroke-dasharray: 2 9;
+  opacity: 0.55;
+}
+
+.orbit__r-ring {
+  stroke-width: 3;
+  opacity: 0.9;
+}
+
+.orbit__r-ring--thin {
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.orbit__r-tri {
+  stroke-width: 1.5;
+  opacity: 0.55;
+  stroke-linejoin: round;
+}
+
+.orbit__r-core {
+  fill: var(--accent);
+  stroke: none;
+  opacity: 0.35;
+}
+
+.orbit__r-spin {
+  transform-origin: 100px 100px;
+}
+
+.orbit__center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 17cqw;
+  text-align: center;
+  color: var(--accent-2);
+}
+
+.orbit__center strong {
+  font-size: clamp(0.6rem, 2.4cqw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  overflow-wrap: anywhere;
+}
+
+.orbit__center > span {
+  font-size: clamp(0.5rem, 1.8cqw, 0.64rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.orbit__center-state--on {
+  color: var(--success) !important;
+}
+
+.orbit__center-state--warn {
+  color: var(--warning) !important;
+}
+
+.orbit__center-state--bad {
+  color: var(--danger) !important;
+}
+
+/* Rings of nodes. A slot sits at an angle on the ring; "upright" undoes the
+   slot's rotation and "counter" undoes the intro sweep, so icons never tilt. */
+.orbit__ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* the rings overlap; only the nodes take clicks */
+}
+
+.orbit__slot {
+  --r: 42cqw;
+  --node: clamp(40px, 9.5cqw, 56px);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--a)) translateY(calc(var(--r) * -1));
+}
+
+.orbit__ring--inner .orbit__slot {
+  --r: 26cqw;
+}
+
+.orbit__upright {
+  transform: rotate(calc(var(--a) * -1));
+}
+
+.orbit__counter {
+  position: relative;
+  width: 0;
+  height: 0;
+}
+
+.orbit__node {
+  position: absolute;
+  top: calc(var(--node) / -2);
+  left: calc(var(--node) / -2);
+  display: grid;
+  place-items: center;
+  width: var(--node);
+  height: var(--node);
+  padding: 0;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.orbit__node:hover,
+.orbit__node:focus-visible,
+.orbit__node--selected {
+  transform: scale(1.14);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+
+.orbit__node--selected {
+  border-width: 2.5px;
+  border-color: var(--accent-2);
+}
+
+.orbit__node--off,
+.orbit__node--planned {
+  border-color: var(--panel-border);
+  color: var(--text-faint);
+}
+
+.orbit__node--needs_account {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.orbit__node--needs_setup {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Names under the nodes, only where there is room. */
+.orbit__label {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  display: none;
+  width: 92px;
+  transform: translateX(-50%);
+  overflow: hidden;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+@container (min-width: 500px) {
+  .orbit__label {
+    display: block;
+  }
+}
+
+/* ---- The intro: rings sweep round and nodes light up, then it all stops ---- */
+@keyframes orbit-sweep-outer {
+  from { transform: rotate(-250deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-unsweep-outer {
+  from { transform: rotate(250deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-sweep-inner {
+  from { transform: rotate(190deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-unsweep-inner {
+  from { transform: rotate(-190deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-reactor-cw {
+  from { transform: rotate(-300deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-reactor-ccw {
+  from { transform: rotate(300deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes orbit-node-in {
+  from { opacity: 0; scale: 0.3; }
+  to { opacity: 1; scale: 1; }
+}
+
+.orbit--spinning .orbit__ring--outer { animation: orbit-sweep-outer var(--orbit-spin) var(--orbit-ease) both; }
+.orbit--spinning .orbit__ring--inner { animation: orbit-sweep-inner var(--orbit-spin) var(--orbit-ease) both; }
+.orbit--spinning .orbit__ring--outer .orbit__counter { animation: orbit-unsweep-outer var(--orbit-spin) var(--orbit-ease) both; }
+.orbit--spinning .orbit__ring--inner .orbit__counter { animation: orbit-unsweep-inner var(--orbit-spin) var(--orbit-ease) both; }
+.orbit--spinning .orbit__r-spin--cw { animation: orbit-reactor-cw var(--orbit-spin) var(--orbit-ease) both; }
+.orbit--spinning .orbit__r-spin--ccw { animation: orbit-reactor-ccw var(--orbit-spin) var(--orbit-ease) both; }
+
+/* Each node appears at its own moment of the sweep. */
+.orbit--spinning .orbit__node {
+  animation: orbit-node-in 0.45s ease-out both;
+  animation-delay: calc(0.15s + var(--i) * (var(--orbit-spin) * 0.55 / var(--n)));
+}
+
+.orbit--spinning .orbit__ring,
+.orbit--spinning .orbit__counter,
+.orbit--spinning .orbit__r-spin {
+  will-change: transform;
+}
+
+.orbit--spinning .orbit__label {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:root[data-perf='lite'] .orbit *,
+:root[data-perf='lite'] .orbit {
+  animation: none !important;
+  will-change: auto !important;
+}
+
+.orbit__replay {
+  font-size: 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .connectors__orbit {
+    grid-template-columns: 1fr;
+  }
+}

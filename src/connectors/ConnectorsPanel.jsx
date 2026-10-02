@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import TelegramControls from './TelegramControls';
 import ProbeControls from './ProbeControls';
 import OAuthLinkControls from './OAuthLinkControls';
+import ConnectorOrbit from './ConnectorOrbit';
 import ComputerControls from './ComputerControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
@@ -20,6 +22,16 @@ const STATUS = {
 };
 
 const CATEGORY = { asistente: 'Asistente', informacion: 'Información', comunicacion: 'Comunicación', agenda: 'Agenda', multimedia: 'Multimedia', productividad: 'Productividad' };
+
+const VIEW_KEY = 'eddie.connectors.view';
+
+function readView() {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'orbit';
+  } catch {
+    return 'orbit';
+  }
+}
 
 const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
@@ -145,7 +157,19 @@ export default function ConnectorsPanel({ notice = null }) {
   const { user, login } = useAuth();
   const { settings, setConnectorEnabled } = useSettings();
   const { status, connectors, error, reload } = useConnectors(user?.id || null);
+  const [view, setView] = useState(readView);
+  // Coming back from an OAuth flow opens that connector's card right away.
+  const [selectedId, setSelectedId] = useState(notice?.connector || null);
   const off = new Set(settings.disabledConnectors || []);
+
+  const changeView = (next) => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* storage blocked: the choice just isn't remembered */
+    }
+  };
 
   const live = connectors.filter(isLive);
   const pending = connectors.filter((c) => c.status === 'needs_account' || c.status === 'needs_setup');
@@ -165,6 +189,14 @@ export default function ConnectorsPanel({ notice = null }) {
     />
   );
 
+  // Orbit nodes: active ones first, then the ones that still need something.
+  const nodes = [...live, ...pending, ...planned].map((c) => {
+    const off_ = isLive(c) && c.tools.length > 0 && off.has(c.id);
+    const st = STATUS[off_ ? 'off' : c.status] || STATUS.planned;
+    return { connector: c, tone: st.tone, label: st.label, off: off_ };
+  });
+  const selected = connectors.find((c) => c.id === selectedId) || null;
+
   return (
     <section className="connectors">
       <div className="glass-panel connectors__summary">
@@ -173,12 +205,24 @@ export default function ConnectorsPanel({ notice = null }) {
           ofrecerse en el chat.
         </p>
         {status === 'ready' && (
-          <div className="chips">
-            <span className={`chip ${activeTools ? 'on' : ''}`}>
-              {activeTools} {activeTools === 1 ? 'herramienta activa' : 'herramientas activas'}
-            </span>
-            <span className={`chip ${pending.length ? 'warn' : ''}`}>{pending.length} por conectar</span>
-            <span className="chip">{planned.length} próximamente</span>
+          <div className="connectors__bar">
+            <div className="chips">
+              <span className={`chip ${activeTools ? 'on' : ''}`}>
+                {activeTools} {activeTools === 1 ? 'herramienta activa' : 'herramientas activas'}
+              </span>
+              <span className={`chip ${pending.length ? 'warn' : ''}`}>{pending.length} por conectar</span>
+              <span className="chip">{planned.length} próximamente</span>
+            </div>
+            <div className="connectors__views" role="group" aria-label="Vista">
+              {[
+                ['orbit', 'Órbita'],
+                ['list', 'Lista'],
+              ].map(([id, label]) => (
+                <button key={id} type="button" className={`chip chip--button connectors__view ${view === id ? 'on' : ''}`} aria-pressed={view === id} onClick={() => changeView(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {settings.provider === 'claude' && (
@@ -205,12 +249,39 @@ export default function ConnectorsPanel({ notice = null }) {
         </div>
       )}
 
-      {status === 'ready' && (
+      {status === 'ready' && view === 'list' && (
         <>
           {live.length > 0 && <Section title="Activos">{live.map(card)}</Section>}
           {pending.length > 0 && <Section title="Por conectar">{pending.map(card)}</Section>}
           {planned.length > 0 && <Section title="Próximamente">{planned.map(card)}</Section>}
         </>
+      )}
+
+      {status === 'ready' && view === 'orbit' && (
+        <div className="connectors__orbit">
+          <ConnectorOrbit
+            nodes={nodes}
+            selectedId={selected?.id || null}
+            onSelect={setSelectedId}
+            summary={`${connectors.length} conectores`}
+          />
+          <aside className="connectors__detail" aria-label="Detalle del conector">
+            {selected ? (
+              card(selected)
+            ) : (
+              <div className="glass-panel connectors__hint">
+                <h3>Elige un conector</h3>
+                <p>Toca un icono de la órbita para ver qué puede hacer Eddie con él, encenderlo, apagarlo o conectarlo.</p>
+                <ul className="connectors__legend">
+                  <li><i className="orbit__dot orbit__dot--on" /> Listo o conectado</li>
+                  <li><i className="orbit__dot orbit__dot--warn" /> Por conectar</li>
+                  <li><i className="orbit__dot orbit__dot--bad" /> Falta configurar</li>
+                  <li><i className="orbit__dot" /> Apagado</li>
+                </ul>
+              </div>
+            )}
+          </aside>
+        </div>
       )}
     </section>
   );
