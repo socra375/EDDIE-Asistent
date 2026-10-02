@@ -312,6 +312,15 @@
   overflow-wrap: anywhere;
 }
 
+.eddie-orb__status--action {
+  font: inherit;
+  cursor: pointer;
+}
+
+.eddie-orb__status--action:hover {
+  background: var(--accent-soft);
+}
+
 .eddie-orb__dot {
   flex: none;
   width: 7px;
@@ -595,6 +604,16 @@
 }
 
 .home__conversation-close {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Closed: the column goes away and the orb gets the room. */
+.home--chat-closed {
+  grid-template-columns: minmax(240px, 300px) 1fr;
+}
+
+.home__conversation:not(.home__conversation--open) {
   display: none;
 }
 
@@ -625,13 +644,14 @@
     visibility: hidden;
   }
 
+  /* A drawer: it stays in place, off screen, until opened. */
+  .home__conversation:not(.home__conversation--open) {
+    display: flex;
+  }
+
   .home__conversation--open {
     transform: none;
     visibility: visible;
-  }
-
-  .home__conversation-close {
-    display: inline-flex;
   }
 }
 

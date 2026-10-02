@@ -30,6 +30,28 @@ const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
 
 const PREVIEW_CHARS = 220;
 
+// Why the browser's speech recognizer keeps failing, for the orb's tooltip.
+const WAKE_REASONS = {
+  network: 'El navegador no logra conectarse a su servicio de voz (¿sin internet, o bloqueado por quien administra el equipo?). Eddie sigue intentándolo.',
+  'service-not-allowed': 'El navegador no deja usar su servicio de voz en este equipo.',
+  'language-not-supported': 'El navegador no admite el idioma elegido para escuchar.',
+  quick: 'El reconocimiento de voz del navegador se corta apenas empieza (la conexión o el micrófono fallan). Eddie sigue intentándolo.',
+};
+const CHAT_KEY = 'eddie.home.chat';
+const WIDE_QUERY = '(min-width: 1101px)';
+
+// Whether the conversation starts open: what the user chose last time, else
+// open on a wide window and closed (a drawer) on a narrow one.
+function initialChatOpen() {
+  try {
+    const saved = localStorage.getItem(CHAT_KEY);
+    if (saved === 'open' || saved === 'closed') return saved === 'open';
+  } catch {
+    // Without storage the default applies.
+  }
+  return window.matchMedia?.(WIDE_QUERY).matches ?? true;
+}
+
 export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
@@ -37,7 +59,7 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(initialChatOpen);
 
   // The "Hablar con Eddie" shortcut: the orb is ready, a tap (or Enter) starts listening.
   // (A page can't open the microphone or play sound before the user touches it.)
@@ -75,8 +97,25 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
 
   const errorText = status === 'error' ? errorMessage : sttError;
   let label = visual === 'error' ? `ERROR · ${(errorText || '').toUpperCase()}` : LABELS[visual];
-  // At rest with the wake word on, say so: it is what the user can do now.
-  if (visual === 'idle' && wake.enabled && wake.status === 'listening') label = `ESCUCHANDO LA PALABRA CLAVE · «${wake.word.toUpperCase()}»`;
+  // At rest with the wake word on, say what it is doing — including when it is
+  // not working, instead of quietly going back to "EN ESPERA".
+  let labelTitle;
+  let labelAction;
+  if (visual === 'idle' && wake.enabled) {
+    if (wake.status === 'listening') label = `ESCUCHANDO LA PALABRA CLAVE · «${wake.word.toUpperCase()}»`;
+    else if (wake.status === 'retrying') {
+      label = 'PALABRA CLAVE SIN SEÑAL · REINTENTANDO';
+      labelTitle = WAKE_REASONS[wake.reason] || WAKE_REASONS.quick;
+    } else if (wake.status === 'denied') {
+      label = 'MICRÓFONO BLOQUEADO · PULSA PARA REINTENTAR';
+      labelTitle = 'El navegador bloqueó el micrófono: permítelo en el candado de la barra de direcciones y pulsa aquí.';
+      labelAction = wake.retry;
+    } else if (wake.status === 'error') {
+      label = 'PALABRA CLAVE DETENIDA · PULSA PARA REINTENTAR';
+      labelTitle = 'No se pudo usar el micrófono (¿otra app lo tiene ocupado?). Pulsa para reintentar.';
+      labelAction = wake.retry;
+    } else if (wake.status === 'unsupported') label = 'ESTE NAVEGADOR NO ESCUCHA LA PALABRA CLAVE';
+  }
 
   function activate() {
     if (transcribing) return;
@@ -98,12 +137,27 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
     start();
   }
 
-  // The conversation is always on screen on a wide window; on a narrow one it
-  // is a drawer, and the keyboard button opens it.
-  function openKeyboard() {
-    setChatOpen(true);
-    window.setTimeout(() => document.querySelector('.home__conversation .chat-panel__textarea')?.focus(), 50);
+  // The conversation opens and closes: a column on a wide window (the orb takes
+  // the room when it is closed), a drawer over the content on a narrow one. The
+  // choice is remembered; Escape closes the drawer.
+  function toggleChat(open = !chatOpen) {
+    setChatOpen(open);
+    try {
+      localStorage.setItem(CHAT_KEY, open ? 'open' : 'closed');
+    } catch {
+      // The choice just isn't remembered.
+    }
+    if (open) window.setTimeout(() => document.querySelector('.home__conversation .chat-panel__textarea')?.focus(), 50);
   }
+
+  useEffect(() => {
+    if (!chatOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !window.matchMedia(WIDE_QUERY).matches) setChatOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chatOpen]);
 
   function exportConversation() {
     const lines = messages
@@ -131,7 +185,7 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const replyPreview = expanded || reply.length <= PREVIEW_CHARS ? reply : `${reply.slice(0, PREVIEW_CHARS)}…`;
 
   return (
-    <section className="home">
+    <section className={`home ${chatOpen ? '' : 'home--chat-closed'}`}>
       <div className="home__col">
         <SystemPanel />
         <WeatherPanel />
@@ -141,7 +195,7 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
       </div>
 
       <div className="home__center">
-        <EddieOrb state={RING_STATE[visual] || visual} label={label} onActivate={activate} actionLabel={actionLabel} />
+        <EddieOrb state={RING_STATE[visual] || visual} label={label} labelTitle={labelTitle} onLabelClick={labelAction} onActivate={activate} actionLabel={actionLabel} />
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
@@ -207,9 +261,10 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
           <button
             type="button"
             className={`home__fab ${chatOpen ? 'home__fab--live' : ''}`}
-            onClick={openKeyboard}
-            aria-label="Escribirle a Eddie"
-            title="Escribirle a Eddie"
+            onClick={() => toggleChat()}
+            aria-label={chatOpen ? 'Cerrar la conversación' : 'Abrir la conversación y escribirle a Eddie'}
+            aria-expanded={chatOpen}
+            title={chatOpen ? 'Cerrar la conversación' : 'Abrir la conversación y escribirle a Eddie'}
           >
             <Icon name="chat" />
           </button>
@@ -226,8 +281,8 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
             <button type="button" className="btn" onClick={exportConversation} disabled={!messages.length}>
               Exportar
             </button>
-            <button type="button" className="btn home__conversation-close" onClick={() => setChatOpen(false)}>
-              Cerrar
+            <button type="button" className="btn home__conversation-close" onClick={() => toggleChat(false)} aria-label="Cerrar la conversación" title="Cerrar la conversación">
+              <Icon name="close" size={14} />
             </button>
           </div>
         </div>

@@ -53,6 +53,7 @@ const WAKE_STATUS = {
   off: 'Desactivada',
   unsupported: 'Tu navegador no permite escuchar una palabra clave (usa Chrome o Edge).',
   paused: 'En pausa mientras hablas con Eddie o él contesta.',
+  retrying: 'El navegador no logra escuchar ahora y sigue intentándolo (puede ser la conexión o que otra app use el micrófono).',
   denied: 'El navegador bloqueó el micrófono: permítelo en el candado de la barra de direcciones.',
   error: 'No se pudo escuchar (micrófono ocupado o sin conexión).',
 };
