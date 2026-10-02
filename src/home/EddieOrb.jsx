@@ -13,7 +13,7 @@ const BARS = [0.35, 0.6, 1, 0.6, 0.35];
 // "segments" when they turn.
 const circumference = (r) => 2 * Math.PI * r;
 
-export default function EddieOrb({ state, label, onActivate, actionLabel }) {
+export default function EddieOrb({ state, label, onActivate, actionLabel, labelTitle, onLabelClick }) {
   return (
     <div className="eddie-orb" data-state={state}>
       <button type="button" className="eddie-orb__hit" onClick={onActivate} aria-label={actionLabel}>
@@ -51,10 +51,17 @@ export default function EddieOrb({ state, label, onActivate, actionLabel }) {
       </button>
 
       <h2 className="eddie-orb__name">E.D.D.I.E.</h2>
-      <p className="eddie-orb__status" role="status">
-        <span className="eddie-orb__dot" aria-hidden="true" />
-        {label}
-      </p>
+      {onLabelClick ? (
+        <button type="button" className="eddie-orb__status eddie-orb__status--action" onClick={onLabelClick} title={labelTitle}>
+          <span className="eddie-orb__dot" aria-hidden="true" />
+          {label}
+        </button>
+      ) : (
+        <p className="eddie-orb__status" role="status" title={labelTitle}>
+          <span className="eddie-orb__dot" aria-hidden="true" />
+          {label}
+        </p>
+      )}
     </div>
   );
 }

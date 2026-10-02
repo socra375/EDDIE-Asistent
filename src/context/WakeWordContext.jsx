@@ -176,10 +176,11 @@ export function WakeWordProvider({ children }) {
       secondsLeft,
       supported: wakeWordSupported,
       status: listener.status,
+      reason: listener.reason,
       heard: listener.heard,
       retry: listener.retry,
     }),
-    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.heard, listener.retry],
+    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry],
   );
 
   return <WakeWordContext.Provider value={value}>{children}</WakeWordContext.Provider>;
