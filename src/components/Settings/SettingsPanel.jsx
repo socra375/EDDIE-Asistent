@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
 import { formatSeconds, useVoiceTimings } from '../../services/voiceTiming';
+import { describeEngine, onlyLocalVoices } from '../../services/speechText';
 import { isLite, lowPowerDevice, PERF_CHANGED_EVENT, readGuard, writeGuard } from '../../services/performance';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import Icon from '../../layout/Icon';
@@ -60,7 +61,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
-  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, speakWithSettings } =
+  const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, engineInfo, sttLang, speakWithSettings } =
     useVoice();
   const health = useProviderHealth();
   const timings = useVoiceTimings();
@@ -357,6 +358,16 @@ export default function SettingsPanel({ onOpenConversation }) {
           <button type="button" className="btn settings-voice-test" onClick={() => speakWithSettings('Hola, soy Eddie. Así suena mi voz.')}>
             Probar voz
           </button>
+        )}
+        {engineInfo?.engine && (
+          <p className="settings-placeholder" aria-live="polite">
+            Habló con: {describeEngine(engineInfo)}
+          </p>
+        )}
+        {engineInfo?.engine === 'browser' && onlyLocalVoices(voices, sttLang, settings.voice.voiceURI) && (
+          <p className="settings-placeholder">
+            Las voces instaladas en el equipo suenan más robóticas. En ChromeOS: Ajustes → Accesibilidad → Texto a voz → Voces naturales; en Chrome, elige arriba una voz «Google» o «Natural».
+          </p>
         )}
         <p className="settings-placeholder" aria-live="polite">
           Última respuesta · transcribir: {formatSeconds(timings.transcribe)} · primeras palabras: {formatSeconds(timings.firstToken)} · primera voz: {formatSeconds(timings.firstVoice)} · total desde que

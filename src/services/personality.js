@@ -100,7 +100,12 @@ function describeTasks(tasks) {
     .join('\n');
 }
 
-export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [] }) {
+// Added while Eddie reads his answers aloud: written to be heard, so the
+// voice sounds like a person talking and not like a document being read.
+const SPOKEN_STYLE =
+  'Esta respuesta se va a leer en voz alta. Habla como una persona en una conversación: frases cortas y naturales (normalmente de 1 a 3), empieza directo sin fórmulas de asistente como «Claro, con gusto», usa conectores cotidianos («vale», «mira», «bueno») con mesura, sin listas, tablas, emojis ni símbolos raros, y escribe las cantidades como se dicen. Si piden código o un texto largo, entrégalo completo; lo que se oiga debe ser corto: resume lo esencial y ofrece seguir.';
+
+export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [], spoken = false }) {
   const modeConfig = MODES[mode] || MODES[DEFAULT_MODE];
   const languageName = LANGUAGE_NAMES[language] || language;
 
@@ -114,6 +119,7 @@ export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory
     `Modo de respuesta actual: ${modeConfig.label}. ${modeConfig.instruction}`,
   ];
 
+  if (spoken) parts.push(SPOKEN_STYLE);
   if (memoryLines) {
     parts.push(`Lo que sabes del usuario (úsalo solo si es relevante):\n${memoryLines}`);
   }

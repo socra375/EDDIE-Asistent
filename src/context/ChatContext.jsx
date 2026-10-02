@@ -323,6 +323,7 @@ export function ChatProvider({ children }) {
         query: trimmed,
         tasks: getTasks(),
         disabledConnectors: settings.disabledConnectors || [],
+        spoken: Boolean(settings.voice?.autoRead),
       });
 
       // Filled in as soon as the first chunk arrives, so the bubble appears

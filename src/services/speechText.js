@@ -22,7 +22,7 @@ function voiceScore(voice, lang) {
   if (/natural|neural|online|premium|enhanced/i.test(voice.name)) score += 25;
   if (/google/i.test(voice.name)) score += 20;
   if (/espeak|robot/i.test(voice.name)) score -= 20;
-  if (!voice.localService) score += 5;
+  if (!voice.localService) score += 10;
   // Latin American Spanish first for es-419/es-US users, Spain's otherwise.
   if (base === 'es' && /es-(us|mx|419)/.test(vLang)) score += 2;
   return score;
@@ -45,17 +45,37 @@ export function pickVoice(voices, lang, preferredURI) {
   return best;
 }
 
-// Markdown symbols, code and links read aloud sound like noise.
-export function speakableText(text) {
-  return String(text || '')
+// Written symbols a voice would read badly (or not at all); Spanish only,
+// since the spoken words are Spanish.
+const SPOKEN_SYMBOLS = [
+  [/\bE\.\s?D\.\s?D\.\s?I\.\s?E\.?/gi, 'Eddie'],
+  [/\s*°\s*C\b/g, ' grados'],
+  [/\s*º\s*C\b/g, ' grados'],
+  [/\s*°/g, ' grados'],
+  [/\s*%/g, ' por ciento'],
+  [/\bkm\/h\b/gi, 'kilómetros por hora'],
+  [/\bm\/s\b/gi, 'metros por segundo'],
+  [/\s*&\s*/g, ' y '],
+];
+
+// Markdown symbols, emojis, code and links read aloud sound like noise.
+export function speakableText(text, lang = 'es') {
+  let out = String(text || '')
     .replace(/```[\s\S]*?```/g, ' (código omitido) ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/https?:\/\/\S+/g, '')
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D]/gu, '')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s*[-*+]\s+/gm, '')
+    // "1. Lo primero…": the number of a list item isn't read out.
+    .replace(/^\s*\d{1,2}[.)]\s+(?=\S)/gm, '');
+  if (lang === 'es') for (const [pattern, spoken] of SPOKEN_SYMBOLS) out = out.replace(pattern, spoken);
+  return out
     .replace(/[*_~>|#]+/g, '')
+    // A line break without punctuation is still a pause when read aloud.
+    .replace(/([^.!?;:,\s])[ \t]*\n+/g, '$1. ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -96,4 +116,25 @@ export function splitForCloud(text) {
   const [first, ...rest] = splitForSpeech(text, CLOUD_FIRST_CHUNK);
   if (!first) return [];
   return [first, ...splitForSpeech(rest.join(' '), CLOUD_CHUNK)];
+}
+
+// What the "Habló con…" line in Configuración → Voz says: which engine read
+// the last answer and, for the browser voice, why it did.
+export function describeEngine(info) {
+  if (!info?.engine) return '';
+  if (info.engine === 'elevenlabs') return 'ElevenLabs (la voz propia de Eddie).';
+  const reasons = {
+    chosen: 'elegiste una voz del navegador; para usar ElevenLabs elige «ElevenLabs · …» en Voz de Eddie.',
+    unconfigured: 'ElevenLabs no está configurado (falta ELEVENLABS_API_KEY en Vercel y volver a desplegar).',
+    error: `ElevenLabs falló${info.detail ? `: ${info.detail}` : '.'}`,
+    paused: 'ElevenLabs está en pausa unos minutos después de un error; se vuelve a intentar solo.',
+    unsupported: 'este navegador no puede reproducir el audio de ElevenLabs.',
+  };
+  return `Navegador — ${reasons[info.reason] || reasons.chosen}`;
+}
+
+// Local voices (installed on the device) sound the most robotic.
+export function onlyLocalVoices(voices, lang, preferredURI) {
+  const best = pickVoice(voices, lang, preferredURI);
+  return !best || best.localService !== false;
 }

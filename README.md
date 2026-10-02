@@ -135,7 +135,9 @@ exclusivamente desde variables de entorno del backend:
 - `ELEVENLABS_API_KEY` — (opcional) la **voz propia de Eddie**: las
   respuestas se leen con ElevenLabs usando la voz `bUQeiO7gn4ehGuSnZf26`
   y el modelo `eleven_flash_v2_5` (en español, rápido y a mitad de
-  créditos). `ELEVENLABS_VOICE_ID` y `ELEVENLABS_MODEL` los cambian. Sin la
+  créditos). `ELEVENLABS_VOICE_ID` y `ELEVENLABS_MODEL` los cambian; el tono se ajusta con
+  `ELEVENLABS_STABILITY` (0,45 por defecto: más bajo = más expresiva), `ELEVENLABS_SIMILARITY` (0,8)
+  y `ELEVENLABS_STYLE` (0,15), valores de 0 a 1. Sin la
   clave, si se acaban los créditos o si la voz no está permitida en tu plan
   (el plan gratis no puede usar voces de la biblioteca por API), Eddie
   sigue con la voz del navegador y Configuración → Voz explica por qué.
@@ -534,12 +536,20 @@ Eddie usa la **Web Speech API** del navegador (sin dependencias externas):
 - **TTS**: si activas "Eddie lee sus respuestas en voz alta" en
   Configuración, Eddie **empieza a hablar con la primera frase**, mientras
   todavía escribe el resto (no espera a que termine). Las frases se leen por
-  trozos con la voz de ElevenLabs o, si no está, la del navegador; el siguiente
-  audio se prepara mientras suena el actual, y si el servidor falla sigue con
-  la voz del navegador sin quedarse callado. El micrófono de seguimiento (palabra
+  trozos con la voz de ElevenLabs o, si no está, la del navegador. Con
+  ElevenLabs cada trozo se encadena justo detrás del anterior (sin huecos, con un
+  fundido de 8 ms) y el servidor recibe también el texto de los trozos vecinos para que la
+  entonación continúe en vez de reiniciarse; el siguiente audio se prepara mientras suena el
+  actual. Si el servidor falla, esa respuesta sigue con la voz del navegador (un error de
+  créditos o de plan lo pausa 5 minutos; uno pasajero se reintenta en la siguiente respuesta).
+  Mientras Eddie usa herramientas y pasan 1,5 s sin nada que oír, dice una frase corta
+  («Un momento, lo reviso») y la respuesta empieza cuando termina. Con la voz activada, el
+  prompt pide un estilo hablado (frases cortas, sin listas ni símbolos), y símbolos como `°C`,
+  `%` o `km/h` se leen como se dicen, sin emojis. El micrófono de seguimiento (palabra
   clave) espera a que termine de hablar. Los bloques de código no se leen y los
   enlaces se leen solo por su texto. Configuración → Voz muestra los tiempos de la
-  última respuesta (transcribir, primeras palabras, primera voz).
+  última respuesta (transcribir, primeras palabras, primera voz) y **con qué voz habló**
+  (ElevenLabs o el navegador) y, si fue el navegador, por qué.
 
 Compatibilidad: mejor soporte en Chrome/Edge. Safari y Firefox tienen soporte
 parcial o distinto del estándar; si el navegador no implementa

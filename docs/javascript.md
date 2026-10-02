@@ -368,7 +368,7 @@ detalle del protocolo.
   texto) y `?action=speak` (texto a voz) para no gastar otras de las 12
   funciones del plan Hobby.
 - **`api/_lib/speech.js`** — texto a voz con ElevenLabs
-  (`/v1/text-to-speech/{voz}/stream`, MP3 a 64 kbps que se reenvía al
+  (`/v1/text-to-speech/{voz}/stream`, MP3 a 128 kbps con `voice_settings` y el texto vecino (`previous_text`/`next_text`), que se reenvía al
   navegador tal como llega). Voz `bUQeiO7gn4ehGuSnZf26` (o
   `ELEVENLABS_VOICE_ID`), modelo `eleven_flash_v2_5` (o `ELEVENLABS_MODEL`)
   con `language_code` del idioma de la app. Máximo 600 caracteres por
