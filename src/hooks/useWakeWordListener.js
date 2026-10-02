@@ -7,6 +7,15 @@ const SpeechRecognitionImpl =
 export const wakeWordSupported = Boolean(SpeechRecognitionImpl);
 
 const RESTART_MS = 400;
+// After Eddie speaks or the microphone was used for a command, give the audio
+// device a moment to be free before listening for the word again.
+const HANDOFF_MS = 600;
+// A recognizer that hasn't really started listening after this long is
+// restarted (the chip must not claim to listen when it doesn't).
+const START_WATCH_MS = 4000;
+// "audio-capture" right after another use of the microphone is usually the
+// device still being released: retry a few times before giving up.
+const CAPTURE_RETRIES = 5;
 // A session that ends this soon after starting counts as a failed attempt.
 const QUICK_MS = 1500;
 // After this many failed attempts in a row the listener reports "retrying"
@@ -22,12 +31,14 @@ const MAX_WAIT_MS = 30_000;
 // microphone or speaking — two recognizers can't share the mic, and Eddie's
 // own voice must not wake itself.
 //
-// status: off | unsupported | listening | retrying | paused | denied | error
+// status: off | unsupported | starting | listening | retrying | paused | denied | error
+// ("listening" only once the browser says the recognizer is really on.)
 // `reason` is the browser's error name while it is retrying ('network', 'audio-capture'…).
 export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
   const [heard, setHeard] = useState('');
   const [failure, setFailure] = useState('');
   const [trouble, setTrouble] = useState('');
+  const [confirmed, setConfirmed] = useState(false); // the recognizer is really listening
   const onWakeRef = useRef(onWake);
   useEffect(() => {
     onWakeRef.current = onWake;
@@ -42,13 +53,23 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
     let quick = 0;
     let startedAt = 0;
     let lastError = '';
+    let captureFails = 0;
+    let running = false; // this session got to listening
+    let watch = null;
     const recognition = new SpeechRecognitionImpl();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = lang;
 
+    recognition.onstart = () => {
+      window.clearTimeout(watch);
+      running = true;
+      setConfirmed(true);
+    };
+
     recognition.onresult = (event) => {
       quick = 0;
+      captureFails = 0;
       setTrouble('');
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
@@ -74,8 +95,12 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
         stopped = true;
         setFailure('denied');
       } else if (event.error === 'audio-capture') {
-        stopped = true;
-        setFailure('error');
+        captureFails += 1;
+        lastError = 'audio-capture';
+        if (captureFails > CAPTURE_RETRIES) {
+          stopped = true;
+          setFailure('error');
+        }
       } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
         lastError = event.error;
       }
@@ -83,8 +108,10 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
     };
 
     recognition.onend = () => {
+      window.clearTimeout(watch);
+      setConfirmed(false);
       if (stopped) return;
-      if (Date.now() - startedAt < QUICK_MS) {
+      if (!running || Date.now() - startedAt < QUICK_MS) {
         quick += 1;
       } else {
         quick = 0;
@@ -99,6 +126,16 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
     function start() {
       if (stopped) return;
       startedAt = Date.now();
+      running = false;
+      window.clearTimeout(watch);
+      watch = window.setTimeout(() => {
+        if (running || stopped) return;
+        try {
+          recognition.abort(); // ends the session; onend retries
+        } catch {
+          /* already stopped */
+        }
+      }, START_WATCH_MS);
       try {
         recognition.start();
       } catch {
@@ -106,12 +143,15 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
         timer = window.setTimeout(start, RESTART_MS);
       }
     }
-    start();
+    timer = window.setTimeout(start, HANDOFF_MS);
 
     return () => {
       stopped = true;
       setTrouble('');
+      setConfirmed(false);
       window.clearTimeout(timer);
+      window.clearTimeout(watch);
+      recognition.onstart = null;
       recognition.onresult = null;
       recognition.onerror = null;
       recognition.onend = null;
@@ -130,6 +170,7 @@ export function useWakeWordListener({ enabled, word, lang, paused, onWake }) {
   else if (failure) status = 'error';
   else if (paused) status = 'paused';
   else if (trouble) status = 'retrying';
+  else if (!confirmed) status = 'starting';
 
   return { status, reason: trouble, heard, retry: () => setFailure('') };
 }

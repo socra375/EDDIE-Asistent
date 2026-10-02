@@ -67,6 +67,7 @@ function orbItemsOf(memory, episodes) {
 
 const WAKE_STATUS = {
   off: 'Desactivada',
+  starting: 'Iniciando el micrófono…',
   unsupported: 'Tu navegador no permite escuchar una palabra clave (usa Chrome o Edge).',
   paused: 'En pausa mientras hablas con Eddie o él contesta.',
   retrying: 'El navegador no logra escuchar ahora y sigue intentándolo (puede ser la conexión o que otra app use el micrófono).',
