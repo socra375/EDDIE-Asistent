@@ -4,6 +4,8 @@ import { useVoice } from './VoiceContext';
 import { useChat } from './ChatContext';
 import { VisionContext } from './visionState';
 import { analyzeVisionFrame } from '../services/api';
+import { detectLocal, loadLocalDetector } from '../services/localVision';
+import { describeScene, sceneFromPredictions } from '../services/localScene';
 import { cameraSupported, captureFrame, captureGray, createFeedVideo, describeCameraError, openCamera, readConsent, stopStream, writeConsent } from '../services/camera';
 import { createAnnouncer, createEventTracker, describeEvent, motionScore, shouldAnalyze } from '../services/vigilance';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
@@ -13,13 +15,20 @@ const MAX_ERRORS = 3;
 // A hidden tab sends nothing; after this long hidden the camera is released.
 const HIDDEN_STOP_MS = 2 * 60 * 1000;
 const FIRST_LOOK_MS = 800;
-const NO_SCENE = { summary: '', objects: [], provider: '' };
+const NO_SCENE = { summary: '', objects: [], extras: [], provider: '' };
+// With the local detector doing the watching, the cloud AI is only asked now
+// and then for a better description (and the materials), to spare its free quota.
+const CLOUD_EVERY_MS = 20_000;
+const CLOUD_SUMMARY_FRESH_MS = 45_000;
 
-// "Modo Vigilancia": opens the camera and, every few seconds, sends a small
-// frame to the AI (only when the scene moved) to learn what is in it. It runs
-// while on any screen — the header chip shows it and turns it off — and stops
-// by itself (time limit, hidden tab, camera unplugged, closing the page).
-// Frames are sent and dropped: nothing is saved.
+// "Modo Vigilancia": opens the camera and, every few seconds (only when the
+// scene moved), learns what is in it. The default engine is a detector that
+// runs in this browser — free, no keys, no quota, nothing leaves the device —
+// optionally helped, every ~20 s, by a cloud AI (Gemini, Groq or Claude,
+// whichever is set up) for a better description and the materials. "Solo en
+// la nube" uses the AI for everything. It runs while on any screen — the
+// header chip shows it and turns it off — and stops by itself (time limit,
+// hidden tab, camera unplugged, closing the page). Nothing is saved.
 export function VisionProvider({ children }) {
   const { settings } = useSettings();
   const { speakWithSettings, speaking } = useVoice();
@@ -42,6 +51,7 @@ export function VisionProvider({ children }) {
     live.current = {
       intervalMs,
       maxMinutes,
+      engine: settings.vision?.engine || 'auto',
       announce: settings.vision?.announce !== false,
       voiceOn: Boolean(settings.voice?.autoRead),
       speaking,
@@ -66,7 +76,21 @@ export function VisionProvider({ children }) {
     eventId: 0,
     tracker: createEventTracker(),
     announcer: createAnnouncer(),
+    scene: NO_SCENE,
+    model: null,
+    localFailed: false,
+    cloudAt: 0,
+    cloudUntil: 0,
+    cloudBusy: false,
+    cloudOff: false,
+    cloudAbort: null,
+    cloudSummaryAt: 0,
   });
+
+  const commitScene = useCallback((next) => {
+    run.current.scene = next;
+    setScene(next);
+  }, []);
 
   const stop = useCallback(({ error: failure = '', note: message = '' } = {}) => {
     const r = run.current;
@@ -77,6 +101,10 @@ export function VisionProvider({ children }) {
     window.clearTimeout(r.hidden);
     r.abort?.abort();
     r.abort = null;
+    r.cloudAbort?.abort();
+    r.cloudAbort = null;
+    r.cloudBusy = false;
+    r.scene = NO_SCENE;
     stopStream(r.stream);
     r.stream = null;
     r.video = null;
@@ -111,6 +139,51 @@ export function VisionProvider({ children }) {
     }
   }, []);
 
+  // Asks the cloud AI for a description now and then (never while one is
+  // pending, never faster than CLOUD_EVERY_MS, and not at all when it isn't
+  // set up). Its summary and the materials it sees are added to the scene the
+  // local detector made; its failures never stop the watching.
+  const enrich = useCallback(
+    (id) => {
+      const r = run.current;
+      const now = Date.now();
+      if (r.cloudBusy || r.cloudOff || now < r.cloudUntil || now - r.cloudAt < CLOUD_EVERY_MS) return;
+      const frame = captureFrame(r.video);
+      if (!frame) return;
+      r.cloudBusy = true;
+      r.cloudAt = now;
+      r.cloudAbort = new AbortController();
+      analyzeVisionFrame(frame, r.cloudAbort.signal)
+        .then((result) => {
+          if (id !== r.id) return;
+          const known = new Set(r.scene.objects.map((o) => o.label));
+          // What the detector doesn't know (materials, other things) rides along, without boxes.
+          const extras = (result.objects || [])
+            .filter((o) => o.material || o.category === 'material' || !known.has(o.label))
+            .slice(0, 6)
+            .map((o) => {
+              const { box, ...rest } = o;
+              return box ? rest : o;
+            });
+          r.cloudSummaryAt = Date.now();
+          commitScene({ ...r.scene, summary: result.summary || r.scene.summary, extras, provider: `local + ${result.provider}` });
+        })
+        .catch((err) => {
+          if (id !== r.id || err.name === 'AbortError') return;
+          if (err.status === 503) {
+            r.cloudOff = true;
+            setNote('Sin IA en la nube (falta una clave): sigo con el detector de este equipo.');
+          } else {
+            r.cloudUntil = Date.now() + (err.status === 429 ? Math.max(30, err.retryAfter || 0) : 60) * 1000;
+          }
+        })
+        .finally(() => {
+          r.cloudBusy = false;
+        });
+    },
+    [commitScene],
+  );
+
   const tick = useCallback(
     async (id) => {
       const r = run.current;
@@ -134,6 +207,47 @@ export function VisionProvider({ children }) {
           setNote('Sin cambios en la escena');
           return;
         }
+        const engine = live.current.engine;
+
+        // 1. The detector in this browser (unless "solo en la nube").
+        let local = null;
+        if (engine !== 'cloud' && !r.localFailed) {
+          setAnalyzing(true);
+          setNote(r.model ? 'Analizando…' : 'Cargando el detector (la primera vez baja unos 18 MB)…');
+          try {
+            r.model ||= await loadLocalDetector();
+            if (id !== r.id) return;
+            const predictions = await detectLocal(r.model, r.video);
+            if (id !== r.id) return;
+            local = sceneFromPredictions(predictions, r.video.videoWidth, r.video.videoHeight);
+          } catch (err) {
+            if (id !== r.id) return;
+            if (engine === 'local') {
+              stopRef.current({ error: `No pude cargar el detector de este equipo (${err.message || 'sin conexión'}). Se descarga la primera vez: revisa tu conexión o elige otro motor en Configuración.` });
+              return;
+            }
+            r.localFailed = true;
+            setNote('El detector de este equipo no está disponible; uso la IA en la nube.');
+          }
+        }
+
+        if (local) {
+          r.lastAt = Date.now();
+          r.errors = 0;
+          const fresh = Date.now() - r.cloudSummaryAt < CLOUD_SUMMARY_FRESH_MS;
+          commitScene({
+            summary: fresh ? r.scene.summary : local.summary,
+            objects: local.objects,
+            extras: fresh ? r.scene.extras : [],
+            provider: fresh ? r.scene.provider : 'local',
+          });
+          setNote('Escena al día');
+          handleEvents(r.tracker.update(local.objects));
+          if (engine === 'auto') enrich(id);
+          return;
+        }
+
+        // 2. The cloud AI does everything ("solo en la nube", or no local detector).
         const frame = captureFrame(r.video);
         if (!frame) return;
         r.abort = new AbortController();
@@ -143,7 +257,7 @@ export function VisionProvider({ children }) {
         if (id !== r.id) return;
         r.lastAt = Date.now();
         r.errors = 0;
-        setScene({ summary: result.summary || '', objects: result.objects || [], provider: result.provider || '' });
+        commitScene({ summary: result.summary || '', objects: result.objects || [], extras: [], provider: result.provider || '' });
         setNote('Escena al día');
         handleEvents(r.tracker.update(result.objects || []));
       } catch (err) {
@@ -169,7 +283,7 @@ export function VisionProvider({ children }) {
         }
       }
     },
-    [handleEvents],
+    [handleEvents, enrich, commitScene],
   );
   useEffect(() => {
     tickRef.current = tick;
@@ -212,6 +326,14 @@ export function VisionProvider({ children }) {
     r.video = createFeedVideo(media);
     r.lastAt = 0;
     r.errors = 0;
+    r.localFailed = false;
+    r.cloudAt = 0;
+    r.cloudUntil = 0;
+    r.cloudOff = false;
+    r.cloudSummaryAt = 0;
+    r.scene = NO_SCENE;
+    // The detector starts downloading while the camera warms up.
+    if (live.current.engine !== 'cloud') loadLocalDetector().then((model) => id === r.id && (r.model ||= model)).catch(() => {});
     r.tracker.reset();
     r.announcer.reset();
     media.getVideoTracks()[0]?.addEventListener('ended', () => stopRef.current({ error: 'La cámara se desconectó.' }));
@@ -257,6 +379,8 @@ export function VisionProvider({ children }) {
       hasConsent: readConsent,
       isSupported: cameraSupported,
       getFrame: async () => (run.current.video ? captureFrame(run.current.video, { withThumb: true }) : null),
+      engine: () => live.current.engine || 'auto',
+      describe: () => describeScene(run.current.scene),
     });
     return () =>
       Object.assign(visionBridge, {
@@ -264,6 +388,8 @@ export function VisionProvider({ children }) {
         hasConsent: () => true,
         isSupported: () => true,
         getFrame: async () => null,
+        engine: () => 'auto',
+        describe: () => '',
       });
   }, []);
 
@@ -289,6 +415,7 @@ export function VisionProvider({ children }) {
       phase,
       active: phase === 'watching',
       busy: phase === 'starting' || phase === 'watching',
+      engine: settings.vision?.engine || 'auto',
       error,
       stream,
       scene,
@@ -302,7 +429,7 @@ export function VisionProvider({ children }) {
       grantConsent,
       cancelConsent,
     }),
-    [phase, error, stream, scene, analyzing, note, events, maxMinutes, start, stop, toggle, grantConsent, cancelConsent],
+    [phase, settings.vision?.engine, error, stream, scene, analyzing, note, events, maxMinutes, start, stop, toggle, grantConsent, cancelConsent],
   );
 
   return <VisionContext.Provider value={value}>{children}</VisionContext.Provider>;

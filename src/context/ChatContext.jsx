@@ -228,7 +228,8 @@ export function ChatProvider({ children }) {
       // "¿Qué ves?" while Modo Vigilancia has the camera on: the current
       // picture travels with the question, like any attached image.
       const seeing = !tag && !probe && !images.length && isSeeQuestion(trimmed, settings.wake?.word);
-      if (seeing && visionBridge.isActive()) {
+      // (Unless the detector in this browser answers, see below.)
+      if (seeing && visionBridge.isActive() && visionBridge.engine() === 'cloud') {
         const frame = await visionBridge.getFrame();
         if (frame) images = [frame];
       }
@@ -289,6 +290,13 @@ export function ChatProvider({ children }) {
         window.dispatchEvent(new CustomEvent(HUD_EVENT, { detail: { action: hud } }));
         if (hud === 'show') addEddieMessage('Sistema activado. Dejo los paneles a la vista hasta que digas «desactiva sistema».');
         else if (hud === 'hide') addEddieMessage('Sistema desactivado. Paneles ocultos.');
+        return null;
+      }
+
+      // "¿Qué ves?" with the detector of this browser watching: answered on the
+      // spot from what it sees (free, instant, no image sent anywhere).
+      if (seeing && !images.length && visionBridge.isActive() && visionBridge.engine() !== 'cloud') {
+        addEddieMessage(visionBridge.describe());
         return null;
       }
 

@@ -9,4 +9,8 @@ export const visionBridge = {
   isSupported: () => true,
   // → { mimeType, data, thumb, name } for the current camera frame, or null.
   getFrame: async () => null,
+  // 'auto' | 'local' | 'cloud': who looks at the picture (see Configuración → Cámara).
+  engine: () => 'auto',
+  // What the camera sees now, in words, from the detector's list ("¿qué ves?").
+  describe: () => '',
 };

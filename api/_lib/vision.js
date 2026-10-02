@@ -17,6 +17,10 @@ const MAX_DETAIL = 90;
 const MAX_SUMMARY = 160;
 const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+// Free on Groq's plan, and it takes images. If Groq retires it, another vision
+// model from their list is found and used instead (see findGroqVisionModel).
+const DEFAULT_GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GROQ_VISION_PREFERENCE = [/llama-4-scout/i, /llama-4-maverick/i, /vision/i, /llama-4/i];
 const REQUEST_TIMEOUT_MS = 25000;
 const DEFAULT_PER_MINUTE = 20;
 
@@ -138,6 +142,70 @@ async function callGeminiVision(image, { apiKey, model }) {
   return parseSceneText(text);
 }
 
+const groqReplacements = new Map();
+
+function isMissingGroqModel(status, data) {
+  const code = data?.error?.code;
+  return status === 404 || code === 'model_not_found' || code === 'model_decommissioned' || /does not exist|decommissioned|no longer supported|not support/i.test(data?.error?.message || '');
+}
+
+async function findGroqVisionModel(apiKey, failedModel) {
+  try {
+    const res = await fetchWithRetry('https://api.groq.com/openai/v1/models', () => ({ headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(6000) }), { retries: 0 });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const ids = (data?.data || []).filter((m) => m?.id && m.active !== false && m.id !== failedModel).map((m) => m.id);
+    for (const preference of GROQ_VISION_PREFERENCE) {
+      const match = ids.find((id) => preference.test(id));
+      if (match) return match;
+    }
+  } catch {
+    // No list, no replacement.
+  }
+  return null;
+}
+
+async function callGroqVision(image, { apiKey, model }, retried = false) {
+  const useModel = groqReplacements.get(model) || model;
+  const res = await fetchWithRetry(
+    'https://api.groq.com/openai/v1/chat/completions',
+    () => ({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: useModel,
+        temperature: 0.2,
+        max_completion_tokens: 1500,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `${PROMPT}\nResponde únicamente con el JSON, sin texto antes ni después.` },
+              { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }),
+    { retries: 1, retryableStatusCodes: [500, 502, 503] },
+  );
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (!retried && isMissingGroqModel(res.status, data)) {
+      const replacement = await findGroqVisionModel(apiKey, useModel);
+      if (replacement) {
+        groqReplacements.set(model, replacement);
+        return callGroqVision(image, { apiKey, model }, true);
+      }
+    }
+    if (res.status === 429) throw visionError('Se alcanzó el límite de solicitudes de Groq para la visión.', 429, 'RATE_LIMITED');
+    throw visionError(data?.error?.message || `Groq respondió con estado ${res.status}.`, res.status >= 500 ? 502 : 400, res.status >= 500 ? 'UPSTREAM' : 'VISION_ERROR');
+  }
+  return parseSceneText(data?.choices?.[0]?.message?.content || '');
+}
+
 async function callClaudeVision(image, { apiKey, model }) {
   const res = await fetchWithRetry(
     'https://api.anthropic.com/v1/messages',
@@ -170,29 +238,31 @@ async function callClaudeVision(image, { apiKey, model }) {
   return parseSceneText(text);
 }
 
-// One frame → { summary, objects, provider, model }. Gemini first; Claude when
-// Gemini is not set up or is busy/down.
+// One frame → { summary, objects, provider, model }. Tries, in order, the
+// providers that are set up: Gemini, Groq (free, Llama 4 with vision) and Claude.
+// When one is busy, down or retired the next one answers.
 export async function analyzeFrame(image, env = process.env) {
-  const gemini = env.GEMINI_API_KEY ? { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_VISION_MODEL || DEFAULT_GEMINI_MODEL } : null;
-  const claude = env.ANTHROPIC_API_KEY ? { apiKey: env.ANTHROPIC_API_KEY, model: env.CLAUDE_VISION_MODEL || DEFAULT_CLAUDE_MODEL } : null;
-  if (!gemini && !claude) {
-    throw visionError('La visión necesita GEMINI_API_KEY (o ANTHROPIC_API_KEY) en las variables de entorno de Vercel.', 503, 'NOT_CONFIGURED');
+  const providers = [];
+  if (env.GEMINI_API_KEY) providers.push({ id: 'gemini', apiKey: env.GEMINI_API_KEY, model: env.GEMINI_VISION_MODEL || DEFAULT_GEMINI_MODEL, call: callGeminiVision });
+  if (env.GROQ_API_KEY) providers.push({ id: 'groq', apiKey: env.GROQ_API_KEY, model: env.GROQ_VISION_MODEL || DEFAULT_GROQ_MODEL, call: callGroqVision });
+  if (env.ANTHROPIC_API_KEY) providers.push({ id: 'claude', apiKey: env.ANTHROPIC_API_KEY, model: env.CLAUDE_VISION_MODEL || DEFAULT_CLAUDE_MODEL, call: callClaudeVision });
+  if (!providers.length) {
+    throw visionError('La visión por IA necesita GEMINI_API_KEY, GROQ_API_KEY (gratis) o ANTHROPIC_API_KEY en las variables de entorno de Vercel.', 503, 'NOT_CONFIGURED');
   }
   let firstError = null;
-  if (gemini) {
+  for (const [i, provider] of providers.entries()) {
     try {
-      return { ...normalizeScene(await callGeminiVision(image, gemini)), provider: 'gemini', model: gemini.model };
+      const raw = await provider.call(image, { apiKey: provider.apiKey, model: provider.model });
+      return { ...normalizeScene(raw), provider: provider.id, model: provider.model };
     } catch (err) {
-      // A malformed request won't be fixed by asking Claude; busy or down will.
-      if (!claude || (err.code !== 'RATE_LIMITED' && err.code !== 'UPSTREAM' && err.name !== 'TimeoutError' && err.name !== 'TypeError')) throw err;
-      firstError = err;
+      // A malformed request won't be fixed by asking another one; busy or down will.
+      const next = i < providers.length - 1;
+      const retryable = err.code === 'RATE_LIMITED' || err.code === 'UPSTREAM' || err.name === 'TimeoutError' || err.name === 'TypeError';
+      if (!next || !retryable) throw firstError && err.code !== 'RATE_LIMITED' ? firstError : err;
+      firstError ||= err;
     }
   }
-  try {
-    return { ...normalizeScene(await callClaudeVision(image, claude)), provider: 'claude', model: claude.model };
-  } catch (err) {
-    throw firstError && err.code !== 'RATE_LIMITED' ? firstError : err;
-  }
+  throw firstError;
 }
 
 export { createRateLimiter };
