@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
@@ -21,17 +21,46 @@ import { WakeWordProvider } from './context/WakeWordContext';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import './layout/Layout.css';
 
+// Reads Eddie's answers aloud when the voice is on. An answer that streams in
+// is spoken sentence by sentence while it is still being written; anything
+// that arrives whole (small talk, the probe, an error) is read in one go.
 function AutoReadBridge() {
-  const { lastReply } = useChat();
-  const { speakWithSettings } = useVoice();
+  const { messages, status, lastReply } = useChat();
+  const { speakWithSettings, streamWithSettings } = useVoice();
   const { settings } = useSettings();
+  const autoRead = settings.voice.autoRead;
+  const streamRef = useRef(null); // { id, controller }
 
+  // The answer being written: the last message while Eddie is responding.
+  const writing = status === 'responding' ? messages.at(-1) : null;
+  const writingId = writing?.role === 'assistant' && !writing.isError ? writing.id : null;
+  const writingText = writingId ? writing.content : '';
   useEffect(() => {
-    if (lastReply && settings.voice.autoRead) {
+    if (!autoRead || !writingId) return;
+    if (streamRef.current?.id !== writingId) streamRef.current = { id: writingId, controller: streamWithSettings() };
+    streamRef.current.controller.push(writingText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [writingId, writingText, autoRead]);
+
+  // The answer is complete: finish the stream, or read it whole if it never streamed.
+  useEffect(() => {
+    if (!lastReply || !autoRead) return;
+    const stream = streamRef.current;
+    if (stream?.id === lastReply.id) {
+      stream.controller.end(lastReply.content);
+      streamRef.current = null;
+    } else {
       speakWithSettings(lastReply.content);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastReply]);
+
+  // An answer that failed half-way: say what was already written, not the error.
+  useEffect(() => {
+    if (status !== 'error' || !streamRef.current) return;
+    streamRef.current.controller.end();
+    streamRef.current = null;
+  }, [status]);
 
   return null;
 }
