@@ -40,6 +40,11 @@ export function VoiceProvider({ children }) {
     synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, onEnd });
   };
 
+  // Starts talking right away and takes the answer as it is written:
+  // { push(textSoFar), end(finalText) }.
+  const streamWithSettings = (onEnd) =>
+    synthesis.speakStream({ lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, onEnd });
+
   // Named explicitly rather than spread — the hooks share key names
   // (`supported`, `stop`), and a flat spread once let synthesis's `stop`
   // shadow recognition's. `listening` stays true until the final transcript
@@ -72,6 +77,7 @@ export function VoiceProvider({ children }) {
       speak: synthesis.speak,
       stopSpeaking: synthesis.stop,
       speakWithSettings,
+      streamWithSettings,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [browser, whisper, synthesis, sttLang, sttEngine, whisperAvailable, settings.voice.voiceURI, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice],

@@ -1,111 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { markVoice } from '../services/voiceTiming';
+import { CLOUD_FIRST_CHUNK, MAX_CHUNK, pickVoice, speakableText, splitForCloud, splitForSpeech } from '../services/speechText';
+import { createSentenceStreamer } from '../services/speechStream';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
 
-// Chrome stops long utterances after ~15 s, so answers are read in pieces
-// of whole sentences no longer than this.
-const MAX_CHUNK = 220;
-// ElevenLabs pieces can be longer (fewer requests); the first one stays
-// short so Eddie starts talking sooner.
-const CLOUD_FIRST_CHUNK = 160;
-const CLOUD_CHUNK = 450;
 // Errors that won't fix themselves this session (no key, no credits, a voice
 // the plan can't use): stop trying ElevenLabs until the page reloads.
 const CLOUD_FATAL_STATUSES = [401, 402, 403, 503];
 // A server voice that doesn't answer in this long counts as failed, so Eddie
 // doesn't stay "about to speak" forever.
 const CLOUD_FETCH_TIMEOUT_MS = 20000;
-
-// Higher is better. Network/neural voices sound far more natural than the
-// local eSpeak-style ones Linux and ChromeOS ship by default.
-function voiceScore(voice, lang) {
-  let score = 0;
-  const [base] = lang.toLowerCase().split('-');
-  const vLang = (voice.lang || '').toLowerCase().replace('_', '-');
-  if (vLang === lang.toLowerCase()) score += 33;
-  else if (vLang.startsWith(`${base}-`) || vLang === base) score += 30;
-  else return -1;
-  if (/natural|neural|online|premium|enhanced/i.test(voice.name)) score += 25;
-  if (/google/i.test(voice.name)) score += 20;
-  if (/espeak|robot/i.test(voice.name)) score -= 20;
-  if (!voice.localService) score += 5;
-  // Latin American Spanish first for es-419/es-US users, Spain's otherwise.
-  if (base === 'es' && /es-(us|mx|419)/.test(vLang)) score += 2;
-  return score;
-}
-
-export function pickVoice(voices, lang, preferredURI) {
-  if (preferredURI) {
-    const chosen = voices.find((v) => v.voiceURI === preferredURI);
-    if (chosen) return chosen;
-  }
-  let best = null;
-  let bestScore = -1;
-  for (const v of voices) {
-    const s = voiceScore(v, lang);
-    if (s > bestScore) {
-      best = v;
-      bestScore = s;
-    }
-  }
-  return best;
-}
-
-// Markdown symbols, code and links read aloud sound like noise.
-export function speakableText(text) {
-  return String(text || '')
-    .replace(/```[\s\S]*?```/g, ' (código omitido) ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/[*_~>|#]+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-export function splitForSpeech(text, max = MAX_CHUNK) {
-  // Only punctuation followed by a space ends a sentence, so "3.5" or
-  // "10:30" stay whole.
-  const sentences = text.split(/(?<=[.!?;:])\s+|\n+/);
-  const chunks = [];
-  let current = '';
-  for (const raw of sentences) {
-    const s = raw.trim();
-    if (!s) continue;
-    if ((current + ' ' + s).trim().length <= max) {
-      current = (current + ' ' + s).trim();
-      continue;
-    }
-    if (current) chunks.push(current);
-    if (s.length <= max) {
-      current = s;
-    } else {
-      // A single huge sentence: cut on spaces.
-      let rest = s;
-      while (rest.length > max) {
-        const cut = rest.lastIndexOf(' ', max) > 40 ? rest.lastIndexOf(' ', max) : max;
-        chunks.push(rest.slice(0, cut).trim());
-        rest = rest.slice(cut).trim();
-      }
-      current = rest;
-    }
-  }
-  if (current) chunks.push(current);
-  return chunks;
-}
-
-// ElevenLabs pieces: a short first one, then longer ones.
-export function splitForCloud(text) {
-  const [first, ...rest] = splitForSpeech(text, CLOUD_FIRST_CHUNK);
-  if (!first) return [];
-  return [first, ...splitForSpeech(rest.join(' '), CLOUD_CHUNK)];
-}
 
 async function fetchCloudAudio(text, language, signal, voiceId) {
   // The caller's `signal` stops everything; ours adds the time limit.
@@ -136,7 +43,50 @@ async function fetchCloudAudio(text, language, signal, voiceId) {
   }
 }
 
-// Text to speech. Two engines behind one `speak`:
+// A growing list of pieces to read: the player waits for the next one while
+// the answer is still being written, and `finish()` says no more will come.
+function createChunkQueue() {
+  const items = [];
+  let finished = false;
+  let wake = null;
+  const notify = () => {
+    wake?.();
+    wake = null;
+  };
+  return {
+    push(chunk) {
+      items.push(chunk);
+      notify();
+    },
+    finish() {
+      finished = true;
+      notify();
+    },
+    get finished() {
+      return finished;
+    },
+    has: (i) => i < items.length,
+    at: (i) => items[i],
+    rest: (i) => items.slice(i).join(' '),
+    // The piece number i, waiting for it if needed; null once it is known there won't be one.
+    async get(i) {
+      while (i >= items.length) {
+        if (finished) return null;
+        await new Promise((resolve) => {
+          wake = resolve;
+        });
+      }
+      return items[i];
+    },
+  };
+}
+
+// While an answer streams in, pieces are sized for the engine in use.
+const STREAM_CLOUD = { firstMin: 20, firstMax: CLOUD_FIRST_CHUNK, min: 80, max: 260 };
+const STREAM_BROWSER = { firstMin: 12, firstMax: 120, min: 30, max: MAX_CHUNK };
+
+// Text to speech. Two engines behind one `speak` (or `speakStream`, which
+// starts talking while the answer is still being written):
 // - "elevenlabs": Eddie's own voice, generated on the server (POST
 //   /api/chat?action=speak) piece by piece — the next piece is fetched while
 //   the current one plays. Any failure falls back to the browser voice for
@@ -144,7 +94,9 @@ async function fetchCloudAudio(text, language, signal, voiceId) {
 // - "browser": Web Speech API, with the most natural voice available for the
 //   language (or the one chosen in Configuración), read sentence by sentence
 //   so Chrome doesn't cut long answers off.
-// Both strip Markdown first.
+// Both strip Markdown first. `speaking` is true from the moment a voice is
+// asked for until it ends, so nothing else (the microphone) jumps in while
+// the audio is still on its way.
 export function useSpeechSynthesis() {
   const browserSupported = Boolean(synth);
   const [speaking, setSpeaking] = useState(false);
@@ -153,6 +105,7 @@ export function useSpeechSynthesis() {
   const runRef = useRef(0);
   const audioRef = useRef(null);
   const abortRef = useRef(null);
+  const sessionRef = useRef(null);
   const cloudOffRef = useRef(false);
 
   // Voices load asynchronously in Chrome.
@@ -164,55 +117,94 @@ export function useSpeechSynthesis() {
     return () => synth.removeEventListener?.('voiceschanged', load);
   }, [browserSupported]);
 
-  const speakBrowser = useCallback(
-    (chunks, run, { lang, voiceURI, onEnd }) => {
-      if (!browserSupported || !chunks.length) {
-        if (run === runRef.current) setSpeaking(false);
-        return;
+  // The browser voice as a place pieces are sent to, one utterance each.
+  const createBrowserSink = useCallback(
+    (session) => {
+      const { run, options } = session;
+      let pending = 0;
+      let finished = false;
+      let started = false;
+      const maybeEnd = () => {
+        if (!finished || pending > 0 || run !== runRef.current) return;
+        setSpeaking(false);
+        options.onEnd?.();
+      };
+      if (!browserSupported) {
+        return {
+          push() {},
+          finish() {
+            if (run === runRef.current) setSpeaking(false);
+          },
+        };
       }
-      const voice = pickVoice(synth.getVoices(), lang, voiceURI);
-      chunks.forEach((chunk, i) => {
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.lang = voice?.lang || lang;
-        if (voice) utterance.voice = voice;
-        if (i === 0) {
+      const voice = pickVoice(synth.getVoices(), options.lang, options.voiceURI);
+      return {
+        push(chunk) {
+          const utterance = new SpeechSynthesisUtterance(chunk);
+          utterance.lang = voice?.lang || options.lang;
+          if (voice) utterance.voice = voice;
+          pending += 1;
           utterance.onstart = () => {
-            if (run !== runRef.current) return;
+            if (run !== runRef.current || started) return;
+            started = true;
             markVoice('audioStart');
             setSpeaking(true);
           };
-        }
-        if (i === chunks.length - 1) {
           utterance.onend = () => {
-            if (run !== runRef.current) return;
-            setSpeaking(false);
-            onEnd?.();
+            pending -= 1;
+            maybeEnd();
           };
-        }
-        utterance.onerror = () => run === runRef.current && setSpeaking(false);
-        synth.speak(utterance);
-      });
+          utterance.onerror = () => {
+            pending -= 1;
+            if (run === runRef.current && finished && pending === 0) setSpeaking(false);
+          };
+          synth.speak(utterance);
+        },
+        finish() {
+          finished = true;
+          maybeEnd();
+        },
+      };
     },
     [browserSupported],
   );
 
-  const speakCloud = useCallback(
-    async (clean, run, options) => {
+  // Plays the session's pieces with the server voice, fetching the next one
+  // while the current one plays.
+  const playCloud = useCallback(
+    async (session) => {
+      const { run, options, queue } = session;
       const language = options.lang.slice(0, 2);
-      const chunks = splitForCloud(clean);
       const controller = new AbortController();
       abortRef.current = controller;
       const urls = [];
+      let current = 0;
       const load = (i) => {
-        if (i < chunks.length && !urls[i]) {
-          urls[i] = fetchCloudAudio(chunks[i], language, controller.signal, options.cloudVoice);
+        if (queue.has(i) && !urls[i]) {
+          urls[i] = fetchCloudAudio(queue.at(i), language, controller.signal, options.cloudVoice);
           urls[i].catch(() => {}); // handled where it's awaited
         }
         return urls[i];
       };
+      session.prefetch = () => {
+        load(current);
+        load(current + 1);
+      };
       const release = () => urls.forEach((p) => p?.then((u) => URL.revokeObjectURL(u)).catch(() => {}));
+      // Finish this answer with the browser voice instead of going silent:
+      // what is left now, and whatever is still to come.
+      const fallBack = (index) => {
+        session.mode = 'browser';
+        session.sink = createBrowserSink(session);
+        splitForSpeech(queue.rest(index)).forEach((c) => session.sink.push(c));
+        if (queue.finished) session.sink.finish();
+      };
 
-      for (let i = 0; i < chunks.length; i += 1) {
+      for (let i = 0; ; i += 1) {
+        current = i;
+        const chunk = await queue.get(i);
+        if (run !== runRef.current) return release();
+        if (chunk === null) break;
         let url;
         try {
           url = await load(i);
@@ -221,8 +213,7 @@ export function useSpeechSynthesis() {
           if (CLOUD_FATAL_STATUSES.includes(err.status)) cloudOffRef.current = true;
           setCloudError(err.message);
           release();
-          // Finish this answer with the browser voice instead of going silent.
-          speakBrowser(splitForSpeech(chunks.slice(i).join(' ')), run, options);
+          fallBack(i);
           return undefined;
         }
         if (run !== runRef.current) return release();
@@ -251,11 +242,13 @@ export function useSpeechSynthesis() {
       options.onEnd?.();
       return undefined;
     },
-    [speakBrowser],
+    [createBrowserSink],
   );
 
   const stopAll = useCallback(() => {
     runRef.current += 1;
+    sessionRef.current?.queue.finish(); // wakes a player that was waiting for more text
+    sessionRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
     if (audioRef.current) {
@@ -265,24 +258,75 @@ export function useSpeechSynthesis() {
     if (browserSupported) synth.cancel();
   }, [browserSupported]);
 
-  const speak = useCallback(
-    (text, { lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, onEnd } = {}) => {
-      const clean = speakableText(text);
-      if (!clean) return;
+  // Starts a reading and returns its session; pieces are added with `feed`.
+  const open = useCallback(
+    ({ lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, onEnd } = {}) => {
       stopAll();
       const run = runRef.current;
       // "Speaking" from the moment the voice is asked for, not when the first
       // sound plays: the wake-word window and the ring wait for it instead of
       // opening the microphone first.
       setSpeaking(true);
-      const options = { lang, voiceURI, cloudVoice, onEnd };
+      const session = { run, options: { lang, voiceURI, cloudVoice, onEnd }, queue: createChunkQueue(), mode: 'browser', sink: null, prefetch: null };
+      sessionRef.current = session;
       if (engine === 'elevenlabs' && !cloudOffRef.current) {
-        speakCloud(clean, run, options);
+        session.mode = 'cloud';
+        playCloud(session);
       } else {
-        speakBrowser(splitForSpeech(clean), run, options);
+        session.sink = createBrowserSink(session);
       }
+      return session;
     },
-    [stopAll, speakCloud, speakBrowser],
+    [stopAll, playCloud, createBrowserSink],
+  );
+
+  const feed = useCallback((session, chunks) => {
+    for (const chunk of chunks) {
+      if (session.mode === 'browser') {
+        session.sink?.push(chunk);
+      } else {
+        session.queue.push(chunk);
+        session.prefetch?.();
+      }
+    }
+  }, []);
+
+  const finish = useCallback((session) => {
+    if (session.mode === 'browser') session.sink?.finish();
+    else session.queue.finish();
+  }, []);
+
+  const speak = useCallback(
+    (text, options = {}) => {
+      const clean = speakableText(text);
+      if (!clean) return;
+      const session = open(options);
+      feed(session, session.mode === 'browser' ? splitForSpeech(clean) : splitForCloud(clean));
+      finish(session);
+    },
+    [open, feed, finish],
+  );
+
+  // Talks while the answer is still being written: `push(textSoFar)` as it
+  // grows, `end(finalText)` when it is complete. Cancelled by any other
+  // speak/stop, after which the controller does nothing.
+  const speakStream = useCallback(
+    (options = {}) => {
+      const session = open(options);
+      const streamer = createSentenceStreamer(session.mode === 'browser' ? STREAM_BROWSER : STREAM_CLOUD);
+      const alive = () => runRef.current === session.run;
+      return {
+        push(text) {
+          if (alive()) feed(session, streamer.push(text));
+        },
+        end(finalText) {
+          if (!alive()) return;
+          feed(session, streamer.end(finalText));
+          finish(session);
+        },
+      };
+    },
+    [open, feed, finish],
   );
 
   const stop = useCallback(() => {
@@ -291,7 +335,7 @@ export function useSpeechSynthesis() {
   }, [stopAll]);
 
   return useMemo(
-    () => ({ supported: browserSupported, speaking, voices, cloudError, speak, stop }),
-    [browserSupported, speaking, voices, cloudError, speak, stop],
+    () => ({ supported: browserSupported, speaking, voices, cloudError, speak, speakStream, stop }),
+    [browserSupported, speaking, voices, cloudError, speak, speakStream, stop],
   );
 }

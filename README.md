@@ -532,9 +532,14 @@ Eddie usa la **Web Speech API** del navegador (sin dependencias externas):
   transcripción en tiempo real, maneja permisos denegados y avisa si el
   navegador no es compatible.
 - **TTS**: si activas "Eddie lee sus respuestas en voz alta" en
-  Configuración, cada respuesta se lee automáticamente en cuanto llega, con
-  la voz/velocidad/tono/volumen por defecto del navegador para el idioma
-  activo — no hay selector de voz, es un simple interruptor on/off.
+  Configuración, Eddie **empieza a hablar con la primera frase**, mientras
+  todavía escribe el resto (no espera a que termine). Las frases se leen por
+  trozos con la voz de ElevenLabs o, si no está, la del navegador; el siguiente
+  audio se prepara mientras suena el actual, y si el servidor falla sigue con
+  la voz del navegador sin quedarse callado. El micrófono de seguimiento (palabra
+  clave) espera a que termine de hablar. Los bloques de código no se leen y los
+  enlaces se leen solo por su texto. Configuración → Voz muestra los tiempos de la
+  última respuesta (transcribir, primeras palabras, primera voz).
 
 Compatibilidad: mejor soporte en Chrome/Edge. Safari y Firefox tienen soporte
 parcial o distinto del estándar; si el navegador no implementa
