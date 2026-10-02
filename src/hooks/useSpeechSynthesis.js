@@ -205,7 +205,8 @@ export function useSpeechSynthesis() {
         push(chunk, tag) {
           const utterance = new SpeechSynthesisUtterance(chunk);
           utterance.lang = voice?.lang || options.lang;
-          utterance.rate = BROWSER_RATE;
+          utterance.rate = BROWSER_RATE * (options.rate || 1);
+          utterance.volume = options.volume ?? 1;
           if (voice) utterance.voice = voice;
           pending += 1;
           chars += chunk.length;
@@ -253,7 +254,9 @@ export function useSpeechSynthesis() {
       const loads = [];
       let current = 0;
       let ended = 0; // pieces already heard to the end
+      const peak = Math.min(1, Math.max(0.05, options.volume ?? 1));
       const context = (i) => ({
+        ...(options.rate && options.rate !== 1 ? { speed: options.rate } : {}),
         ...(i > 0 && queue.at(i - 1) ? { previousText: queue.at(i - 1) } : {}),
         ...(queue.has(i + 1) ? { nextText: queue.at(i + 1) } : {}),
       });
@@ -335,8 +338,8 @@ export function useSpeechSynthesis() {
         const when = Math.max(ctx.currentTime + 0.03, clock);
         const end = when + buffer.duration;
         gain.gain.setValueAtTime(0, when);
-        gain.gain.linearRampToValueAtTime(1, when + FADE_S);
-        gain.gain.setValueAtTime(1, Math.max(when + FADE_S, end - FADE_S));
+        gain.gain.linearRampToValueAtTime(peak, when + FADE_S);
+        gain.gain.setValueAtTime(peak, Math.max(when + FADE_S, end - FADE_S));
         gain.gain.linearRampToValueAtTime(0, end);
         // The next piece starts as this one ends (the fades overlap slightly).
         clock = end - FADE_S / 2;
@@ -390,14 +393,14 @@ export function useSpeechSynthesis() {
 
   // Starts a reading and returns its session; pieces are added with `feed`.
   const open = useCallback(
-    ({ lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, browserReason = 'chosen', filler = false, onEnd, onPiece } = {}) => {
+    ({ lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, browserReason = 'chosen', filler = false, onEnd, onPiece, volume, rate } = {}) => {
       stopAll();
       const run = runRef.current;
       // "Speaking" from the moment the voice is asked for, not when the first
       // sound plays: the wake-word window and the ring wait for it instead of
       // opening the microphone first.
       setSpeaking(true);
-      const session = { run, options: { lang, voiceURI, cloudVoice, filler, onEnd, onPiece }, queue: createChunkQueue(), mode: 'browser', sink: null, prefetch: null };
+      const session = { run, options: { lang, voiceURI, cloudVoice, filler, onEnd, onPiece, volume, rate }, queue: createChunkQueue(), mode: 'browser', sink: null, prefetch: null };
       sessionRef.current = session;
       const paused = Date.now() < cloudOffUntilRef.current;
       if (engine === 'elevenlabs' && !paused && audioContext()) {

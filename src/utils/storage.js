@@ -40,10 +40,13 @@ export const DEFAULT_SETTINGS = {
   memoryEnabled: true,
   voice: {
     autoRead: false,
+    volume: 1, // 0.2–1
+    rate: 1, // 0.8–1.2
   },
   // "Modo ligero": auto | lite | full (see services/performance.js).
   display: {
     perf: 'auto',
+    core: 'cyan', // colour of the orb: cyan | blue | green | amber
   },
   // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).
   vision: {

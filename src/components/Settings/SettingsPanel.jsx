@@ -9,7 +9,9 @@ import { isLite, lowPowerDevice, PERF_CHANGED_EVENT, readGuard, writeGuard } fro
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import { promptInstall, useInstallState } from '../../services/pwa';
 import Icon from '../../layout/Icon';
+import { EddieMark } from '../../layout/EddieLogo';
 import { countItems } from '../../services/memory';
+import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../../services/wakeWord';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -58,9 +60,50 @@ const LANGUAGES = [
   { code: 'pt', label: 'Português' },
 ];
 
+// The left menu: each entry shows its own cards (see data-section on them).
+const SECTIONS = [
+  { id: 'voice', label: 'Voz y audio' },
+  { id: 'engine', label: 'Motor de IA' },
+  { id: 'hud', label: 'Interfaz HUD' },
+  { id: 'account', label: 'Cuenta' },
+  { id: 'privacy', label: 'Privacidad' },
+];
+
+// Colour of the orb's core.
+const CORE_COLORS = [
+  { id: 'cyan', label: 'Cian', color: '#3fe8ff' },
+  { id: 'blue', label: 'Azul', color: '#6a8dff' },
+  { id: 'green', label: 'Verde', color: '#4dffa6' },
+  { id: 'amber', label: 'Ámbar', color: '#ffb020' },
+];
+
+// A labelled slider with its value on the right, HUD style.
+function Slider({ label, value, min, max, step, format, onChange, disabled }) {
+  const percent = ((value - min) / (max - min)) * 100;
+  return (
+    <label className="settings-slider">
+      <span className="settings-slider__top">
+        <span>{label}</span>
+        <b>{format(value)}</b>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        style={{ '--fill': `${percent}%` }}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
 export default function SettingsPanel({ onOpenConversation }) {
   const install = useInstallState();
-  const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, updateVisionSettings, memory, forgetEverything } = useSettings();
+  const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, updateVisionSettings, updateWakeSettings, resetSettings, memory, forgetEverything } = useSettings();
+  const [section, setSection] = useState('voice');
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
   const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, engineInfo, sttLang, speakWithSettings } =
@@ -107,10 +150,47 @@ export default function SettingsPanel({ onOpenConversation }) {
   const sortedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
   const dateFormatter = new Intl.DateTimeFormat(settings.language, { dateStyle: 'medium', timeStyle: 'short' });
 
+  const activeSection = SECTIONS.find((x) => x.id === section);
+  const engineLabel = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter' }[settings.provider] || settings.provider;
+  const providerOk = !health || health[settings.provider];
+
+  function handleReset() {
+    if (window.confirm('Esto devuelve los ajustes a sus valores iniciales (no borra tus tareas, memoria ni conversaciones). ¿Continuar?')) resetSettings();
+  }
+
   return (
     <section className="settings-panel">
-      <div className="glass-panel settings-card">
+      <header className="settings-head">
+        <EddieMark size={44} />
+        <div className="settings-head__title">
+          <h1>EDDIE</h1>
+          <span>Configuración del sistema</span>
+        </div>
+        <div className="settings-head__chips">
+          <span className={`chip ${providerOk ? 'on' : 'warn'}`}>● Motor · {engineLabel}</span>
+          <span className="chip">{user ? 'Sesión iniciada' : 'Solo en este navegador'}</span>
+        </div>
+      </header>
+
+      <div className="settings-body">
+        <nav className="settings-nav" aria-label="Secciones de configuración">
+          {SECTIONS.map((x, i) => (
+            <button
+              key={x.id}
+              type="button"
+              className={`settings-nav__item ${section === x.id ? 'settings-nav__item--on' : ''}`}
+              aria-current={section === x.id ? 'page' : undefined}
+              onClick={() => setSection(x.id)}
+            >
+              <span>{String(i + 1).padStart(2, '0')}</span> {x.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="settings-grid" data-section={section} aria-label={activeSection?.label}>
+      <div className="glass-panel settings-card" data-section="account">
         <h2>Cuenta de Google</h2>
+        <p className="settings-card__sub">Sincroniza tus tareas, ajustes y memoria entre dispositivos.</p>
         {user ? (
           <>
             <p className="settings-placeholder">
@@ -147,8 +227,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         )}
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="engine">
         <h2>Proveedor de IA</h2>
+        <p className="settings-card__sub">Elige qué cerebro piensa por Eddie.</p>
         <div className="settings-row">
           <label>
             <span className="field-label">Proveedor</span>
@@ -236,8 +317,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         )}
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="hud">
         <h2>Idioma y apariencia</h2>
+        <p className="settings-card__sub">Idioma, tema y color del núcleo.</p>
         <div className="settings-row">
           <label>
             <span className="field-label">Idioma</span>
@@ -257,10 +339,29 @@ export default function SettingsPanel({ onOpenConversation }) {
             </select>
           </label>
         </div>
+        <div className="settings-field">
+          <span className="field-label">Color del núcleo</span>
+          <div className="settings-swatches" role="radiogroup" aria-label="Color del núcleo">
+            {CORE_COLORS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={(settings.display?.core || 'cyan') === c.id}
+                aria-label={c.label}
+                title={c.label}
+                className="settings-swatch"
+                style={{ '--swatch': c.color }}
+                onClick={() => updateDisplaySettings({ core: c.id })}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="hud">
         <h2>Pantalla</h2>
+        <p className="settings-card__sub">Rendimiento y efectos del HUD.</p>
         <label>
           <span className="field-label">Modo ligero</span>
           <select className="select" value={settings.display?.perf || 'auto'} onChange={(e) => updateDisplaySettings({ perf: e.target.value })}>
@@ -291,8 +392,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         )}
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="hud">
         <h2>Aplicación</h2>
+        <p className="settings-card__sub">Instala Eddie como una aplicación.</p>
         <p className="settings-placeholder">
           {install.installed
             ? 'Eddie está instalado en este equipo: se abre en su propia ventana y desde el lanzador.'
@@ -312,8 +414,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         </p>
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="hud">
         <h2>Cámara · Modo Vigilancia</h2>
+        <p className="settings-card__sub">Qué tan seguido mira y cuánto dura.</p>
         <div className="settings-row">
           <label>
             <span className="field-label">Analizar cada</span>
@@ -347,8 +450,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         </p>
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="voice">
         <h2>Voz</h2>
+        <p className="settings-card__sub">Cómo te escucha y te habla Eddie.</p>
         <label className="settings-toggle">
           <input
             type="checkbox"
@@ -359,6 +463,32 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Eddie lee sus respuestas en voz alta</span>
         </label>
         {!ttsSupported && <p className="settings-warning">Este navegador no admite síntesis de voz.</p>}
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={Boolean(settings.wake?.enabled)}
+            onChange={(e) => updateWakeSettings({ enabled: e.target.checked })}
+          />
+          <span>Activar con la palabra «{cleanWakeWord(settings.wake?.word || DEFAULT_WAKE_WORD) || DEFAULT_WAKE_WORD}»</span>
+        </label>
+        <Slider
+          label="Volumen de respuesta"
+          value={settings.voice.volume ?? 1}
+          min={0.2}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(volume) => updateVoiceSettings({ volume })}
+        />
+        <Slider
+          label="Velocidad de voz"
+          value={settings.voice.rate ?? 1}
+          min={0.8}
+          max={1.2}
+          step={0.05}
+          format={(v) => `${v.toFixed(2).replace(/0$/, '')}x`}
+          onChange={(rate) => updateVoiceSettings({ rate })}
+        />
 
         <div className="settings-row">
           <label>
@@ -433,8 +563,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         </p>
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="privacy">
         <h2>Historial de conversaciones</h2>
+        <p className="settings-card__sub">Lo que guarda este navegador.</p>
         {sortedConversations.length === 0 ? (
           <p className="settings-placeholder">No hay conversaciones guardadas todavía.</p>
         ) : (
@@ -471,8 +602,9 @@ export default function SettingsPanel({ onOpenConversation }) {
         </div>
       </div>
 
-      <div className="glass-panel settings-card">
+      <div className="glass-panel settings-card" data-section="privacy">
         <h2>Memoria</h2>
+        <p className="settings-card__sub">Lo que Eddie recuerda entre sesiones.</p>
         <label className="settings-toggle">
           <input type="checkbox" checked={settings.memoryEnabled} onChange={(e) => updateSettings({ memoryEnabled: e.target.checked })} />
           <span>Permitir que Eddie recuerde preferencias entre sesiones</span>
@@ -491,6 +623,15 @@ export default function SettingsPanel({ onOpenConversation }) {
           </button>
         </div>
       </div>
+        </div>
+      </div>
+
+      <footer className="settings-foot">
+        <span>Los cambios se guardan al instante en este navegador{user ? ' y en tu cuenta' : ''}.</span>
+        <button type="button" className="btn" onClick={handleReset}>
+          Restablecer ajustes
+        </button>
+      </footer>
     </section>
   );
 }

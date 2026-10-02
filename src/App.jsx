@@ -131,6 +131,12 @@ function PerfBridge() {
     else delete document.documentElement.dataset.perf;
   }, [lite]);
 
+  const core = settings.display?.core || 'cyan';
+  useEffect(() => {
+    if (core === 'cyan') delete document.documentElement.dataset.core;
+    else document.documentElement.dataset.core = core;
+  }, [core]);
+
   useEffect(() => {
     const sync = () => setGuard(readGuard());
     window.addEventListener(PERF_CHANGED_EVENT, sync);
