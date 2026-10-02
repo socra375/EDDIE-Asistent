@@ -30,7 +30,7 @@ const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
 
 const PREVIEW_CHARS = 220;
 
-export default function HomePanel({ onOpenTasks }) {
+export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
   const vision = useVision();
@@ -38,6 +38,12 @@ export default function HomePanel({ onOpenTasks }) {
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
   const [chatOpen, setChatOpen] = useState(false);
+
+  // The "Hablar con Eddie" shortcut: the orb is ready, a tap (or Enter) starts listening.
+  // (A page can't open the microphone or play sound before the user touches it.)
+  useEffect(() => {
+    if (focusOrb) document.querySelector('.eddie-orb__hit')?.focus();
+  }, [focusOrb]);
   const [expanded, setExpanded] = useState(false);
   const voiceOn = settings.voice.autoRead;
 

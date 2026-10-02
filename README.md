@@ -568,6 +568,23 @@ parcial o distinto del estándar; si el navegador no implementa
 `SpeechRecognition`/`speechSynthesis`, Eddie lo indica y el chat sigue
 funcionando por texto.
 
+## App instalable (PWA)
+
+Eddie se puede **instalar como app** en el Chromebook, el computador o el teléfono (Chrome o Edge): menú del navegador →
+**Instalar Eddie**, o el botón **Instalar Eddie** de Configuración → *Aplicación* cuando el navegador lo permite. Se
+abre en su propia ventana, desde el lanzador, y trae **atajos** (clic derecho o mantener pulsado el ícono): *Hablar con
+Eddie* (abre Inicio con el orbe listo; un toque y escucha), *Modo Vigilancia*, *Mis tareas* y *Hoy*. Los mismos enlaces
+sirven en el navegador: `/?modulo=tareas|hoy|chat|memoria|conectores|configuracion` y `/?accion=hablar|vigilancia`.
+
+- **Sin conexión**: tras abrir Eddie una vez con internet, el *service worker* (`public/sw.js`) guarda **solo la propia
+  app** (la página, sus scripts y estilos, los íconos). Sin internet abre, muestra «SIN RED» y deja ver tus tareas, tu
+  memoria y tus chats guardados (están en el navegador); para hablar con la IA hace falta internet.
+- **Qué nunca guarda**: todo lo de `/api` (sesión, IA, voz, cámara) va siempre a la red y no se almacena; tampoco lo que
+  no sea de la propia dirección (fuentes, mapas, clima) ni nada que no sea una lectura (GET).
+- **Actualizaciones**: la página se pide primero a la red, así que una versión nueva aparece al volver a abrir Eddie con
+  internet; si la red tarda más de 4 s se usa la copia guardada. Solo se registra en producción (no en `npm run dev`).
+- Vercel sirve `sw.js` sin caché (`vercel.json`); para probarlo en local: `npm run build && npm run preview`.
+
 ## Exportación de documentos
 
 - **TXT**: generado como Blob y descargado directamente.
