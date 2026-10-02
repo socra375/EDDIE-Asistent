@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS = {
   display: {
     perf: 'auto',
     core: 'cyan', // colour of the orb: cyan | blue | green | amber
+    boot: true, // the start-up animation
   },
   // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).
   vision: {

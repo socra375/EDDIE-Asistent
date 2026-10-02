@@ -3,16 +3,19 @@ import { ORB_COLORS, growth, layoutOrb, pickNode, project } from './orbMath.js';
 
 const AUTO_SPIN = 0.18; // radians per second
 const FRAME_MS = 48; // ~20 fps while turning on its own: it is decoration
+const LITE_FRAME_MS = 100; // ~10 fps in Modo ligero
 const BIRTH_MS = 700;
 const INTRO_STAGGER_MS = 35;
 const INTRO_MAX_MS = 1400;
 
-// Modo ligero and "reduce motion" keep the orb still: it only redraws when
-// you drag it or point at something.
+// Only "reduce motion" keeps the orb still. Modo ligero (which the browser may
+// turn on by itself on a slow screen) just makes it turn more slowly, with
+// fewer frames: it must not make the orb look dead.
 function isCalm() {
-  if (document.documentElement.dataset.perf === 'lite') return true;
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 }
+
+const isLite = () => document.documentElement.dataset.perf === 'lite';
 
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
@@ -165,7 +168,7 @@ export default function MemoryOrb({ items, categories, onForget, onEdit }) {
       s.running = false;
       const spinning = !isCalm() && s.visible && !document.hidden && !s.drag && s.hoverIndex < 0 && !s.selectedId;
       const growing = [...s.born.values()].some((b) => now - b < BIRTH_MS);
-      if (now - s.last >= FRAME_MS || !spinning) {
+      if (now - s.last >= (isLite() ? LITE_FRAME_MS : FRAME_MS) || !spinning) {
         const dt = Math.min((now - (s.last || now)) / 1000, 0.2);
         if (spinning) s.rot.yaw += AUTO_SPIN * dt;
         s.last = now;

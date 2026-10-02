@@ -806,12 +806,6 @@
   }
 }
 
-:root[data-perf='lite'] .orbit *,
-:root[data-perf='lite'] .orbit {
-  animation: none !important;
-  will-change: auto !important;
-}
-
 .orbit__replay {
   font-size: 0.7rem;
 }
