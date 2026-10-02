@@ -3,11 +3,13 @@ import { useChat } from '../context/ChatContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useWakeWord } from '../context/wakeWordState';
+import { useVision } from '../context/visionState';
 import { exportTxt } from '../utils/export';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
 import ConfirmCard from '../components/Chat/ConfirmCard';
 import StepTrace from '../components/Chat/StepTrace';
+import CameraPanel from './CameraPanel';
 import EddieOrb from './EddieOrb';
 import { SystemPanel, TasksSummary, UptimePanel, WeatherPanel } from './InfoPanels';
 import './Home.css';
@@ -31,6 +33,7 @@ const PREVIEW_CHARS = 220;
 export default function HomePanel({ onOpenTasks }) {
   const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
+  const vision = useVision();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
@@ -126,6 +129,7 @@ export default function HomePanel({ onOpenTasks }) {
       <div className="home__col">
         <SystemPanel />
         <WeatherPanel />
+        <CameraPanel />
         <UptimePanel />
         <TasksSummary onOpenTasks={onOpenTasks} />
       </div>
@@ -173,6 +177,16 @@ export default function HomePanel({ onOpenTasks }) {
         </div>
 
         <div className="home__actions">
+          <button
+            type="button"
+            className={`home__fab ${vision.busy ? 'home__fab--live' : ''}`}
+            onClick={vision.toggle}
+            aria-label={vision.busy ? 'Apagar la cámara' : 'Encender la cámara (Modo Vigilancia)'}
+            aria-pressed={vision.busy}
+            title={vision.busy ? 'Apagar la cámara' : 'Encender la cámara (Modo Vigilancia)'}
+          >
+            <Icon name="camera" />
+          </button>
           {sttSupported && (
             <button
               type="button"

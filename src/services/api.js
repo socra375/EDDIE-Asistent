@@ -104,3 +104,29 @@ export async function confirmAction({ tool, args, context, disabledConnectors })
   if (!res.ok) throw new EddieApiError(data?.error || `No se pudo completar la acción (${res.status}).`);
   return { result: data?.result || {}, actions: data?.actions || [] };
 }
+
+// One camera frame → { summary, objects: [{ label, category, count, confidence,
+// material?, detail?, box? }], provider } (see api/_lib/vision.js). Throws an
+// EddieApiError with `status` (and `retryAfter` in seconds for 429).
+export async function analyzeVisionFrame({ mimeType, data }, signal) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api/chat?action=vision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: { mimeType, data } }),
+      signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    throw new EddieApiError('No se pudo contactar al servidor de Eddie. Verifica tu conexión.');
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = new EddieApiError(body?.error || `No se pudo analizar el fotograma (${res.status}).`);
+    error.status = res.status;
+    error.retryAfter = Number(body?.retryAfter) || Number(res.headers.get('Retry-After')) || 0;
+    throw error;
+  }
+  return body;
+}

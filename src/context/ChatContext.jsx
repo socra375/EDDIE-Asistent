@@ -17,6 +17,8 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
+import { isSeeQuestion, parseVigilanceCommand } from '../services/commands';
+import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
 import { askProbe, looksLikeSystemQuestion, PROBE_AUTO_TIMEOUT_MS, stepsFromTools } from '../services/probeCore';
@@ -216,6 +218,14 @@ export function ChatProvider({ children }) {
       if (!trimmed) return;
       markVoice('send');
 
+      // "¿Qué ves?" while Modo Vigilancia has the camera on: the current
+      // picture travels with the question, like any attached image.
+      const seeing = !tag && !probe && !images.length && isSeeQuestion(trimmed, settings.wake?.word);
+      if (seeing && visionBridge.isActive()) {
+        const frame = await visionBridge.getFrame();
+        if (frame) images = [frame];
+      }
+
       // The local probe (Sonda Local) on the user's computer answers only when
       // the chat panel's «Sonda local» switch is on (`probe: true`, typed
       // messages only — the voice ring and the wake word never use it), or,
@@ -240,6 +250,38 @@ export function ChatProvider({ children }) {
       if (title) replyMeta.title = title;
       setMessages((prev) => (silent ? prev : [...prev, userMessage]));
       setErrorMessage('');
+
+      // "Modo Vigilancia" / "desactiva el modo vigilancia": the camera (see
+      // context/VisionContext.jsx) switches on or off; Eddie answers by himself.
+      const vigilance = !tag && !images.length && parseVigilanceCommand(trimmed, settings.wake?.word);
+      if (vigilance) {
+        const wasActive = visionBridge.isActive();
+        window.dispatchEvent(new CustomEvent(VIGILANCE_EVENT, { detail: { action: vigilance } }));
+        if (vigilance === 'on') {
+          addEddieMessage(
+            !visionBridge.isSupported()
+              ? 'Este navegador no permite usar la cámara.'
+              : wasActive
+                ? 'El modo vigilancia ya estaba activado.'
+                : !visionBridge.hasConsent()
+                  ? 'Para activar el modo vigilancia necesito tu permiso para usar la cámara. Pulsa «Permitir y encender» en el panel Cámara de Inicio.'
+                  : 'Modo vigilancia activado. Estoy observando.',
+          );
+        } else {
+          addEddieMessage(wasActive ? 'Vigilancia desactivada. Apagué la cámara.' : 'La vigilancia ya estaba apagada.');
+        }
+        return null;
+      }
+
+      // "¿Qué ves?" with nothing to look at.
+      if (seeing && !images.length) {
+        addEddieMessage(
+          visionBridge.isActive()
+            ? 'Todavía no tengo imagen de la cámara. Inténtalo en unos segundos.'
+            : 'La cámara está apagada. Di «Modo Vigilancia» para encenderla y luego pregúntame qué veo.',
+        );
+        return null;
+      }
 
       // "Eddie, suspéndete" / "apágate": switches the microphone (the wake word
       // listener) off, by voice or by typing. Turning it back on is up to the

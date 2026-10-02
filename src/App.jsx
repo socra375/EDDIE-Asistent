@@ -18,6 +18,8 @@ import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
+import { VisionProvider } from './context/VisionContext';
+import { VIGILANCE_EVENT } from './services/visionBridge';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
@@ -166,6 +168,15 @@ function AppShell() {
   }, [connectReturn]);
   const [chatListOpen, setChatListOpen] = useState(false);
 
+  // "Modo Vigilancia" by voice or text: the camera panel lives in Inicio.
+  useEffect(() => {
+    const goHome = (e) => {
+      if (e.detail?.action === 'on') setActiveModule('home');
+    };
+    window.addEventListener(VIGILANCE_EVENT, goHome);
+    return () => window.removeEventListener(VIGILANCE_EVENT, goHome);
+  }, []);
+
   function closeListIfNarrow() {
     if (window.matchMedia(NARROW_QUERY).matches) setChatListOpen(false);
   }
@@ -228,7 +239,9 @@ export default function App() {
           <VoiceProvider>
             <ChatProvider>
               <WakeWordProvider>
-                <AppShell />
+                <VisionProvider>
+                  <AppShell />
+                </VisionProvider>
               </WakeWordProvider>
             </ChatProvider>
           </VoiceProvider>

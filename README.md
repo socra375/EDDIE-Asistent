@@ -40,7 +40,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 
 | Módulo | Qué hace |
 | --- | --- |
-| Inicio | Panel estilo J.A.R.V.I.S.: a la izquierda Sistema (núcleos, memoria, batería, red), Clima (temperatura, humedad, viento, sensación), Tiempo activo (sesión, comandos, carga de Eddie) y Tareas; al centro el **orbe** (círculos concéntricos con cinco barras de sonido) con el nombre, el estado («Escuchando la palabra clave…», escuchando, procesando, hablando…) y los botones de micrófono y teclado; a la derecha la **Conversación** siempre visible (Limpiar y Exportar). En ventanas de menos de 1100 px la conversación pasa a ser un cajón que abre el botón de teclado, y de menos de 760 px todo va en una columna. El encabezado es una barra delgada: marca y estado «En línea», reloj y fecha, clima y chips. Es ligero a propósito: en reposo solo gira un aro fino, los estados activos se redibujan por pasos y cada parte móvil es su propia capa (solo cambia `transform`/`opacity`); sin desenfoques ni filtros de sombra (GPU en reposo ≈ 2 % en la medición con render por software). En Configuración → Pantalla, el **Modo ligero** (automático, siempre ligero o completo) apaga además la rejilla, las líneas y las animaciones; el automático se activa solo en equipos pequeños, si se pide menos movimiento o si la pantalla se ve lenta (menos de 20 cuadros por segundo) |
+| Inicio | Panel estilo J.A.R.V.I.S.: a la izquierda Sistema (núcleos, memoria, batería, red), Clima (temperatura, humedad, viento, sensación), **Cámara** (Modo Vigilancia, ver más abajo), Tiempo activo (sesión, comandos, carga de Eddie) y Tareas; al centro el **orbe** (círculos concéntricos con cinco barras de sonido) con el nombre, el estado («Escuchando la palabra clave…», escuchando, procesando, hablando…) y los botones de cámara, micrófono y teclado; a la derecha la **Conversación** siempre visible (Limpiar y Exportar). En ventanas de menos de 1100 px la conversación pasa a ser un cajón que abre el botón de teclado, y de menos de 760 px todo va en una columna. El encabezado es una barra delgada: marca y estado «En línea», reloj y fecha, clima y chips. Es ligero a propósito: en reposo solo gira un aro fino, los estados activos se redibujan por pasos y cada parte móvil es su propia capa (solo cambia `transform`/`opacity`); sin desenfoques ni filtros de sombra (GPU en reposo ≈ 2 % en la medición con render por software). En Configuración → Pantalla, el **Modo ligero** (automático, siempre ligero o completo) apaga además la rejilla, las líneas y las animaciones; el automático se activa solo en equipos pequeños, si se pide menos movimiento o si la pantalla se ve lenta (menos de 20 cuadros por segundo) |
 | Hoy | El día de un vistazo: saludo, agenda de hoy y mañana (Google Calendar), correos importantes sin leer (Gmail), tareas pendientes (vencidas primero), clima y titulares de noticias. Cada tarjeta explica qué falta si está vacía (iniciar sesión, conectar Gmail, conector apagado) y el botón "Resumen del día con Eddie" le pide que te lo cuente con sus herramientas, por voz si está activa. Se actualiza solo cada 5 minutos |
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
@@ -325,6 +325,34 @@ mandarle una foto (con la pregunta como pie de foto, o sin ella).
   origen, 3 imágenes por mensaje (Vercel solo acepta ~4,5 MB por petición). En Telegram, las imágenes
   mandadas como archivo deben pesar menos de unos 900 KB; como foto normal no hay problema.
 
+## Modo Vigilancia (cámara con visión por IA)
+
+Di **«Modo Vigilancia»** (o «Eddie, activa el modo vigilancia»; también escrito en la conversación, o con el botón de la
+cámara bajo el orbe o el de encendido del panel **Cámara**) y Eddie enciende la cámara de tu equipo y empieza a
+identificar **objetos, personas, animales y materiales**. Para apagarla: «desactiva el modo vigilancia», «modo normal»,
+el chip rojo **● VIGILANCIA · ON** del encabezado (se ve en cualquier pantalla) o el botón de encendido.
+
+- **Qué se ve**: el video con una caja y una etiqueta sobre cada cosa que la IA encontró (rojo = personas, verde =
+  animales, ámbar = objetos), la lista con categoría, material (vidrio, madera, metal, plástico, tela…), detalle y
+  confianza, y un **registro de eventos** («Persona detectado», «Perro: ya no está») con confirmación en dos análisis
+  seguidos para que no parpadee. Con la voz activada, Eddie **avisa en voz alta** cuando aparece o se va una persona o un
+  animal (máx. uno cada 15 s y la misma cosa no antes de 60 s). Con la cámara encendida, pregunta **«¿qué ves?»**: la
+  imagen actual viaja con la pregunta por el chat y Eddie te lo cuenta con sus palabras.
+- **Cómo funciona**: cada 5 s (3–15 en Configuración → Cámara · Modo Vigilancia) el navegador compara un cuadro pequeño
+  con el anterior y **solo si la escena cambió** (o pasaron 30 s) manda un fotograma de 640 px a
+  `POST /api/chat?action=vision` (no hay función nueva en Vercel). El servidor lo analiza con **Gemini**
+  (`GEMINI_VISION_MODEL`, por defecto `gemini-flash-latest`) y, si Gemini está ocupado o no configurado, con **Claude**
+  (`CLAUDE_VISION_MODEL`, por defecto `claude-haiku-4-5-20251001`); la respuesta se recorta a una forma fija (máx. 12
+  elementos, etiquetas cortas, cajas en rango) antes de llegar a la página. `VISION_MAX_PER_MINUTE` (20 por defecto)
+  limita los fotogramas por minuto y por dirección.
+- **Privacidad**: la primera vez Eddie pide tu permiso en el panel Cámara (y el navegador pide el suyo). Los fotogramas se
+  envían una vez al proveedor de IA y **no se guardan** (ni fotos ni miniaturas, ni en el servidor ni en el navegador). La
+  cámara se apaga sola a los 5/10/30 min (Configuración), si la pestaña estuvo oculta 2 min, si se desconecta o al
+  cerrar la página. Eddie **describe** lo que ve (cantidad de personas, qué hacen, ropa), pero **no reconoce quién es**
+  una persona ni deduce nombre, edad, etnia ni emociones.
+- **Cuota**: con el plan gratis de Gemini la cuota diaria es limitada; el filtro de movimiento y el tope de tiempo
+  mantienen un uso normal en unas 50–120 consultas. Si se alcanza el límite, el panel lo dice y reintenta solo.
+
 ## Notion (buscar, leer y escribir tus páginas)
 
 Eddie puede buscar y leer tus páginas de Notion, ver las filas de tus bases de datos (tareas, proyectos,
@@ -570,6 +598,8 @@ funcionando por texto.
 
 ## Seguridad y privacidad
 
+- La cámara de Modo Vigilancia solo se enciende con tu permiso, muestra siempre un chip rojo y se apaga sola; los
+  fotogramas no se guardan (ver «Modo Vigilancia»).
 - Las claves de API y el Client Secret de Google solo existen en variables
   de entorno del servidor; nunca se envían al navegador.
 - Toda solicitud a `/api/chat` se valida (proveedor permitido, longitud de
@@ -676,7 +706,7 @@ server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
   components/          Chat, Tasks, Settings, Core, Shared
-  home/                Pantalla de Inicio (orbe de voz, paneles HUD y conversación)
+  home/                Pantalla de Inicio (orbe de voz, paneles HUD, cámara y conversación)
   layout/              Barra de íconos, Mis chats, encabezado, logo, efectos HUD
   connectors/          Hub de conectores (tarjetas por estado e interruptores)
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext
