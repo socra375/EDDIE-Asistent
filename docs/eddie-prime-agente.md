@@ -2,13 +2,13 @@
 
 La Sonda local (fase 1, `docs/sonda-local.md`) solo responde al navegador del mismo equipo. **EDDIE Prime** es un
 agente pequeño (`public/eddie_agent.py`, servido en `/eddie_agent.py`) que deja a Eddie usar el equipo desde la web
-en otro dispositivo, el teléfono, Telegram o WhatsApp.
+en otro dispositivo, el teléfono o Telegram.
 
 - **Fase 2: el agente se conecta hacia afuera.** El equipo nunca abre un puerto. Se vincula una vez con un código,
   espera un aviso y va a buscar sus trabajos a Eddie con su propio token.
 - **Fase 3: un solo cerebro.** El agente no tiene IA. Ofrece una lista blanca de herramientas; Eddie (Gemini, Groq…)
   decide cuál usar y redacta la respuesta. Nada de comandos libres. Lo que cambia algo pasa por la tarjeta de
-  confirmación, también con los botones de Telegram y WhatsApp.
+  confirmación, también con los botones de Telegram.
 
 ## Cómo viaja una pregunta
 

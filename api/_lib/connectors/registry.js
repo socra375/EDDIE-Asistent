@@ -16,7 +16,6 @@ import agent from './agent/index.js';
 import github from './github/index.js';
 import notion from './notion/index.js';
 import telegram from './telegram/index.js';
-import whatsapp from './whatsapp/index.js';
 import probe from './probe/index.js';
 import computer from './computer/index.js';
 import youtube from './youtube/index.js';
@@ -28,7 +27,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, spotify, telegram, whatsapp, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, spotify, telegram, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -79,7 +78,7 @@ function matchesIntent(connector, intent) {
 // switched off in the hub, and relevant to what the user is talking about.
 function activeConnectors({ disabled = [], env = process.env, intent } = {}) {
   const off = new Set(disabled);
-  // Entries without tools (Telegram, WhatsApp, the local probe) only describe a channel for the hub.
+  // Entries without tools (Telegram, the local probe) only describe a channel for the hub.
   return CONNECTORS.filter((c) => c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0 && matchesIntent(c, intent));
 }
 

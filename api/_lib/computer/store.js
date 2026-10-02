@@ -1,7 +1,7 @@
 // Database side of EDDIE Prime (see db/migrations/0006_computer.sql).
 import { createHash, randomBytes } from 'node:crypto';
 import { getDb } from '../db.js';
-import { newLinkCode } from '../whatsapp/store.js';
+import { newLinkCode } from '../telegram/store.js';
 
 const PAIR_MINUTES = 10;
 // A job nobody picked up for this long is stale: the user has moved on.

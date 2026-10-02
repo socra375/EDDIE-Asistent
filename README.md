@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, WhatsApp, Sonda local…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, Sonda local…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -144,7 +144,7 @@ exclusivamente desde variables de entorno del backend:
 - `ELEVENLABS_VOICES` — (opcional) **más voces para elegir** en Configuración → Voz, como pares `Nombre:VoiceID`
   separados por comas (`Mayordomo:abc123…,Cercano:def456…`, hasta 12). La de `ELEVENLABS_VOICE_ID` sigue siendo la
   de por defecto. El servidor solo habla con las voces de esa lista, y la que elijas también se usa en las notas de voz
-  de Telegram y WhatsApp. Usa voces creadas por ti (Voice Design o clonadas): el plan gratis no permite por API las de
+  de Telegram. Usa voces creadas por ti (Voice Design o clonadas): el plan gratis no permite por API las de
   la biblioteca.
 
 Puedes configurar solo una o ambas. Si seleccionas en Configuración un
@@ -406,7 +406,7 @@ Spotify** y se puede quitar con **Desconectar Spotify**.
   Hace falta aplicar `db/migrations/0007_spotify.sql` (tabla `spotify_credentials`; los tokens se guardan cifrados).
 - **Cómo funciona**: `/api/connectors/spotify/{connect,callback,disconnect}` viven en la misma función de conectores
   (no suman funciones a Vercel). Eddie solo le ofrece estas herramientas a la IA cuando la conversación habla de música.
-  También funciona desde Telegram y WhatsApp.
+  También funciona desde Telegram.
 
 ## Memoria de conversaciones (Eddie recuerda lo que hablaron)
 
@@ -503,46 +503,6 @@ Comandos: `/llamar`, `/resumen`, `/recordatorios`, `/voz on|off` (contestar siem
 definido, solo esa cuenta puede vincular Telegram. Eddie solo responde en tu
 chat privado vinculado; en grupos no contesta.
 
-## WhatsApp (hablar con Eddie desde WhatsApp)
-
-Igual que en Telegram: le escribes, le mandas **notas de voz** o **fotos** y te contesta (con su voz si le hablaste
-por voz), con las mismas herramientas, memoria y tareas que en la app. Lo delicado (enviar un correo, borrar algo)
-te llega con botones **Confirmar / Cancelar**. Comandos: `/ayuda`, `/voz on|off`, `/resumen`, `/recordatorios`,
-`/nuevo`, `/desvincular`. Funciona con la API oficial de WhatsApp de Meta (WhatsApp Cloud API) y su número de
-prueba gratuito.
-
-> Límites de WhatsApp: un asistente **no puede llamarte ni recibir llamadas**, y solo puede escribirte libremente
-> durante las **24 horas** siguientes a tu último mensaje (fuera de ese plazo exige mensajes con plantilla aprobada
-> por Meta). Por eso los **avisos de recordatorios y el resumen de la mañana siguen llegando por Telegram**; en
-> WhatsApp tienes `/resumen` y `/recordatorios` cuando quieras.
-
-Pasos (los haces tú, una sola vez; necesitas una cuenta de Facebook/Meta):
-
-1. En https://developers.facebook.com → **My Apps → Create App** → tipo **Business** → agrega el producto
-   **WhatsApp**. Meta crea una cuenta de WhatsApp Business de prueba con un **número de prueba** gratis.
-2. En **WhatsApp → API Setup**: copia el **Phone number ID** (será `WHATSAPP_PHONE_NUMBER_ID`) y, en el campo
-   "To", agrega **tu propio número** como destinatario y verifícalo con el código que te llega (el número de prueba
-   solo conversa con los números que registres, hasta 5).
-3. **Token** (`WHATSAPP_TOKEN`): la pantalla API Setup da uno temporal que caduca en 24 horas (sirve para
-   probar). Para uno permanente: Meta Business Settings → **Users → System users** → crea un usuario del sistema
-   (Admin) → *Add assets* → tu app y tu cuenta de WhatsApp (control total) → **Generate token** con los permisos
-   `whatsapp_business_messaging` y `whatsapp_business_management`. Cópialo (nunca lo pegues en un chat).
-4. **App secret** (`WHATSAPP_APP_SECRET`): en **App settings → Basic → App secret** (Show).
-5. **Variables en Vercel** (Settings → Environment Variables → Production, luego Redeploy):
-   `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET` y `WHATSAPP_VERIFY_TOKEN` (una frase
-   al azar que inventas tú, por ejemplo `openssl rand -hex 16`); `APP_URL` ya la tienes.
-6. **Base de datos**: ejecuta `db/migrations/0005_whatsapp.sql` en el editor SQL de Neon.
-7. **Webhook**: en Meta, **WhatsApp → Configuration → Webhook → Edit**: *Callback URL*
-   `https://TU-DOMINIO/api/connectors/whatsapp/webhook`, *Verify token* = tu `WHATSAPP_VERIFY_TOKEN` →
-   **Verify and save**. Luego en *Webhook fields* suscríbete a **messages**.
-8. **Vincular**: en Eddie → Conectores → **WhatsApp** → *Vincular WhatsApp*; se abre el chat con el número de
-   prueba con el mensaje `VINCULAR XXXXXXXX` ya escrito: envíalo. La tarjeta pasa a "Conectado" sola.
-9. Prueba: escribe "hola", manda una nota de voz o una foto.
-
-Seguridad: cada entrega del webhook se acepta solo si trae la firma `X-Hub-Signature-256` válida (HMAC-SHA256 con
-tu app secret); Eddie solo responde al número que vinculaste (si defines `EDDIE_OWNER_EMAIL`, solo el dueño puede
-vincular); los mensajes repetidos se ignoran y el token solo se envía a los servidores de Meta.
-
 ## Sonda local (tu Chromebook)
 
 La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la
@@ -561,12 +521,12 @@ directamente desde el navegador de ese mismo equipo.
    («disco duro», RAM, CPU, batería) vayan solas a la sonda (si no responde en 8 s, contesta Eddie). Todo lo demás
    sobre tu equipo lo responde EDDIE Prime desde la nube.
 
-Solo funciona en el equipo donde corre la sonda. Para el teléfono, Telegram o WhatsApp está EDDIE Prime (abajo).
+Solo funciona en el equipo donde corre la sonda. Para el teléfono o Telegram está EDDIE Prime (abajo).
 
 ## Tu equipo desde cualquier lugar (EDDIE Prime)
 
-Con el agente `eddie_agent.py` en tu Chromebook, Eddie lo consulta y lo maneja desde la web, el teléfono, Telegram o
-WhatsApp: "¿cuánto disco me queda?", "¿qué está gastando memoria?", "abre la terminal". El agente no tiene IA
+Con el agente `eddie_agent.py` en tu Chromebook, Eddie lo consulta y lo maneja desde la web, el teléfono o
+Telegram: "¿cuánto disco me queda?", "¿qué está gastando memoria?", "abre la terminal". El agente no tiene IA
 propia (un solo cerebro: el de Eddie) y no abre puertos. Espera un aviso sin datos (ntfy) y va a buscar el trabajo con
 su token. Solo ejecuta su lista blanca de herramientas, y lo que cambia algo pide confirmación.
 
@@ -725,7 +685,7 @@ db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
   migrations/0003_reminders.sql      Recordatorios y resumen de la mañana
   migrations/0004_episodes.sql       Memoria de conversaciones (pgvector)
-  migrations/0005_whatsapp.sql       WhatsApp (números vinculados, códigos, confirmaciones)
+  migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya no se usan)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

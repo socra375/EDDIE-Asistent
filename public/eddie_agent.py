@@ -2,7 +2,7 @@
 """EDDIE Prime: el agente de Eddie en tu equipo.
 
 Deja que Eddie (en la nube) consulte y maneje este equipo desde la web, el
-teléfono, Telegram o WhatsApp, sin abrir ningún puerto:
+teléfono, Telegram, sin abrir ningún puerto:
 
   1. Se vincula una vez con el código de Conectores → «Tu equipo (EDDIE Prime)».
   2. Espera un aviso sin datos (un tema secreto de ntfy) que dice "hay trabajo".

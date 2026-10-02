@@ -1,5 +1,5 @@
-// The user's own computer, reachable from anywhere (web, phone, Telegram,
-// WhatsApp) through EDDIE Prime: the agent eddie_agent.py running on it.
+// The user's own computer, reachable from anywhere (web, phone, Telegram)
+// through EDDIE Prime: the agent eddie_agent.py running on it.
 // One brain: Eddie decides and words the answer; the agent only runs the
 // whitelisted tools it declared when it linked (disk, memory, processes,
 // opening an allowed app…). Anything that changes the computer goes through
@@ -37,7 +37,7 @@ export default {
   id: 'computer',
   name: 'Tu equipo (EDDIE Prime)',
   description:
-    'Eddie consulta y maneja tu Chromebook o PC desde cualquier lugar —la web, el teléfono, Telegram o WhatsApp— a través del agente EDDIE Prime: disco, memoria, procesador, batería, procesos, archivos de tu carpeta y abrir las apps que permitas.',
+    'Eddie consulta y maneja tu Chromebook o PC desde cualquier lugar —la web, el teléfono, Telegram— a través del agente EDDIE Prime: disco, memoria, procesador, batería, procesos, archivos de tu carpeta y abrir las apps que permitas.',
   icon: 'monitor',
   category: 'asistente',
   route:
@@ -69,7 +69,7 @@ export default {
       declaration: {
         name: 'computer_check',
         description:
-          'Consulta el equipo del usuario (su Chromebook/PC con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram o WhatsApp. Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}. Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
+          'Consulta el equipo del usuario (su Chromebook/PC con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram. Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}. Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
         parameters: {
           type: 'OBJECT',
           properties: { tool: { type: 'STRING', description: 'Nombre de la herramienta del equipo, ej. "disk_usage".' }, ...COMMON_ARGS },

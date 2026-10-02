@@ -1,4 +1,4 @@
-// Eddie's brain for chat channels (Telegram, WhatsApp): the same providers,
+// Eddie's brain for chat channels (Telegram): the same providers,
 // tools, memory and tasks as the web app, but running on the server for a
 // linked user. A channel brings a `link` ({ userId, timezone, user, history })
 // and the surface note ("you're talking on Telegram…"), and gets back what to

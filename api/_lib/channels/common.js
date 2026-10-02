@@ -1,4 +1,4 @@
-// Pieces every chat channel (Telegram, WhatsApp) shares: understanding a
+// Pieces every chat channel (Telegram) shares: understanding a
 // typed "sí" / "no", making a reply fit to be spoken, Eddie's voice, the
 // text of a confirmation card and closing a cold conversation into memory.
 import { synthesizeSpeech, MAX_SPEECH_CHARS } from '../speech.js';

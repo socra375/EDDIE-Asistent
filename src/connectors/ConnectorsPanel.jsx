@@ -1,7 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import TelegramControls from './TelegramControls';
-import WhatsAppControls from './WhatsAppControls';
 import ProbeControls from './ProbeControls';
 import OAuthLinkControls from './OAuthLinkControls';
 import ComputerControls from './ComputerControls';
@@ -88,7 +87,6 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onC
 
       {connector.auth === 'oauth-link' && <OAuthLinkControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'telegram' && <TelegramControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
-      {connector.id === 'whatsapp' && <WhatsAppControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'probe' && <ProbeControls />}
       {connector.id === 'computer' && <ComputerControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
 
