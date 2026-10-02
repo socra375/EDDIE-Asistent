@@ -620,8 +620,20 @@ sirven en el navegador: `/?modulo=tareas|hoy|chat|memoria|conectores|configuraci
 - Puedes borrar el historial de conversación y la memoria, cerrar sesión, o
   eliminar tu cuenta y todos tus datos del servidor en cualquier momento
   desde Configuración.
-- CORS restringido a los métodos necesarios; sin ejecución de código
-  arbitrario en el navegador.
+- **Solo la propia página puede usar la API** (`api/_lib/requestGuard.js`): `/api/chat` y sus acciones (voz, transcripción,
+  visión, confirmaciones) ya no aceptan llamadas de navegador desde otros sitios (antes respondían con
+  `Access-Control-Allow-Origin: *`, es decir, cualquier página podía gastar tu cuota de IA). Si tu página vive en otra
+  dirección, agrégala a `ALLOWED_ORIGINS` (separadas por comas). Los cambios que usan tu sesión (tareas, memoria,
+  ajustes, calendario, Drive, cuenta, conectores) además rechazan un POST/PUT/PATCH/DELETE que venga de otro sitio, aunque
+  la cookie `SameSite=Lax` ya no se enviaría. Telegram, el agente EDDIE Prime y el cron no son navegadores y siguen
+  entrando con su propio secreto o token.
+- **Límites por minuto y por dirección** (en memoria de cada instancia): chat 60 (`CHAT_MAX_PER_MINUTE`), transcripción 40
+  (`TRANSCRIBE_MAX_PER_MINUTE`), voz 120 (`SPEAK_MAX_PER_MINUTE`), confirmaciones 60 (`CONFIRM_MAX_PER_MINUTE`) y cámara 20
+  (`VISION_MAX_PER_MINUTE`). Responden 429 con `Retry-After`.
+- El nombre de modelo que manda el navegador se valida (letras, números y `. _ : -`, y `/` solo en Groq/OpenRouter; nunca
+  `..`): no puede cambiar la dirección de la petición al proveedor.
+- Los accesos de Spotify y Google se guardan cifrados (AES-256-GCM); las acciones delicadas (enviar, borrar, mover) siempre
+  piden tu confirmación en una tarjeta; sin ejecución de código arbitrario en el navegador. Ver `docs/seguridad.md`.
 
 ## Despliegue
 

@@ -7,6 +7,8 @@
 // it reaches the page, which only ever shows it as text.
 import { sanitizeImages } from './images.js';
 import { fetchWithRetry } from './fetchWithRetry.js';
+import { createRateLimiter, tooMany } from './rateLimit.js';
+import { isTrustedRequest } from './requestGuard.js';
 
 export const VISION_CATEGORIES = ['persona', 'animal', 'objeto', 'material', 'vehículo', 'otro'];
 const MAX_OBJECTS = 12;
@@ -193,46 +195,16 @@ export async function analyzeFrame(image, env = process.env) {
   }
 }
 
-// A few requests a minute per address: cameras are chatty and every frame
-// spends AI quota. Kept in memory — good enough for one serverless instance.
-export function createRateLimiter({ perMinute = DEFAULT_PER_MINUTE, now = () => Date.now() } = {}) {
-  const hits = new Map();
-  return function allow(key) {
-    const t = now();
-    const recent = (hits.get(key) || []).filter((at) => t - at < 60_000);
-    if (recent.length >= perMinute) {
-      hits.set(key, recent);
-      return { ok: false, retryAfter: Math.max(1, Math.ceil((60_000 - (t - recent[0])) / 1000)) };
-    }
-    recent.push(t);
-    hits.set(key, recent);
-    if (hits.size > 500) for (const [k, v] of hits) if (!v.some((at) => t - at < 60_000)) hits.delete(k);
-    return { ok: true };
-  };
-}
-
-let limiter;
-function limiterFor(env) {
-  const perMinute = Math.min(60, Math.max(1, Number.parseInt(env.VISION_MAX_PER_MINUTE, 10) || DEFAULT_PER_MINUTE));
-  if (!limiter || limiter.perMinute !== perMinute) limiter = Object.assign(createRateLimiter({ perMinute }), { perMinute });
-  return limiter;
-}
+export { createRateLimiter };
 
 // Shared by api/chat.js (Vercel) and server/dev-server.js (Express).
 export async function runVision(req, res, env = process.env) {
   // Only Eddie's own pages may spend the AI quota.
-  const site = req.headers['sec-fetch-site'];
-  if (site && site !== 'same-origin' && site !== 'none') {
+  if (!isTrustedRequest(req, env)) {
     res.status(403).json({ error: 'Origen no permitido.' });
     return;
   }
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local').split(',')[0].trim();
-  const allowed = limiterFor(env)(ip);
-  if (!allowed.ok) {
-    res.setHeader?.('Retry-After', String(allowed.retryAfter));
-    res.status(429).json({ error: 'Demasiados fotogramas por minuto. Eddie espera un momento.', retryAfter: allowed.retryAfter });
-    return;
-  }
+  if (tooMany(req, res, 'vision', DEFAULT_PER_MINUTE, 'VISION_MAX_PER_MINUTE', env)) return;
   try {
     let image;
     try {

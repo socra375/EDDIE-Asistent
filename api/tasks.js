@@ -6,8 +6,10 @@
 import { listTasks, createTask, updateTask, removeTask } from './_lib/tasksHandlers.js';
 import { parseCookies } from './_lib/cookies.js';
 import { applyResult, respondError } from './_lib/respond.js';
+import { refuseCrossSiteChange } from './_lib/requestGuard.js';
 
 export default async function handler(req, res) {
+  if (refuseCrossSiteChange(req, res)) return;
   try {
     const cookies = parseCookies(req.headers.cookie);
     const idParam = req.query.id;

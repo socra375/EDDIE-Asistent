@@ -8,8 +8,11 @@
 import { handleConnectorsRequest } from './_lib/connectorsHandlers.js';
 import { parseCookies } from './_lib/cookies.js';
 import { applyResult, respondError } from './_lib/respond.js';
+import { refuseCrossSiteChange } from './_lib/requestGuard.js';
 
 export default async function handler(req, res) {
+  // Telegram's webhook, the EDDIE Prime agent and the cron job are not browsers (no Sec-Fetch headers), so they pass.
+  if (refuseCrossSiteChange(req, res)) return;
   try {
     const raw = req.query.path;
     const path = (Array.isArray(raw) ? raw.join('/') : raw || '').split('/').filter(Boolean);
