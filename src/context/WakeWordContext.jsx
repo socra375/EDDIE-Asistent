@@ -4,6 +4,7 @@ import { useVoice } from './VoiceContext';
 import { useChat } from './ChatContext';
 import { useWakeWordListener, wakeWordSupported } from '../hooks/useWakeWordListener';
 import { DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, cleanFollowUpSeconds } from '../services/wakeWord';
+import { useNotes } from './notesState';
 import { WakeWordContext } from './wakeWordState';
 
 const STT_LANG_MAP = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', de: 'de-DE', it: 'it-IT', pt: 'pt-PT' };
@@ -36,13 +37,15 @@ export function WakeWordProvider({ children }) {
   const { listening, transcribing, transcript, interimTranscript, speechDetected, sttEngine, start, stop, reset, speaking, sttSupported, ttsSupported } =
     useVoice();
   const { status, sendMessage, lastReply } = useChat();
+  const { dictating } = useNotes();
 
   const enabled = Boolean(settings.wake?.enabled);
   const word = settings.wake?.word || DEFAULT_WAKE_WORD;
   const followUp = cleanFollowUpSeconds(settings.wake?.followUpSeconds, DEFAULT_FOLLOW_UP_SECONDS);
   const lang = STT_LANG_MAP[settings.language] || 'es-ES';
   const autoRead = settings.voice.autoRead;
-  const busy = listening || transcribing || speaking || status === 'processing' || status === 'responding';
+  // Dictating notes keeps the microphone: the word listener waits.
+  const busy = listening || transcribing || speaking || dictating || status === 'processing' || status === 'responding';
 
   // Latest values for timers and intervals, which outlive a render.
   const live = useRef({});

@@ -18,6 +18,9 @@ import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
+import { NotesProvider } from './context/NotesContext';
+import NotesPanel from './notes/NotesPanel';
+import { NOTES_EVENT } from './services/notesBridge';
 import { VisionProvider } from './context/VisionContext';
 import { HudProvider } from './context/HudContext';
 import { VIGILANCE_EVENT } from './services/visionBridge';
@@ -25,6 +28,7 @@ import { HUD_EVENT } from './services/hudBridge';
 import { readLaunch } from './services/pwa';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import BootSplash from './boot/BootSplash';
+import DeviceBridge from './devices/DeviceBridge';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
 
@@ -204,6 +208,15 @@ function AppShell() {
     return () => window.removeEventListener(HUD_EVENT, goHome);
   }, []);
 
+  // "Toma notas…" / "abre mis notas": the sheet is in Notas.
+  useEffect(() => {
+    const goNotes = (e) => {
+      if (e.detail?.action === 'show') setActiveModule('notes');
+    };
+    window.addEventListener(NOTES_EVENT, goNotes);
+    return () => window.removeEventListener(NOTES_EVENT, goNotes);
+  }, []);
+
   function closeListIfNarrow() {
     if (window.matchMedia(NARROW_QUERY).matches) setChatListOpen(false);
   }
@@ -245,6 +258,7 @@ function AppShell() {
           )}
           {activeModule === 'chat' && <ChatPanel />}
           {activeModule === 'tasks' && <TasksPanel />}
+          {activeModule === 'notes' && <NotesPanel />}
           {activeModule === 'memory' && <MemoryPanel />}
           {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
@@ -265,15 +279,18 @@ export default function App() {
         <LocationProvider>
           <VoiceProvider>
             <ChatProvider>
-              <WakeWordProvider>
-                <VisionProvider>
-                  <HudProvider>
-                    <AppShell />
-                    {/* Outside the app shell, whose children are all made `position: relative`. */}
-                    <BootSplash />
-                  </HudProvider>
-                </VisionProvider>
-              </WakeWordProvider>
+              <NotesProvider>
+                <WakeWordProvider>
+                  <VisionProvider>
+                    <HudProvider>
+                      <AppShell />
+                      <DeviceBridge />
+                      {/* Outside the app shell, whose children are all made `position: relative`. */}
+                      <BootSplash />
+                    </HudProvider>
+                  </VisionProvider>
+                </WakeWordProvider>
+              </NotesProvider>
             </ChatProvider>
           </VoiceProvider>
         </LocationProvider>

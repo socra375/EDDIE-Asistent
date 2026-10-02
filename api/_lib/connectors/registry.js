@@ -18,6 +18,7 @@ import notion from './notion/index.js';
 import telegram from './telegram/index.js';
 import probe from './probe/index.js';
 import computer from './computer/index.js';
+import devices from './devices/index.js';
 import youtube from './youtube/index.js';
 import spotify from './spotify/index.js';
 import reminders from './reminders/index.js';
@@ -27,7 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, spotify, telegram, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, spotify, telegram, devices, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);

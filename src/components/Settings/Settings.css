@@ -244,6 +244,7 @@
 .settings-grid[data-section='engine'] > .settings-card[data-section='engine'],
 .settings-grid[data-section='hud'] > .settings-card[data-section='hud'],
 .settings-grid[data-section='account'] > .settings-card[data-section='account'],
+.settings-grid[data-section='devices'] > .settings-card[data-section='devices'],
 .settings-grid[data-section='privacy'] > .settings-card[data-section='privacy'] {
   display: flex;
 }
@@ -437,4 +438,132 @@
   .settings-head__chips {
     display: none;
   }
+}
+
+/* ---- Dispositivos ---- */
+.settings-card--wide {
+  grid-column: 1 / -1;
+}
+
+.devices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device {
+  display: flex;
+  gap: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--panel-border);
+}
+
+.device--on {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.device__dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.device__dot--on {
+  background: var(--success);
+}
+
+.device__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.device__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.device__title strong {
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+}
+
+.device__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.device__rename {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.device__rename .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.device__meta {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.device__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.device__toggle {
+  margin-top: 0.2rem;
+}
+
+.device__result {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.device__result--ok {
+  color: var(--success);
+}
+
+.device__result--bad {
+  color: var(--danger);
+}
+
+.device__result--wait {
+  color: var(--warning);
+}
+
+.device__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.device__note {
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--text-faint);
 }

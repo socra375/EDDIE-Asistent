@@ -7,6 +7,7 @@
 // vigilancia", "vigilancia del barrio") does nothing. The wake word (or
 // "Eddie") may come first, "por favor" / "ya" last.
 import { DEFAULT_WAKE_WORD, wakePhrases } from './wakeWord.js';
+import { parseDuration } from './dictation.js';
 
 const FILLERS = ['hey', 'oye', 'ey', 'hola', 'ok', 'okay', 'okey'];
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -67,4 +68,29 @@ export function parseHudCommand(text, word) {
   if (HUD_SHOW.test(t)) return 'show';
   if (HUD_HIDE.test(t)) return 'hide';
   return null;
+}
+
+// ---- Notas ----------------------------------------------------------------
+// "Toma notas durante 10 minutos", "termina la nota", "abre mis notas". Only
+// whole messages: "toma nota de que mañana tengo examen" is not a command.
+const NOTE_THING = '(?:una |unas |la |las |mis |mi |el |un )?(?:notas?|apuntes|dictado)(?: de voz| nuevas?)?';
+const NOTES_START = new RegExp(
+  `^(?:(?:toma|tomar|tomame|apunta|apuntame|anota|anotame|dicta|dictame|empieza a tomar|comienza a tomar|empieza a apuntar|comienza a apuntar|quiero tomar|voy a tomar|vamos a tomar|necesito tomar|haz|hazme|crea|crear|ponme|inicia|iniciar) ${NOTE_THING}|nueva nota|(?:(?:activa|activar|enciende|encender|inicia|iniciar|entra en|entrar en|pon|poner) (?:el )?)?modo (?:de )?(?:notas?|dictado)|voy a dictar(?:te)?)(?: (.+))?$`,
+);
+const NOTES_STOP =
+  /^(?:(?:termina|terminar|finaliza|finalizar|deten|detener|cierra|cerrar|para|parar|cancela|cancelar) (?:de tomar |la |las |el |mi |mis )?(?:notas?|dictado|apuntes)|deja de tomar notas?|dejar de tomar notas?|ya no tomes notas?|fin de(?:l)? (?:la |el )?(?:nota|dictado|notas))$/;
+const NOTES_OPEN = /^(?:abre|abrir|muestra|mostrar|muestrame|ensename|ve a|ir a|quiero ver|ver) (?:mis |las |la |mi )?(?:notas?|libreta|hoja de notas)$/;
+const TAIL = /^(?:(?:durante|por|de|con|que dure|que duren|con una duracion de|de duracion|por un tiempo de|por espacio de|por unos) )?(.+)$/;
+
+// { action: 'start', minutes: number | null } | { action: 'stop' } | { action: 'open' } | null
+export function parseNotesCommand(text, word) {
+  const t = core(text, word);
+  if (!t) return null;
+  if (NOTES_STOP.test(t)) return { action: 'stop' };
+  if (NOTES_OPEN.test(t)) return { action: 'open' };
+  const m = NOTES_START.exec(t);
+  if (!m) return null;
+  if (!m[1]) return { action: 'start', minutes: null };
+  const minutes = parseDuration(TAIL.exec(m[1])[1]);
+  return minutes === null ? null : { action: 'start', minutes };
 }

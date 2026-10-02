@@ -17,7 +17,9 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { isSleepCommand } from '../services/wakeWord';
-import { isSeeQuestion, parseHudCommand, parseVigilanceCommand } from '../services/commands';
+import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
+import { MAX_MINUTES, formatMinutes } from '../services/dictation';
+import { notesBridge } from '../services/notesBridge';
 import { HUD_EVENT } from '../services/hudBridge';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
@@ -290,6 +292,35 @@ export function ChatProvider({ children }) {
         window.dispatchEvent(new CustomEvent(HUD_EVENT, { detail: { action: hud } }));
         if (hud === 'show') addEddieMessage('Sistema activado. Dejo los paneles a la vista hasta que digas «desactiva sistema».');
         else if (hud === 'hide') addEddieMessage('Sistema desactivado. Paneles ocultos.');
+        return null;
+      }
+
+      // "Toma notas durante 10 minutos" / "termina la nota" / "abre mis notas":
+      // Notas (context/NotesContext.jsx) opens a blank sheet and listens for
+      // the time asked; Eddie says what he understood and then keeps quiet.
+      const notesCommand = !tag && !images.length && parseNotesCommand(trimmed, settings.wake?.word);
+      if (notesCommand) {
+        if (notesCommand.action === 'open') {
+          notesBridge.show();
+          addEddieMessage('Aquí tienes tus notas.');
+        } else if (notesCommand.action === 'stop') {
+          const result = notesBridge.stop();
+          addEddieMessage(result ? `Nota terminada: ${result.words} ${result.words === 1 ? 'palabra' : 'palabras'} en la hoja.` : 'No estaba tomando notas.');
+        } else if (!notesBridge.isSupported()) {
+          addEddieMessage('Este navegador no permite dictar. Para tomar notas por voz usa Chrome o Edge.');
+        } else {
+          const was = notesBridge.isDictating();
+          const asked = notesCommand.minutes;
+          const { minutes, clamped } = notesBridge.start({ minutes: asked });
+          const span = formatMinutes(minutes);
+          const limit = clamped ? ` (el máximo es ${formatMinutes(MAX_MINUTES)})` : '';
+          const tip = asked === null && !was ? ' Puedes decirme otra duración: «toma notas durante 15 minutos».' : '';
+          addEddieMessage(
+            was
+              ? `Sigo en la misma hoja; ahora tengo ${span}${limit}.`
+              : `Tomo notas en una hoja en blanco durante ${span}${limit}. Di «fin de la nota» para terminar antes.${tip}`,
+          );
+        }
         return null;
       }
 
