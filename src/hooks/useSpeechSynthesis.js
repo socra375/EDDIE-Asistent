@@ -168,8 +168,10 @@ export function useSpeechSynthesis() {
         };
       }
       const voice = pickVoice(synth.getVoices(), options.lang, options.voiceURI);
+      const announced = new Set();
       return {
-        push(chunk) {
+        // `tag` names the piece this chunk belongs to (see speakPieces).
+        push(chunk, tag) {
           const utterance = new SpeechSynthesisUtterance(chunk);
           utterance.lang = voice?.lang || options.lang;
           utterance.rate = BROWSER_RATE;
@@ -181,6 +183,11 @@ export function useSpeechSynthesis() {
             if (!options.filler) markVoice('audioStart');
             setSpeaking(true);
           };
+          utterance.addEventListener('start', () => {
+            if (run !== runRef.current || tag === undefined || announced.has(tag)) return;
+            announced.add(tag);
+            options.onPiece?.(tag);
+          });
           utterance.onend = () => {
             pending -= 1;
             maybeEnd();
@@ -241,6 +248,8 @@ export function useSpeechSynthesis() {
       // Finish this answer with the browser voice instead of going silent:
       // what is left now, and whatever is still to come.
       const fallBack = (index, err) => {
+        // Pieces announced by their start can't be timed any more: say they're here.
+        session.pieceIds?.slice(index).forEach((id) => options.onPiece?.(id));
         session.mode = 'browser';
         session.sink = createBrowserSink(session);
         setEngineInfo({ engine: 'browser', reason: 'error', detail: err.message });
@@ -307,6 +316,10 @@ export function useSpeechSynthesis() {
         });
         session.sources.push(source);
         source.start(when);
+        if (options.onPiece) {
+          const id = session.pieceIds ? session.pieceIds[i] : i;
+          window.setTimeout(() => run === runRef.current && options.onPiece(id), Math.max(0, (when - ctx.currentTime) * 1000));
+        }
         if (!started) {
           started = true;
           setCloudError('');
@@ -344,14 +357,14 @@ export function useSpeechSynthesis() {
 
   // Starts a reading and returns its session; pieces are added with `feed`.
   const open = useCallback(
-    ({ lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, browserReason = 'chosen', filler = false, onEnd } = {}) => {
+    ({ lang = 'es-ES', voiceURI, engine = 'browser', cloudVoice, browserReason = 'chosen', filler = false, onEnd, onPiece } = {}) => {
       stopAll();
       const run = runRef.current;
       // "Speaking" from the moment the voice is asked for, not when the first
       // sound plays: the wake-word window and the ring wait for it instead of
       // opening the microphone first.
       setSpeaking(true);
-      const session = { run, options: { lang, voiceURI, cloudVoice, filler, onEnd }, queue: createChunkQueue(), mode: 'browser', sink: null, prefetch: null };
+      const session = { run, options: { lang, voiceURI, cloudVoice, filler, onEnd, onPiece }, queue: createChunkQueue(), mode: 'browser', sink: null, prefetch: null };
       sessionRef.current = session;
       const paused = Date.now() < cloudOffUntilRef.current;
       if (engine === 'elevenlabs' && !paused && audioContext()) {
@@ -395,6 +408,40 @@ export function useSpeechSynthesis() {
     [open, feed, finish],
   );
 
+  // Reads a list of pieces, each as one unit, and says when each one starts
+  // being heard: `onPiece(index)`. For things that go with what is being said
+  // (the home screen's panels). Pieces are short; the server voice gets each
+  // as one request, and they play back to back.
+  const speakPieces = useCallback(
+    (pieces, options = {}) => {
+      const lang = (options.lang || 'es').slice(0, 2);
+      const ids = [];
+      const clean = [];
+      pieces.forEach((piece, id) => {
+        const text = speakableText(piece, lang);
+        if (text) {
+          ids.push(id);
+          clean.push(text);
+        } else {
+          options.onPiece?.(id);
+        }
+      });
+      if (!clean.length) return;
+      const session = open(options);
+      session.pieceIds = ids;
+      clean.forEach((text, k) => {
+        if (session.mode === 'browser') {
+          splitForSpeech(text).forEach((chunk) => session.sink.push(chunk, ids[k]));
+        } else {
+          session.queue.push(text);
+          session.prefetch?.();
+        }
+      });
+      finish(session);
+    },
+    [open, finish],
+  );
+
   // Talks while the answer is still being written: `push(textSoFar)` as it
   // grows, `end(finalText)` when it is complete. Cancelled by any other
   // speak/stop, after which the controller does nothing.
@@ -424,7 +471,7 @@ export function useSpeechSynthesis() {
   }, [stopAll]);
 
   return useMemo(
-    () => ({ supported: browserSupported, speaking, voices, cloudError, engineInfo, speak, speakStream, stop }),
-    [browserSupported, speaking, voices, cloudError, engineInfo, speak, speakStream, stop],
+    () => ({ supported: browserSupported, speaking, voices, cloudError, engineInfo, speak, speakPieces, speakStream, stop }),
+    [browserSupported, speaking, voices, cloudError, engineInfo, speak, speakPieces, speakStream, stop],
   );
 }
