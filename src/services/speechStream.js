@@ -41,6 +41,16 @@ function lastBoundary(text) {
   return cut;
 }
 
+// A comma followed by a space after at least `at` characters, in the part that is safe to read.
+function softEnd(raw, at) {
+  const part = raw.slice(0, safeLength(raw));
+  let cut = 0;
+  for (const m of part.matchAll(/,(?=\s)/g)) {
+    if (m.index + 1 >= at && cut === 0) cut = m.index + 1;
+  }
+  return cut;
+}
+
 // How much of `raw` is ready to read: up to the last finished sentence that
 // does not end inside a block, `code` or link still being written (a line
 // break inside a code block is not the end of a sentence).
@@ -59,7 +69,12 @@ function readyEnd(raw) {
 // firstMin/firstMax: the first piece goes out as soon as it has `firstMin`
 // characters and is at most `firstMax` long. Later pieces wait until they
 // have `min` characters (fewer, longer requests) and are cut at `max`.
-export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80, max = 260, lang = 'es' } = {}) {
+// `ramp` are the minimums of the 2nd, 3rd… pieces: the first sound is short,
+// so the next piece must be ready soon after it or there is a silence; each
+// one can be a little longer than the last until `min` is reached.
+// `softAt`: the first piece does not wait for the end of a long sentence: at a
+// comma after this many characters it goes out.
+export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80, max = 260, ramp = [], softAt = 0, lang = 'es' } = {}) {
   let consumed = 0; // characters of the raw text already taken
   let pending = ''; // speakable text waiting to be handed out
   let sent = 0; // pieces handed out so far
@@ -82,12 +97,14 @@ export function createSentenceStreamer({ firstMin = 20, firstMax = 90, min = 80,
     push(text) {
       lastText = typeof text === 'string' ? text : lastText;
       const raw = lastText.slice(consumed);
-      const cut = readyEnd(raw);
+      let cut = readyEnd(raw);
+      if (cut <= 0 && softAt > 0 && sent === 0 && !pending) cut = softEnd(raw, softAt);
       if (cut <= 0) return [];
       consumed += cut;
       const spoken = speakableText(raw.slice(0, cut), lang);
       if (spoken) pending = pending ? `${pending} ${spoken}` : spoken;
-      return pending.length >= (sent === 0 ? firstMin : min) ? release(pieces(pending)) : [];
+      const need = sent === 0 ? firstMin : (ramp[sent - 1] ?? min);
+      return pending.length >= need ? release(pieces(pending)) : [];
     },
     end(finalText) {
       if (typeof finalText === 'string') lastText = finalText;

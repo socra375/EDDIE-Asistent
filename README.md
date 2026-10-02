@@ -774,7 +774,7 @@ db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
   migrations/0003_reminders.sql      Recordatorios y resumen de la mañana
   migrations/0004_episodes.sql       Memoria de conversaciones (pgvector)
-  migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya no se usan)
+  migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya se borraron de Neon)
   migrations/0008_devices.sql        Dispositivos de la cuenta y sus órdenes
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local

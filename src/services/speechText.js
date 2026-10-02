@@ -58,10 +58,20 @@ const SPOKEN_SYMBOLS = [
   [/\s*&\s*/g, ' y '],
 ];
 
+// Signs the voices turn into long silences: "…", "..." and dashes are read as
+// a full stop (or longer), ";" as a hard stop. A comma is the pause a person makes.
+const PAUSE_SIGNS = [
+  [/\s*(?:…|\.{3,})\s*/g, ', '],
+  [/\s+[-–—]+\s+|\s*[–—]+\s*/g, ', '],
+  [/;\s*/g, ', '],
+];
+
 // Markdown symbols, emojis, code and links read aloud sound like noise.
 export function speakableText(text, lang = 'es') {
   let out = String(text || '')
     .replace(/```[\s\S]*?```/g, ' (código omitido) ')
+    // A line that goes on in lower case (no bullet, no number) is the same sentence wrapped: no pause.
+    .replace(/([^.!?;:,\s])[ \t]*\n(?=\p{Ll})/gu, '$1 ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -72,10 +82,15 @@ export function speakableText(text, lang = 'es') {
     // "1. Lo primero…": the number of a list item isn't read out.
     .replace(/^\s*\d{1,2}[.)]\s+(?=\S)/gm, '');
   if (lang === 'es') for (const [pattern, spoken] of SPOKEN_SYMBOLS) out = out.replace(pattern, spoken);
+  for (const [pattern, spoken] of PAUSE_SIGNS) out = out.replace(pattern, spoken);
   return out
     .replace(/[*_~>|#]+/g, '')
-    // A line break without punctuation is still a pause when read aloud.
+    // Any other line break without punctuation is still a pause when read aloud.
     .replace(/([^.!?;:,\s])[ \t]*\n+/g, '$1. ')
+    // Commas that the replacements above may have doubled or left hanging.
+    .replace(/,(?:\s*,)+/g, ',')
+    .replace(/\s+,/g, ',')
+    .replace(/([.!?]),/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }
