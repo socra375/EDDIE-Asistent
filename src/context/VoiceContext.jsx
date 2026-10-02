@@ -39,18 +39,21 @@ export function VoiceProvider({ children }) {
   // Why the browser voice would be the one speaking (shown in Configuración).
   const browserReason = settings.voice.tts === 'browser' ? 'chosen' : 'unconfigured';
 
+  // How loud and how fast the user wants Eddie (Configuración → Voz).
+  const level = { volume: settings.voice.volume, rate: settings.voice.rate };
+
   const speakWithSettings = (text, onEnd, extra = {}) => {
-    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd, ...extra });
+    synthesis.speak(text, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd, ...level, ...extra });
   };
 
   // Reads pieces one after another and reports each one's start (onPiece).
   const speakPiecesWithSettings = (pieces, onPiece, onEnd) =>
-    synthesis.speakPieces(pieces, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onPiece, onEnd });
+    synthesis.speakPieces(pieces, { lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onPiece, onEnd, ...level });
 
   // Starts talking right away and takes the answer as it is written:
   // { push(textSoFar), end(finalText) }.
   const streamWithSettings = (onEnd) =>
-    synthesis.speakStream({ lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd });
+    synthesis.speakStream({ lang: sttLang, voiceURI: settings.voice.voiceURI || undefined, engine: ttsEngine, cloudVoice, browserReason, onEnd, ...level });
 
   // Named explicitly rather than spread — the hooks share key names
   // (`supported`, `stop`), and a flat spread once let synthesis's `stop`

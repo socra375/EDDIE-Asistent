@@ -4,7 +4,6 @@ import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useWakeWord } from '../context/wakeWordState';
 import { useVision } from '../context/visionState';
-import { useHud } from '../context/hudState';
 import { exportTxt } from '../utils/export';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
@@ -58,7 +57,6 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
   const vision = useVision();
-  const hud = useHud();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
@@ -213,7 +211,7 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
   const replyPreview = expanded || reply.length <= PREVIEW_CHARS ? reply : `${reply.slice(0, PREVIEW_CHARS)}…`;
 
   return (
-    <section className={`home ${chatOpen ? '' : 'home--chat-closed'} ${hud.visible.length || vision.phase !== 'off' ? 'home--hud' : ''}`}>
+    <section className={`home ${chatOpen ? '' : 'home--chat-closed'}`}>
       <HudLayer onOpenTasks={onOpenTasks} />
 
       <div className="home__center">

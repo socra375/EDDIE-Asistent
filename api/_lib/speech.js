@@ -76,6 +76,13 @@ export function voiceSettings(env = process.env) {
   };
 }
 
+// Speaking speed the user chose (Configuración → Voz): ElevenLabs accepts
+// 0.7–1.2; anything else is ignored.
+export function cleanSpeed(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0.7 && n <= 1.2 && Math.abs(n - 1) > 0.001 ? Math.round(n * 100) / 100 : null;
+}
+
 function contextText(value, side) {
   const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
   if (!text) return '';
@@ -113,6 +120,7 @@ export async function synthesizeSpeech({
   language,
   previousText,
   nextText,
+  speed,
   apiKey = process.env.ELEVENLABS_API_KEY,
   model = process.env.ELEVENLABS_MODEL || DEFAULT_TTS_MODEL,
   env = process.env,
@@ -130,6 +138,8 @@ export async function synthesizeSpeech({
   // Flash/Turbo v2.5 accept a language hint, which keeps short Spanish
   // phrases from being read with an English accent.
   if (/v2_5/.test(model) && /^[a-z]{2}$/.test(language || '')) body.language_code = language;
+  const pace = cleanSpeed(speed);
+  if (pace) body.voice_settings = { ...body.voice_settings, speed: pace };
   const previous = contextText(previousText, 'end');
   const next = contextText(nextText, 'start');
   if (previous) body.previous_text = previous;
@@ -165,8 +175,8 @@ export async function runSpeech(req, res) {
     return;
   }
   try {
-    const { text, voiceId, language, previousText, nextText } = req.body || {};
-    const upstream = await synthesizeSpeech({ text, voiceId, language: typeof language === 'string' ? language.slice(0, 2) : '', previousText, nextText });
+    const { text, voiceId, language, previousText, nextText, speed } = req.body || {};
+    const upstream = await synthesizeSpeech({ text, voiceId, language: typeof language === 'string' ? language.slice(0, 2) : '', previousText, nextText, speed });
     res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
     const reader = upstream.body.getReader();
     for (;;) {

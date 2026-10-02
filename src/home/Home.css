@@ -40,6 +40,13 @@
   transition: opacity 0.35s ease;
 }
 
+/* Short screens (a Chromebook is ~680 px tall): tighter, so more fits. */
+@media (max-height: 760px) {
+  .home__hud {
+    gap: 0.9rem;
+  }
+}
+
 @keyframes hud-slot-in {
   from { opacity: 0; transform: translateX(-16px); }
   to { opacity: 1; transform: none; }
@@ -202,15 +209,20 @@
   transition: width 0.4s ease;
 }
 
+/* Colour of the orb's core (Configuración → Interfaz HUD); cyan is the theme's own. */
+:root[data-core='blue'] { --core: #6a8dff; --core-soft: #c3d1ff; --core-dim: #3b4fa8; }
+:root[data-core='green'] { --core: #4dffa6; --core-soft: #c4ffe3; --core-dim: #1e9a66; }
+:root[data-core='amber'] { --core: #ffb020; --core-soft: #ffe0a3; --core-dim: #a06a0a; }
+
 /* ---- Eddie orb ----
    Light on purpose (the first ring froze weak Chromebooks): no `filter` or
    shadows inside the drawing, and every moving part is its own layer that only
    changes `transform` or `opacity`, in steps, which the browser can do without
    repainting. At rest only one thin ring drifts. */
 .eddie-orb {
-  --ring: var(--accent);
-  --ring-soft: var(--accent-2);
-  --ring-dim: var(--accent-dim);
+  --ring: var(--core, var(--accent));
+  --ring-soft: var(--core-soft, var(--accent-2));
+  --ring-dim: var(--core-dim, var(--accent-dim));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -669,24 +681,6 @@
     gap: 1rem;
   }
 
-  /* Not enough room beside the orb: the page grows and the panels go under it. */
-  .home--hud {
-    height: auto !important;
-    padding-bottom: 6rem;
-  }
-
-  .home--hud .home__center {
-    order: -1;
-  }
-
-  .home__hud {
-    position: static;
-    order: 2;
-    width: auto;
-    padding: 0.5rem 0 0;
-    overflow: visible;
-  }
-
   .home__conversation {
     position: fixed;
     top: 0.5rem;
@@ -716,6 +710,15 @@
     grid-template-columns: 1fr;
     height: auto !important;
     padding-bottom: 6rem;
+  }
+
+  /* Phones: not enough room beside the orb, so the panels go under it. */
+  .home__hud {
+    position: static;
+    order: 2;
+    width: auto;
+    padding: 0.5rem 0 0;
+    overflow: visible;
   }
 
   .home__center {
