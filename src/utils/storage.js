@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS = {
     intervalSeconds: 5,
     maxMinutes: 10,
     announce: true,
+    engine: 'auto', // auto: detector in this browser + cloud description | local | cloud
   },
   // Wake word: say it and Eddie starts listening (see services/wakeWord.js).
   wake: {

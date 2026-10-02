@@ -1,11 +1,12 @@
 // Eddie's service worker: lets the installed app open without a network and
 // keeps repeat visits fast. It caches ONLY the app itself (the page, its
-// scripts, styles and icons). Everything under /api — the login cookie, the
+// scripts, styles and icons, and the camera detector's model once downloaded). Everything under /api — the login cookie, the
 // AI, the camera frames, the voice — always goes straight to the network and
 // is never stored, and so does everything that isn't a GET to this origin.
 const SHELL = 'eddie-shell-v1';
 const ASSETS = 'eddie-assets-v1';
-const KEEP = [SHELL, ASSETS];
+const MODELS = 'eddie-models-v1';
+const KEEP = [SHELL, ASSETS, MODELS];
 const SHELL_FILES = ['/', '/manifest.webmanifest', '/favicon.svg', '/eddie-icon-192.png', '/eddie-icon-512.png', '/apple-touch-icon.png'];
 const MAX_ASSETS = 80;
 // A page that doesn't answer in this long is served from the cache instead.
@@ -43,6 +44,17 @@ async function assetFirst(request) {
   return res;
 }
 
+// The detector's files (/models/…, ~18 MB) are fetched once, when the camera is
+// first used, and then kept for good (they never change).
+async function modelFirst(request) {
+  const cache = await caches.open(MODELS);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const res = await fetch(request);
+  if (res.ok) await cache.put(request, res.clone());
+  return res;
+}
+
 // The page itself: the network first (so a new version shows up), the cached
 // copy when offline or slow.
 async function pageFirst(request) {
@@ -75,6 +87,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(pageFirst(request));
   } else if (url.pathname.startsWith('/assets/')) {
     event.respondWith(assetFirst(request));
+  } else if (url.pathname.startsWith('/models/')) {
+    event.respondWith(modelFirst(request));
   } else if (SHELL_FILES.includes(url.pathname)) {
     event.respondWith(shellFile(request));
   }

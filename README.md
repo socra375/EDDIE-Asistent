@@ -343,22 +343,38 @@ el chip rojo **● VIGILANCIA · ON** del encabezado (se ve en cualquier pantall
   animales, ámbar = objetos), la lista con categoría, material (vidrio, madera, metal, plástico, tela…), detalle y
   confianza, y un **registro de eventos** («Persona detectado», «Perro: ya no está») con confirmación en dos análisis
   seguidos para que no parpadee. Con la voz activada, Eddie **avisa en voz alta** cuando aparece o se va una persona o un
-  animal (máx. uno cada 15 s y la misma cosa no antes de 60 s). Con la cámara encendida, pregunta **«¿qué ves?»**: la
-  imagen actual viaja con la pregunta por el chat y Eddie te lo cuenta con sus palabras.
-- **Cómo funciona**: cada 5 s (3–15 en Configuración → Cámara · Modo Vigilancia) el navegador compara un cuadro pequeño
-  con el anterior y **solo si la escena cambió** (o pasaron 30 s) manda un fotograma de 640 px a
-  `POST /api/chat?action=vision` (no hay función nueva en Vercel). El servidor lo analiza con **Gemini**
-  (`GEMINI_VISION_MODEL`, por defecto `gemini-flash-latest`) y, si Gemini está ocupado o no configurado, con **Claude**
-  (`CLAUDE_VISION_MODEL`, por defecto `claude-haiku-4-5-20251001`); la respuesta se recorta a una forma fija (máx. 12
-  elementos, etiquetas cortas, cajas en rango) antes de llegar a la página. `VISION_MAX_PER_MINUTE` (20 por defecto)
-  limita los fotogramas por minuto y por dirección.
-- **Privacidad**: la primera vez Eddie pide tu permiso en el panel Cámara (y el navegador pide el suyo). Los fotogramas se
-  envían una vez al proveedor de IA y **no se guardan** (ni fotos ni miniaturas, ni en el servidor ni en el navegador). La
+  animal (máx. uno cada 15 s y la misma cosa no antes de 60 s). Con la cámara encendida, pregunta **«¿qué ves?»** y Eddie
+  te lo cuenta al instante con lo que ve.
+- **Cómo funciona — gratis y sin depender de nadie**: cada 5 s (3–15 en Configuración → Cámara · Modo Vigilancia) el
+  navegador compara un cuadro pequeño con el anterior y **solo si la escena cambió** (o pasaron 30 s) analiza la imagen.
+  El **motor de visión** se elige en esa misma tarjeta:
+  - **Automático (recomendado)**: un **detector que corre en tu propio equipo** (COCO-SSD con TensorFlow.js: 80 tipos de
+    objetos, personas y animales; cajas, lista, registro de eventos y avisos por voz) **sin claves, sin cuota y sin enviar
+    ninguna imagen**; cada ~20 s y solo si algo cambió, una imagen pequeña va además a una IA gratuita para
+    **describir mejor la escena y ver materiales**. Si no hay clave o se agota la cuota, sigue funcionando solo con el
+    detector. «¿Qué ves?» se responde al instante con lo que el detector ve (más la descripción de la IA si la hay).
+  - **Solo en este equipo**: nada sale del equipo, nunca.
+  - **Solo IA en la nube**: la IA hace todo (como antes).
+  - **El detector**: la primera vez que enciendes la cámara baja ~18 MB (los sirve Eddie mismo desde
+    `/models/coco-ssd`, con la copia de Google como respaldo) y el navegador los guarda; después funciona sin conexión. Usa
+    la tarjeta gráfica (WebGL) o, si no hay, el procesador; en equipos modestos tarda ~0,5–1 s por imagen. Modelo
+    ssdlite_mobilenet_v2 de TensorFlow (licencia Apache 2.0). Distingue lo que está en sus 80 clases (persona, perro,
+    laptop, taza, botella, celular…); los materiales que muestra son una pista por tipo de objeto («material probable»).
+  - **La IA en la nube** (`POST /api/chat?action=vision`, sin función nueva en Vercel) prueba, en este orden, lo que esté
+    configurado: **Gemini** (`GEMINI_VISION_MODEL`, por defecto `gemini-flash-latest`), **Groq** (gratis: Llama 4 con visión,
+    `GROQ_VISION_MODEL`, por defecto `meta-llama/llama-4-scout-17b-16e-instruct`; usa la misma `GROQ_API_KEY` del chat y si
+    Groq retira el modelo busca otro con visión de su lista) y **Claude** (`CLAUDE_VISION_MODEL`, por defecto
+    `claude-haiku-4-5-20251001`); si uno está ocupado o caído, responde el siguiente. La respuesta se recorta a una forma
+    fija (máx. 12 elementos, etiquetas cortas, cajas en rango). `VISION_MAX_PER_MINUTE` (20 por defecto) limita las
+    peticiones por minuto y por dirección.
+- **Privacidad**: la primera vez Eddie pide tu permiso en el panel Cámara (y el navegador pide el suyo). Con el detector
+  de tu equipo la imagen **no sale del equipo**; la que va a la IA (modo Automático o nube) se envía una vez y **no se
+  guarda** (ni fotos ni miniaturas, ni en el servidor ni en el navegador). La
   cámara se apaga sola a los 5/10/30 min (Configuración), si la pestaña estuvo oculta 2 min, si se desconecta o al
   cerrar la página. Eddie **describe** lo que ve (cantidad de personas, qué hacen, ropa), pero **no reconoce quién es**
   una persona ni deduce nombre, edad, etnia ni emociones.
-- **Cuota**: con el plan gratis de Gemini la cuota diaria es limitada; el filtro de movimiento y el tope de tiempo
-  mantienen un uso normal en unas 50–120 consultas. Si se alcanza el límite, el panel lo dice y reintenta solo.
+- **Cuota**: el detector local no gasta cuota. La descripción por IA (Gemini/Groq) se pide como mucho cada 20 s y solo si la
+  escena cambió, así que un uso normal queda muy por debajo de los planes gratis (Groq: 30 por minuto).
 
 ## Notion (buscar, leer y escribir tus páginas)
 

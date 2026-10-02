@@ -425,6 +425,14 @@ export default function SettingsPanel({ onOpenConversation }) {
       <div className="glass-panel settings-card" data-section="hud">
         <h2>Cámara · Modo Vigilancia</h2>
         <p className="settings-card__sub">Qué tan seguido mira y cuánto dura.</p>
+        <label>
+          <span className="field-label">Motor de visión</span>
+          <select className="select" value={settings.vision?.engine || 'auto'} onChange={(e) => updateVisionSettings({ engine: e.target.value })}>
+            <option value="auto">Automático: detector de este equipo + descripción por IA (recomendado)</option>
+            <option value="local">Solo en este equipo (sin enviar imágenes, sin claves, sin cuota)</option>
+            <option value="cloud">Solo IA en la nube (Gemini, Groq o Claude)</option>
+          </select>
+        </label>
         <div className="settings-row">
           <label>
             <span className="field-label">Analizar cada</span>
@@ -452,9 +460,10 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Eddie avisa por voz cuando aparece o se va una persona o un animal</span>
         </label>
         <p className="settings-placeholder">
-          Di «Modo Vigilancia» para encender la cámara y «desactiva el modo vigilancia» para apagarla; con ella encendida, pregunta «¿qué ves?». Solo se envía una imagen
-          pequeña cuando la escena cambió (o cada 30 s) y no se guarda nada. Eddie describe lo que ve, pero no reconoce quién es una persona. Con el plan gratis de Gemini la cuota diaria es limitada:
-          un intervalo mayor gasta menos.
+          Di «Modo Vigilancia» para encender la cámara y «desactiva el modo vigilancia» para apagarla; con ella encendida, pregunta «¿qué ves?». El detector de este equipo
+          (COCO-SSD: 80 tipos de objetos, personas y animales) es gratis, funciona sin claves ni cuota y no envía ninguna imagen; la primera vez descarga unos 18 MB (una sola vez). En «Automático»,
+          cada ~20 s y solo si algo cambió, una imagen pequeña va a una IA gratuita (Gemini o Groq, la que esté configurada) para describir mejor la escena y ver materiales; si no hay
+          clave o se agota la cuota, sigue funcionando solo con el detector. Nunca se guarda nada y Eddie no reconoce quién es una persona.
         </p>
       </div>
 
