@@ -7,6 +7,7 @@ import cors from 'cors';
 import { runChatStream } from '../api/_lib/chatStream.js';
 import { runTranscription, MAX_AUDIO_BYTES } from '../api/_lib/transcribe.js';
 import { runSpeech, voiceListStatus } from '../api/_lib/speech.js';
+import { runVision } from '../api/_lib/vision.js';
 import { runConfirm } from '../api/_lib/confirm.js';
 import { parseCookies } from '../api/_lib/cookies.js';
 import { applyResult, respondError } from '../api/_lib/respond.js';
@@ -32,7 +33,7 @@ function cookiesOf(req) {
 
 // ---- Chat (Gemini/Claude) ----
 
-const CHAT_ACTIONS = { transcribe: runTranscription, speak: runSpeech, confirm: runConfirm };
+const CHAT_ACTIONS = { transcribe: runTranscription, speak: runSpeech, confirm: runConfirm, vision: runVision };
 app.post('/api/chat', (req, res) => (CHAT_ACTIONS[req.query.action] || runChatStream)(req, res));
 
 app.get('/api/health', (_req, res) => {

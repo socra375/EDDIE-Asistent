@@ -742,3 +742,226 @@
   color: var(--accent-2);
   overflow-wrap: anywhere;
 }
+
+/* ---- Camera panel (Modo Vigilancia) ---- */
+.camera-panel {
+  position: relative;
+}
+
+.camera-panel--live {
+  border-color: var(--danger);
+}
+
+.camera-panel--live .hud-panel__aside {
+  color: var(--danger);
+}
+
+.camera-panel__power {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.camera-panel__power:hover {
+  background: var(--accent-soft);
+}
+
+.camera-panel__power--on {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.camera-panel__off,
+.camera-panel__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding: 1.1rem 0.6rem;
+  border: 1px dashed var(--accent-dim);
+  text-align: center;
+  color: var(--accent);
+  font-size: 0.72rem;
+}
+
+.camera-panel__off p,
+.camera-panel__card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.camera-panel__card {
+  align-items: stretch;
+  padding: 0.8rem;
+  text-align: left;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+}
+
+.camera-panel__hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.camera-panel__off .camera-panel__hint {
+  margin: 0;
+}
+
+.camera-panel__view {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  margin-top: 0.4rem;
+  overflow: hidden;
+  border: 1px solid var(--accent-dim);
+  background: #000;
+}
+
+.camera-panel__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+/* A box and label over each thing the AI found (positions come in per mille). */
+.camera-box {
+  position: absolute;
+  border: 2px solid var(--warning);
+  pointer-events: none;
+}
+
+.camera-box i {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  max-width: 220%;
+  padding: 0 0.3rem;
+  background: var(--warning);
+  color: #021015;
+  font-size: 0.6rem;
+  font-style: normal;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.camera-box--person {
+  border-color: var(--danger);
+}
+
+.camera-box--person i {
+  background: var(--danger);
+}
+
+.camera-box--animal {
+  border-color: var(--success);
+}
+
+.camera-box--animal i {
+  background: var(--success);
+}
+
+.camera-panel__note {
+  margin: 0.45rem 0 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.camera-panel__note--busy {
+  color: var(--warning);
+}
+
+.camera-panel__summary {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.camera-list,
+.camera-log {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+}
+
+.camera-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.3rem 0 0.3rem 0.5rem;
+  border-left: 2px solid var(--warning);
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.camera-list__item--person {
+  border-left-color: var(--danger);
+}
+
+.camera-list__item--animal {
+  border-left-color: var(--success);
+}
+
+.camera-list__item b {
+  font-weight: 400;
+  color: var(--accent-2);
+}
+
+.camera-list__item span {
+  font-size: 0.62rem;
+  color: var(--text-faint);
+}
+
+.camera-panel__log-title {
+  margin: 0.7rem 0 0;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  color: var(--accent-2);
+}
+
+.camera-log {
+  max-height: 9rem;
+  overflow-y: auto;
+}
+
+.camera-log__item {
+  padding: 0.2rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.68rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.camera-log__item time {
+  margin-right: 0.4rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.camera-log__item--left {
+  color: var(--text-faint);
+}
+
+.header__vigilance {
+  animation: none;
+}

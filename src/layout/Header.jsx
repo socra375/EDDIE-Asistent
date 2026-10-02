@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useLocation } from '../context/LocationContext';
+import { useVision } from '../context/visionState';
 import { useProbeConfig } from '../services/probe';
 import { usePlaceAndWeather } from '../home/usePlaceAndWeather';
 import LiveClock from './LiveClock';
@@ -38,6 +39,7 @@ export default function Header({ section }) {
   const { place, weather } = usePlaceAndWeather(location);
   const online = useOnline();
   const probe = useProbeConfig();
+  const vision = useVision();
   const voiceOn = settings.voice.autoRead;
   const [gpsLabel, gpsClass] = GPS_CHIP[gpsStatus] || GPS_CHIP.idle;
 
@@ -55,6 +57,11 @@ export default function Header({ section }) {
         <span className={`chip ${online ? 'on' : 'bad'}`}>{online ? 'EN LÍNEA' : 'SIN RED'}</span>
         <span className={`chip header__gps ${gpsClass}`}>{gpsLabel}</span>
         {probe.forced && <span className="chip warn" title="Lo que escribes en el chat va a la Sonda local, no a Eddie. Apágalo en el chat.">SONDA · ON</span>}
+        {vision.busy && (
+          <button type="button" className="chip chip--button bad header__vigilance" onClick={vision.toggle} title="La cámara está en Modo Vigilancia. Pulsa para apagarla.">
+            ● VIGILANCIA · ON
+          </button>
+        )}
         <span className="header__section">{section}</span>
       </div>
 

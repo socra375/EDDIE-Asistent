@@ -45,6 +45,12 @@ export const DEFAULT_SETTINGS = {
   display: {
     perf: 'auto',
   },
+  // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).
+  vision: {
+    intervalSeconds: 5,
+    maxMinutes: 10,
+    announce: true,
+  },
   // Wake word: say it and Eddie starts listening (see services/wakeWord.js).
   wake: {
     enabled: false,
@@ -64,6 +70,7 @@ export function getSettings() {
     ...stored,
     voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) },
     display: { ...DEFAULT_SETTINGS.display, ...(stored.display || {}) },
+    vision: { ...DEFAULT_SETTINGS.vision, ...(stored.vision || {}) },
     wake: { ...DEFAULT_SETTINGS.wake, ...(stored.wake || {}) },
   };
 }

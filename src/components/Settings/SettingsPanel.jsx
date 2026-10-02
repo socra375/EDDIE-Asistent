@@ -58,7 +58,7 @@ const LANGUAGES = [
 ];
 
 export default function SettingsPanel({ onOpenConversation }) {
-  const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, memory, forgetEverything } = useSettings();
+  const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, updateVisionSettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
   const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, engineInfo, sttLang, speakWithSettings } =
@@ -268,7 +268,7 @@ export default function SettingsPanel({ onOpenConversation }) {
           </select>
         </label>
         <p className="settings-placeholder">
-          El modo ligero apaga la rejilla, las líneas y las animaciones del anillo para que la pantalla no pese en equipos modestos.
+          El modo ligero apaga la rejilla, las líneas y las animaciones del orbe para que la pantalla no pese en equipos modestos.
           {(settings.display?.perf || 'auto') === 'auto' &&
             (screenGuard
               ? ' Se activó solo porque la pantalla iba lenta.'
@@ -287,6 +287,41 @@ export default function SettingsPanel({ onOpenConversation }) {
             Volver a probar con todos los efectos
           </button>
         )}
+      </div>
+
+      <div className="glass-panel settings-card">
+        <h2>Cámara · Modo Vigilancia</h2>
+        <div className="settings-row">
+          <label>
+            <span className="field-label">Analizar cada</span>
+            <select className="select" value={settings.vision?.intervalSeconds ?? 5} onChange={(e) => updateVisionSettings({ intervalSeconds: Number(e.target.value) })}>
+              {[3, 5, 8, 15].map((n) => (
+                <option key={n} value={n}>
+                  {n} segundos
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Se apaga sola a los</span>
+            <select className="select" value={settings.vision?.maxMinutes ?? 10} onChange={(e) => updateVisionSettings({ maxMinutes: Number(e.target.value) })}>
+              {[5, 10, 30].map((n) => (
+                <option key={n} value={n}>
+                  {n} minutos
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="settings-toggle">
+          <input type="checkbox" checked={settings.vision?.announce !== false} onChange={(e) => updateVisionSettings({ announce: e.target.checked })} />
+          <span>Eddie avisa por voz cuando aparece o se va una persona o un animal</span>
+        </label>
+        <p className="settings-placeholder">
+          Di «Modo Vigilancia» para encender la cámara y «desactiva el modo vigilancia» para apagarla; con ella encendida, pregunta «¿qué ves?». Solo se envía una imagen
+          pequeña cuando la escena cambió (o cada 30 s) y no se guarda nada. Eddie describe lo que ve, pero no reconoce quién es una persona. Con el plan gratis de Gemini la cuota diaria es limitada:
+          un intervalo mayor gasta menos.
+        </p>
       </div>
 
       <div className="glass-panel settings-card">

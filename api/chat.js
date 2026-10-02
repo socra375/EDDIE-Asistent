@@ -5,12 +5,14 @@
 // transcribe (speech to text, Groq Whisper, api/_lib/transcribe.js),
 // ?action=speak (text to speech, ElevenLabs, api/_lib/speech.js) and
 // ?action=confirm (runs an action the user confirmed on a card,
-// api/_lib/confirm.js). Sharing the file keeps the project under Vercel
+// api/_lib/confirm.js) and ?action=vision (what is in a camera frame, for
+// Modo Vigilancia, api/_lib/vision.js). Sharing the file keeps the project under Vercel
 // Hobby's 12 functions.
 import { runChatStream } from './_lib/chatStream.js';
 import { runTranscription } from './_lib/transcribe.js';
 import { runSpeech } from './_lib/speech.js';
 import { runConfirm } from './_lib/confirm.js';
+import { runVision } from './_lib/vision.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -37,6 +39,11 @@ export default async function handler(req, res) {
   }
   if (req.query?.action === 'confirm') {
     await runConfirm(req, res);
+    return;
+  }
+
+  if (req.query?.action === 'vision') {
+    await runVision(req, res);
     return;
   }
 
