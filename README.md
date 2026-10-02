@@ -384,6 +384,30 @@ Si Eddie dice que no encuentra una página, casi siempre es el paso 3. El conten
 sencillo (títulos con `#`, listas con `-`, tareas con `- [ ]`, citas con `>`, código con tres comillas
 invertidas); el formato dentro de una línea (negritas, enlaces) se guarda como texto normal.
 
+## Spotify (música por voz)
+
+«Pon música de Bad Bunny», «pausa», «siguiente canción», «sube el volumen a 60», «¿qué suena?»: Eddie busca y controla la
+reproducción de **tu cuenta de Spotify**. Es un conector por cuenta (OAuth): se vincula desde **Conectores → Conectar
+Spotify** y se puede quitar con **Desconectar Spotify**.
+
+- **Qué hace**: `spotify_search` (canciones, artistas, álbumes, playlists), `spotify_play` (el primer resultado, o
+  reanudar lo que sonaba), `spotify_control` (pausar, reanudar, siguiente, anterior, volumen, aleatorio) y
+  `spotify_now_playing`. Tras poner o pausar, Eddie vuelve a leer el reproductor y lo anota en el recibo como
+  «comprobado». Solo pide permisos de **lectura y control de la reproducción**; nunca toca tus listas ni tu biblioteca.
+- **Lo que necesita Spotify**: una cuenta **Premium** (Spotify no deja controlar la reproducción desde otras apps con
+  cuentas gratis) y **Spotify abierto en algún dispositivo**: la app del teléfono o del computador, o
+  open.spotify.com en una pestaña. Si no hay ninguno activo pero hay uno abierto, Eddie lo arranca ahí; si no hay
+  ninguno, te lo dice.
+- **Configurarlo** (una vez): en https://developer.spotify.com/dashboard crea una app («Web API»), agrega como
+  **Redirect URI** `https://TU-DOMINIO/api/connectors/spotify/callback` (o la de `SPOTIFY_REDIRECT_URI`) y, mientras la
+  app esté en modo desarrollo, agrega tu correo de Spotify en **User Management**. En **Vercel → Settings →
+  Environment Variables → Production** pon `SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET` (junto a `CONNECTOR_SECRET`,
+  `DATABASE_URL` y `APP_URL`, que ya usan Google y Telegram) y vuelve a desplegar. Nunca pegues esas claves en el chat.
+  Hace falta aplicar `db/migrations/0007_spotify.sql` (tabla `spotify_credentials`; los tokens se guardan cifrados).
+- **Cómo funciona**: `/api/connectors/spotify/{connect,callback,disconnect}` viven en la misma función de conectores
+  (no suman funciones a Vercel). Eddie solo le ofrece estas herramientas a la IA cuando la conversación habla de música.
+  También funciona desde Telegram y WhatsApp.
+
 ## Memoria de conversaciones (Eddie recuerda lo que hablaron)
 
 Además de lo que le pides recordar (perfil, preferencias, proyectos…), Eddie guarda **un resumen corto de

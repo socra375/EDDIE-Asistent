@@ -149,14 +149,14 @@ function PerfBridge() {
 // column, so it closes itself once the user picks something.
 const NARROW_QUERY = '(max-width: 1100px)';
 
-// Back from Google after "Conectar Gmail": ?connected=gmail, or
-// ?google_error=…&connect=gmail. Read once, then removed from the address.
+// Back from Google or Spotify after "Conectar Gmail" / "Conectar Spotify": ?connected=gmail, or
+// ?google_error=…&connect=gmail (?connect_error=… for Spotify). Read once, then removed from the address.
 function readConnectReturn() {
   const params = new URLSearchParams(window.location.search);
   const connected = params.get('connected');
   const connector = connected || params.get('connect');
   if (!connector || !/^[a-z0-9_-]{1,40}$/.test(connector)) return null;
-  return connected ? { type: 'connected', connector } : { type: 'error', connector, error: params.get('google_error') || 'error' };
+  return connected ? { type: 'connected', connector } : { type: 'error', connector, error: params.get('google_error') || params.get('connect_error') || 'error' };
 }
 
 function AppShell() {
