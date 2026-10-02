@@ -20,6 +20,7 @@ import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import { VisionProvider } from './context/VisionContext';
 import { VIGILANCE_EVENT } from './services/visionBridge';
+import { readLaunch } from './services/pwa';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
@@ -161,11 +162,19 @@ function readConnectReturn() {
 
 function AppShell() {
   const [connectReturn] = useState(readConnectReturn);
-  const [activeModule, setActiveModule] = useState(() => (connectReturn ? 'connectors' : 'home'));
+  // Where the installed app's shortcuts (and links like /?modulo=tareas) open.
+  const [launch] = useState(readLaunch);
+  const [activeModule, setActiveModule] = useState(() => (connectReturn ? 'connectors' : launch.module || 'home'));
 
   useEffect(() => {
-    if (connectReturn) window.history.replaceState(null, '', window.location.pathname);
-  }, [connectReturn]);
+    if (connectReturn || launch.module || launch.action) window.history.replaceState(null, '', window.location.pathname);
+    // "Modo Vigilancia" shortcut: the camera card listens from the next tick on.
+    if (launch.action === 'vigilancia') {
+      const timer = window.setTimeout(() => window.dispatchEvent(new CustomEvent(VIGILANCE_EVENT, { detail: { action: 'on' } })), 300);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [connectReturn, launch]);
   const [chatListOpen, setChatListOpen] = useState(false);
 
   // "Modo Vigilancia" by voice or text: the camera panel lives in Inicio.
@@ -212,7 +221,7 @@ function AppShell() {
       <div className="app-main">
         <Header section={moduleLabel(activeModule)} />
         <main className="app-content">
-          {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} />}
+          {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} focusOrb={launch.action === 'hablar'} />}
           {activeModule === 'today' && (
             <TodayPanel onOpenTasks={() => setActiveModule('tasks')} onOpenConnectors={() => setActiveModule('connectors')} onOpenChat={openChat} />
           )}

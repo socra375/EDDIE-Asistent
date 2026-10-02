@@ -7,6 +7,7 @@ import { formatSeconds, useVoiceTimings } from '../../services/voiceTiming';
 import { describeEngine, onlyLocalVoices } from '../../services/speechText';
 import { isLite, lowPowerDevice, PERF_CHANGED_EVENT, readGuard, writeGuard } from '../../services/performance';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
+import { promptInstall, useInstallState } from '../../services/pwa';
 import Icon from '../../layout/Icon';
 import { countItems } from '../../services/memory';
 import './Settings.css';
@@ -58,6 +59,7 @@ const LANGUAGES = [
 ];
 
 export default function SettingsPanel({ onOpenConversation }) {
+  const install = useInstallState();
   const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, updateVisionSettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
@@ -287,6 +289,27 @@ export default function SettingsPanel({ onOpenConversation }) {
             Volver a probar con todos los efectos
           </button>
         )}
+      </div>
+
+      <div className="glass-panel settings-card">
+        <h2>Aplicación</h2>
+        <p className="settings-placeholder">
+          {install.installed
+            ? 'Eddie está instalado en este equipo: se abre en su propia ventana y desde el lanzador.'
+            : install.canInstall
+              ? 'Instala Eddie para abrirlo desde el lanzador, en su propia ventana, con atajos (hablar, Modo Vigilancia, tareas, Hoy).'
+              : 'Para instalar Eddie, abre esta página en Chrome o Edge y busca «Instalar Eddie» en el menú del navegador (si ya lo instalaste, ábrelo desde el lanzador).'}
+        </p>
+        {install.canInstall && !install.installed && (
+          <button type="button" className="btn" onClick={() => promptInstall()}>
+            Instalar Eddie
+          </button>
+        )}
+        <p className="settings-placeholder">
+          {install.offlineReady
+            ? 'Sin conexión Eddie abre y muestra tus tareas, tu memoria y tus chats guardados; para hablar con la IA hace falta internet.'
+            : 'Después de abrir Eddie una vez con internet, también abrirá sin conexión (para hablar con la IA hace falta internet).'}
+        </p>
       </div>
 
       <div className="glass-panel settings-card">

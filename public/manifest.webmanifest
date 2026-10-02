@@ -1,14 +1,24 @@
 {
+  "id": "/",
   "name": "Eddie · Asistente personal",
   "short_name": "Eddie",
   "description": "Eddie, tu asistente personal por voz y texto.",
   "lang": "es",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#020b10",
   "theme_color": "#020b10",
+  "categories": ["productivity", "utilities"],
   "icons": [
-    { "src": "/eddie-icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/eddie-icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/eddie-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/eddie-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Hablar con Eddie", "short_name": "Hablar", "description": "Abre Eddie listo para hablar", "url": "/?accion=hablar", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Modo Vigilancia", "short_name": "Vigilancia", "description": "Enciende la cámara con visión por IA", "url": "/?accion=vigilancia", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mis tareas", "short_name": "Tareas", "description": "Abre las tareas pendientes", "url": "/?modulo=tareas", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Hoy", "short_name": "Hoy", "description": "Agenda, correos y noticias del día", "url": "/?modulo=hoy", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] }
   ]
 }
