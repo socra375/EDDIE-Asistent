@@ -15,7 +15,9 @@ export const TOOL_MIN_SIMILARITY = 0.5;
 const AUTO_LIMIT = 3;
 const TOOL_LIMIT = 5;
 const AUTO_BUDGET_CHARS = 900;
-const RECALL_TIMEOUT_MS = 2500;
+// Short on purpose: it runs before the first word of the answer. If the notes
+// aren't ready by then Eddie answers without them.
+const RECALL_TIMEOUT_MS = 700;
 // Below this, a message ("ok", "gracias") says nothing to search for.
 const MIN_QUERY_CHARS = 15;
 const MIN_MESSAGES_TO_KEEP = 4;

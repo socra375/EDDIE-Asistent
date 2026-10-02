@@ -66,16 +66,19 @@ escuchar solo en `127.0.0.1` (`uvicorn main:app --host 127.0.0.1 --port 8000`), 
 - `src/services/probeCore.js`: funciones puras — `cleanProbeUrl` (solo direcciones de este equipo: `127.0.0.1`,
   `localhost`, `[::1]`), `askProbe` (POST `/chat` con `X-Eddie-Key`, 90 s de límite), `pingProbe` (GET `/health`, sin
   clave ni IA), `parseProbeReply` (valida `response` y limpia `tools_used`), `looksLikeSystemQuestion`.
-- `src/services/probe.js`: la configuración (`eddie.probe`: `url`, `key`, `forced`, `autoDetect`) vive **solo en el
-  navegador**; nunca se sincroniza con el servidor de Eddie. `autoDetectReady` exige dirección válida y clave guardada.
+- `src/services/probe.js`: la configuración (`eddie.probe`: `url`, `key`, `autoDetect`) vive **solo en el navegador**;
+  nunca se sincroniza con el servidor de Eddie. `forced` (el botón del chat) **no se guarda**: vive en memoria y arranca
+  en OFF en cada carga, así un botón olvidado no deja a Eddie dependiendo de la sonda. `autoDetect` viene apagado y
+  `autoDetectReady` exige además dirección válida y clave guardada.
 - Conectores → **Sonda local**: dirección, clave, *Probar conexión* (20 s, por si Chrome pide permiso de red local),
-  *Enviar pregunta de prueba*, *Modo Sonda local en el chat* y la detección automática (encendida por defecto).
-- Chat: el botón **Sonda local ON/OFF** de la barra (siempre visible) fuerza que cada mensaje, escrito o dictado
-  (también desde Inicio), vaya a la sonda, sin pasar por la detección; errores claros si no responde. La respuesta se
-  muestra con su Markdown (negritas, listas, títulos, código) y, como recibo, las herramientas que usó. Con el botón
-  apagado, solo las preguntas sobre el equipo van a la sonda y, si no responde, contesta Eddie en la nube.
-- Lo hablado con la sonda queda fuera de la memoria de conversaciones (los resúmenes que se guardan en el servidor);
-  si sigues conversando con Eddie en la nube en el mismo chat, él ve esos mensajes como contexto.
+  *Enviar pregunta de prueba* y la detección automática (apagada por defecto).
+- Chat: el botón **Sonda local ON/OFF** manda a la sonda lo que se **escribe** en el chat (`sendMessage(..., { probe:
+  true })`), con «SONDA · ON» en el encabezado; el anillo, la voz y la palabra clave nunca la usan. Con la detección
+  encendida, solo las preguntas claras sobre el hardware (`looksLikeSystemQuestion`: disco duro, RAM, CPU, batería…
+  —sin palabras como «temperatura», «proceso» o «equipo»—) van a la sonda, con 8 s de espera, y si no responde contesta
+  Eddie. La respuesta se muestra con su Markdown y, como recibo, las herramientas que usó.
+- Lo hablado con la sonda (`local`) queda fuera de la memoria de conversaciones y **tampoco se envía como historial a
+  la nube**, para que Eddie no imite sus respuestas.
 
 ## Límites
 

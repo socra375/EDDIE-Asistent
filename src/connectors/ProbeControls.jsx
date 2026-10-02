@@ -86,14 +86,12 @@ export default function ProbeControls() {
         </div>
       )}
       <label className="settings-toggle">
-        <input type="checkbox" checked={config.forced} onChange={(e) => saveProbeConfig({ forced: e.target.checked })} />
-        <span>Modo Sonda local en el chat: todo lo que escribas o digas va a la sonda (es el mismo botón «Sonda local» del chat)</span>
-      </label>
-      <label className="settings-toggle">
         <input type="checkbox" checked={config.autoDetect} onChange={(e) => saveProbeConfig({ autoDetect: e.target.checked })} />
-        <span>Con el modo apagado, mandar a la sonda las preguntas sobre el equipo (disco, memoria, batería…); si no responde, contesta Eddie en la nube</span>
+        <span>Mandar a la sonda las preguntas claras sobre el hardware (disco duro, RAM, CPU, batería) en lugar de a Eddie. Apagado por defecto: Eddie no depende de la sonda.</span>
       </label>
-      {config.autoDetect && !config.key && <p className="connector__meta">La detección automática empieza cuando guardes la clave.</p>}
+      <p className="connector__meta">
+        El botón «Sonda local» del chat (siempre arranca apagado) manda tus mensajes escritos a esta sonda mientras esté en ON; la voz y la palabra clave nunca van a ella. Para el resto de preguntas sobre tu equipo, usa «Tu equipo (EDDIE Prime)».
+      </p>
       <p className="connector__meta">La dirección y la clave se guardan solo en este navegador; nunca pasan por el servidor de Eddie.</p>
     </div>
   );

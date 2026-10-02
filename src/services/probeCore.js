@@ -11,6 +11,8 @@ export const DEFAULT_PROBE_URL = 'http://127.0.0.1:8000';
 export const PROBE_TIMEOUT_MS = 90_000; // the probe calls its own AI model and then its tools
 // /health answers in milliseconds, but the first time Chrome may hold the
 // request while it asks for permission to reach this device's local network.
+// In automatic mode the probe gets this long before Eddie answers from the cloud instead.
+export const PROBE_AUTO_TIMEOUT_MS = 8_000;
 export const PING_TIMEOUT_MS = 20_000;
 const MAX_MESSAGE = 4000;
 const MAX_TOOLS = 12;
@@ -139,38 +141,33 @@ export async function pingProbe({ url, fetchImpl = globalThis.fetch, timeoutMs =
 
 const plain = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-// Questions about the computer itself, which only the probe can answer
-// (used when "detect questions about the computer" is on).
+// Clear questions about the computer's own hardware, which only the probe can
+// answer (used when "detect questions about the computer" is on, which is
+// off by default). Deliberately narrow: everyday words like "temperatura",
+// "proceso", "sistema" or "equipo" mean other things in other questions
+// (the weather, a task, a team) and must go to Eddie. For everything else
+// about the computer, EDDIE Prime answers from the cloud.
 const SYSTEM_RE = new RegExp(
   '\\b(' +
     [
-      'disco( duro)?',
-      'discos',
+      'disco duro',
+      'discos duros',
       'ssd',
       'hdd',
-      'almacenamiento',
-      'espacio (libre|en disco|disponible|usado|ocupado|me queda|queda|tengo)',
-      'cuanto espacio',
+      '(revisa|mira|checa|comprueba|como esta|como va) (el|mi) disco',
+      'almacenamiento (libre|disponible|del (equipo|computador|pc|chromebook|laptop)|de mi (equipo|computador|pc|chromebook|laptop))',
+      'espacio (libre|disponible|en disco|de almacenamiento)',
       'gigas? (libres?|disponibles?)',
-      'particion(es)?',
-      'memoria (ram|libre|disponible|usada|del (equipo|sistema|computador|pc))',
-      'cuanta memoria',
+      'memoria ram',
       'ram',
+      'memoria (libre|disponible)',
       'cpu',
       'procesador',
-      'nucleos',
-      'bateria',
-      'cargador',
-      'temperatura',
-      'procesos?',
+      'cuanta bateria',
+      'nivel de (la )?bateria',
+      'bateria (del|de mi) (equipo|computador|pc|chromebook|laptop|portatil)',
       'uptime',
-      'tiempo encendid[oa]',
       'lleva encendid[oa]',
-      '(uso|estado|rendimiento|salud) del (sistema|equipo|computador|pc|chromebook)',
-      '(mi|el|este|tu) (computador|computadora|ordenador|pc|chromebook|equipo|laptop|portatil|sistema operativo)',
-      'crostini',
-      'linux',
-      '(mi|la) (ip|direccion ip)',
     ].join('|') +
     ')\\b',
 );
