@@ -164,7 +164,11 @@
   transition: width 0.4s ease;
 }
 
-/* ---- Eddie ring ---- */
+/* ---- Eddie ring ----
+   Light on purpose (the first version froze weak Chromebooks): no `filter`
+   or shadows inside the drawing, and every moving part is its own layer that
+   only changes `transform` or `opacity`, which the browser can do without
+   repainting. At rest the only movement is one tick per second. */
 .eddie-ring {
   --ring: var(--accent);
   --ring-soft: var(--accent-2);
@@ -179,6 +183,7 @@
 }
 
 .eddie-ring__hit {
+  position: relative;
   width: 100%;
   aspect-ratio: 1;
   padding: 0;
@@ -193,13 +198,39 @@
   outline-offset: 6px;
 }
 
-.eddie-ring__svg {
+/* The glow: one soft ring of light behind the drawing (a gradient, not a filter). */
+.eddie-ring__glow {
+  position: absolute;
+  inset: -4%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, transparent 54%, color-mix(in srgb, var(--ring) 34%, transparent) 63%, transparent 74%);
+  opacity: 0.5;
+  will-change: opacity, transform;
+  transition: opacity 0.3s ease;
+}
+
+.eddie-ring__layer {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--ring) 60%, transparent));
-  transition: filter 0.3s ease, opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.eddie-ring__layer--bezel,
+.eddie-ring__layer--band,
+.eddie-ring__layer--process,
+.eddie-ring__layer--name,
+.eddie-ring__layer--hand {
+  will-change: transform;
+}
+
+.eddie-ring__layer--band,
+.eddie-ring__layer--process {
+  will-change: transform, opacity;
 }
 
 /* Outer bezel */
@@ -237,7 +268,6 @@
 
 .eddie-ring .arc {
   fill: none;
-  transition: stroke 0.3s ease;
 }
 
 .eddie-ring .arc--sec {
@@ -257,7 +287,6 @@
   fill: color-mix(in srgb, var(--ring) 8%, transparent);
   stroke: color-mix(in srgb, var(--ring) 45%, transparent);
   stroke-width: 1;
-  transition: fill 0.3s ease;
 }
 
 .eddie-ring .seg--lit {
@@ -269,7 +298,6 @@
 
 .eddie-ring .band-dot {
   fill: var(--warning);
-  filter: drop-shadow(0 0 3px var(--warning));
 }
 
 .eddie-ring__amber path {
@@ -316,17 +344,11 @@
   opacity: 0.35;
 }
 
-.eddie-ring__name {
-  transform-box: view-box;
-  transform-origin: 300px 300px;
-}
-
 .eddie-ring__name text {
   fill: url(#eddie-name);
   font-family: 'Michroma', 'Eurostile', 'Arial Black', var(--font-sans);
   font-size: 40px;
   font-weight: 700;
-  filter: drop-shadow(0 0 6px rgba(160, 230, 255, 0.55));
 }
 
 .eddie-ring__name .name-rule {
@@ -340,18 +362,11 @@
   opacity: 0.3;
 }
 
-.eddie-ring__hand path {
+.eddie-ring__hand {
   fill: var(--warning);
 }
 
-.eddie-ring__bezel,
-.eddie-ring__band,
-.eddie-ring__process {
-  transform-box: view-box;
-  transform-origin: 300px 300px;
-}
-
-.eddie-ring__process {
+.eddie-ring__layer--process {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -375,29 +390,31 @@
   letter-spacing: 0.6em;
   text-align: center;
   color: var(--ring-soft);
-  text-shadow: 0 0 10px var(--ring);
 }
 
-/* Idle: the bezel drifts slowly, the band breathes. */
-.eddie-ring[data-state='idle'] .eddie-ring__bezel {
-  animation: ring-spin 120s linear infinite;
+/* The pointer ticks once a second, in every state (it starts at the current second). */
+.eddie-ring__layer--hand {
+  animation: ring-spin 60s steps(60) infinite;
+  animation-delay: var(--hand-delay, 0s);
 }
 
-.eddie-ring[data-state='idle'] .eddie-ring__band {
-  animation: ring-breathe 5s ease-in-out infinite;
+/* Idle: the bezel drifts one small step a second. Nothing else moves. */
+.eddie-ring[data-state='idle'] .eddie-ring__layer--bezel {
+  animation: ring-spin 120s steps(120) infinite;
 }
 
-/* Listening: the lit segments pulse like an audio meter. */
-.eddie-ring[data-state='listening'] .seg--lit {
-  animation: ring-seg 0.9s ease-in-out infinite;
+/* The active states move in steps (20 frames a second for the pulses, 10 for
+   the turning arcs): to the eye it is still a pulse or a turn, but the screen
+   is redrawn a third to a sixth as often as at 60, which is what a weak
+   computer needs. */
+
+/* Listening: the band pulses like an audio meter. */
+.eddie-ring[data-state='listening'] .eddie-ring__layer--band {
+  animation: ring-pulse 0.9s steps(9) infinite;
 }
 
-.eddie-ring[data-state='listening'] .eddie-ring__name {
-  animation: ring-throb 0.9s ease-in-out infinite;
-}
-
-.eddie-ring[data-state='listening'] .eddie-ring__svg {
-  filter: drop-shadow(0 0 12px var(--ring));
+.eddie-ring[data-state='listening'] .eddie-ring__glow {
+  opacity: 0.85;
 }
 
 /* Processing: the band spins, amber arcs race around the core. */
@@ -405,37 +422,39 @@
   --ring-soft: var(--warning);
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__band {
-  animation: ring-spin 4s linear infinite;
+.eddie-ring[data-state='processing'] .eddie-ring__layer--band {
+  animation: ring-spin 4s steps(40) infinite;
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__process {
+.eddie-ring[data-state='processing'] .eddie-ring__layer--process {
   opacity: 1;
-  animation: ring-spin 1.4s linear infinite reverse;
+  animation: ring-spin 1.4s steps(14) infinite reverse;
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__bezel {
-  animation: ring-spin 12s linear infinite reverse;
+.eddie-ring[data-state='processing'] .eddie-ring__glow {
+  opacity: 0.7;
 }
 
-/* Speaking: the whole ring glows on a beat. */
-.eddie-ring[data-state='speaking'] .eddie-ring__svg {
-  animation: ring-glow 0.8s ease-in-out infinite;
+/* Speaking: the glow beats (the only thing that moves). */
+.eddie-ring[data-state='speaking'] .eddie-ring__glow {
+  opacity: 0.9;
+  animation: ring-glow 0.8s steps(8) infinite;
 }
 
-.eddie-ring[data-state='speaking'] .eddie-ring__name {
-  animation: ring-throb 0.8s ease-in-out infinite;
+/* Disabled: powered down — grey and faded, but still recognisably the same ring. */
+.eddie-ring[data-state='disabled'] {
+  --ring: var(--text-faint);
+  --ring-soft: var(--text-faint);
+  --ring-dim: var(--text-faint);
+  --ring-band: var(--text-faint);
 }
 
-/* Disabled: powered down — faded, but still recognisably the same ring. */
-.eddie-ring[data-state='disabled'] .eddie-ring__svg {
-  filter: saturate(0.3);
+.eddie-ring[data-state='disabled'] .eddie-ring__hit {
   opacity: 0.55;
 }
 
-.eddie-ring[data-state='disabled'] .eddie-ring__status {
-  color: var(--text-faint);
-  text-shadow: none;
+.eddie-ring[data-state='disabled'] .eddie-ring__glow {
+  opacity: 0;
 }
 
 /* Error: red, with a short flash. */
@@ -445,7 +464,7 @@
   --ring-band: #ff7a7a;
 }
 
-.eddie-ring[data-state='error'] .eddie-ring__svg {
+.eddie-ring[data-state='error'] .eddie-ring__hit {
   animation: ring-flash 0.35s ease-in-out 3;
 }
 
@@ -460,43 +479,25 @@
   }
 }
 
-@keyframes ring-breathe {
+@keyframes ring-pulse {
   0%,
   100% {
-    opacity: 0.8;
+    opacity: 0.55;
   }
   50% {
     opacity: 1;
   }
 }
 
-@keyframes ring-throb {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.06);
-  }
-}
-
-@keyframes ring-seg {
-  0%,
-  100% {
-    fill-opacity: 0.25;
-  }
-  50% {
-    fill-opacity: var(--seg, 0.9);
-  }
-}
-
 @keyframes ring-glow {
   0%,
   100% {
-    filter: drop-shadow(0 0 5px var(--ring));
+    opacity: 0.45;
+    transform: scale(1);
   }
   50% {
-    filter: drop-shadow(0 0 18px var(--ring));
+    opacity: 1;
+    transform: scale(1.03);
   }
 }
 
@@ -506,11 +507,23 @@
   }
 }
 
+/* "Modo ligero" (Configuración → Pantalla), and for people who ask their system
+   for less motion: the ring keeps its colors and state label but nothing moves. */
 @media (prefers-reduced-motion: reduce) {
   .eddie-ring *,
-  .eddie-ring__svg {
+  .eddie-ring__hit {
     animation: none !important;
   }
+}
+
+:root[data-perf='lite'] .eddie-ring *,
+:root[data-perf='lite'] .eddie-ring__hit {
+  animation: none !important;
+  will-change: auto !important;
+}
+
+:root[data-perf='lite'] .eddie-ring__glow {
+  display: none;
 }
 
 /* ---- Transcript / last reply under the ring ---- */

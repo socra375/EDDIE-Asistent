@@ -85,7 +85,6 @@ body,
 body {
   margin: 0;
   background: var(--bg-gradient), var(--bg);
-  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
@@ -118,13 +117,14 @@ button {
 }
 
 /* HUD instrument panel: thin cyan frame with two lit corner brackets.
-   Every module card uses this class, so they all share the look. */
+   Every module card uses this class, so they all share the look. No blur
+   behind and no filters (they repaint every time anything moves and are what
+   slows weak Chromebooks down). */
 .glass-panel {
   position: relative;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(2px);
   box-shadow: var(--shadow-glow);
 }
 
@@ -135,7 +135,6 @@ button {
   width: 12px;
   height: 12px;
   border: 2px solid var(--accent);
-  filter: drop-shadow(0 0 4px var(--accent));
   pointer-events: none;
 }
 
@@ -151,11 +150,6 @@ button {
   right: -1px;
   border-left: 0;
   border-top: 0;
-}
-
-:root[data-theme='light'] .glass-panel::before,
-:root[data-theme='light'] .glass-panel::after {
-  filter: none;
 }
 
 .btn {

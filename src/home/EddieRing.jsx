@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const C = 300;
 const circumference = (r) => 2 * Math.PI * r;
@@ -43,7 +43,6 @@ function useGeometry() {
         d: sector(BAND.inner, BAND.outer, from, from + step - 1.6),
         lit,
         strength: lit ? 1 - dist / 140 : 0,
-        delay: (i % 8) * 0.07,
       };
     });
     const ticks = Array.from({ length: 180 }, (_, i) => {
@@ -58,40 +57,65 @@ function useGeometry() {
   }, []);
 }
 
+// One stacked picture of the ring. Each moving part is its OWN layer (an svg
+// with `will-change`), so the browser moves a ready-made picture on the
+// graphics side instead of repainting the whole ring every frame: that is
+// what keeps a Chromebook from freezing. The still parts (rings, core, clock
+// arcs) are drawn once and repainted only when the second changes.
+function Layer({ name, children }) {
+  return (
+    <svg className={`eddie-ring__layer eddie-ring__layer--${name}`} viewBox="0 0 600 600" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
 // Eddie's central control, drawn after the J.A.R.V.I.S. interface: a
 // segmented light band around a dark core with the EDDIE name. It is still
-// a clock (outer arc = seconds, inner arc = minutes, amber pointer sweeps
+// a clock (outer arc = seconds, inner arc = minutes, amber pointer ticks
 // with the seconds) and doubles as the push-to-talk button. `state` drives
 // the animation: idle | listening | processing | speaking | disabled | error.
+// In reposo the only movement is one tick per second.
 export default function EddieRing({ state, label, onActivate, actionLabel }) {
   const { segments, ticks, dots } = useGeometry();
   const secRef = useRef(null);
   const minRef = useRef(null);
-  const handRef = useRef(null);
+  // The pointer's animation starts where the seconds are now (a negative delay).
+  const [handDelay] = useState(() => {
+    const d = new Date();
+    return -(d.getSeconds() + d.getMilliseconds() / 1000);
+  });
 
-  // The clock moves every 100ms; writing SVG attributes directly avoids
-  // re-rendering the whole ring ten times a second.
+  // The two arcs move once a second; writing the attribute directly avoids
+  // re-rendering the ring, and nothing runs while the tab is hidden.
   useEffect(() => {
     const setArc = (el, r, fraction) => {
       el.style.strokeDashoffset = String(circumference(r) * (1 - fraction));
     };
     const tick = () => {
+      if (document.hidden) return;
       const d = new Date();
-      const sec = d.getSeconds() + d.getMilliseconds() / 1000;
+      const sec = d.getSeconds();
       const min = d.getMinutes() + sec / 60;
       setArc(secRef.current, ARCS.sec, sec / 60);
       setArc(minRef.current, ARCS.min, min / 60);
-      handRef.current.setAttribute('transform', `rotate(${sec * 6} ${C} ${C})`);
     };
     tick();
-    const id = setInterval(tick, 100);
-    return () => clearInterval(id);
+    const id = setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, []);
 
   return (
-    <div className="eddie-ring" data-state={state}>
+    <div className="eddie-ring" data-state={state} style={{ '--hand-delay': `${handDelay}s` }}>
       <button type="button" className="eddie-ring__hit" onClick={onActivate} aria-label={actionLabel}>
-        <svg className="eddie-ring__svg" viewBox="0 0 600 600" aria-hidden="true">
+        <span className="eddie-ring__glow" aria-hidden="true" />
+
+        {/* Still parts: rings, the dark core, the amber bracket and the clock arcs. */}
+        <Layer name="static">
           <defs>
             <radialGradient id="eddie-core-bg" cx="50%" cy="45%" r="55%">
               <stop offset="0%" stopColor="#0d3345" />
@@ -104,58 +128,52 @@ export default function EddieRing({ state, label, onActivate, actionLabel }) {
               <stop offset="100%" stopColor="#9fc9dc" />
             </linearGradient>
           </defs>
-
-          {/* Outer bezel: ticks, thin ring, a few bright arcs and the seconds. */}
-          <g className="eddie-ring__bezel">
-            {ticks.map((t, i) => (
-              <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} className={t.major ? 'tick tick--major' : 'tick'} />
-            ))}
-            <path d={arc(294, 100, 140)} className="bezel-arc" />
-            <path d={arc(294, 200, 215)} className="bezel-arc" />
-            <path d={arc(294, 300, 335)} className="bezel-arc" />
-          </g>
           <circle cx={C} cy={C} r="268" className="ring-line" />
           <circle cx={C} cy={C} r={ARCS.sec} className="ring-track" />
           <circle ref={secRef} cx={C} cy={C} r={ARCS.sec} className="arc arc--sec" strokeDasharray={circumference(ARCS.sec)} transform={`rotate(-90 ${C} ${C})`} />
-
-          {/* Segmented light band. */}
-          <g className="eddie-ring__band">
-            <circle cx={C} cy={C} r={BAND.outer + 3} className="band-edge" />
-            <circle cx={C} cy={C} r={BAND.inner - 3} className="band-edge" />
-            {segments.map((s, i) => (
-              <path
-                key={i}
-                d={s.d}
-                className={s.lit ? 'seg seg--lit' : 'seg'}
-                style={s.lit ? { '--seg': 0.45 + s.strength * 0.5, animationDelay: `${s.delay}s` } : undefined}
-              />
-            ))}
-            {dots.map(([x, y], i) => (
-              <circle key={i} cx={x} cy={y} r="3.2" className="band-dot" />
-            ))}
-          </g>
-
-          {/* Amber bracket on the left of the band. */}
           <g className="eddie-ring__amber">
             <path d={arc(212, 212, 300)} />
             <path d={`M${polar(212, 212).join(' ')}L${polar(226, 212).join(' ')}`} />
             <path d={`M${polar(212, 300).join(' ')}L${polar(222, 300).join(' ')}`} />
             <path d={arc(226, 196, 212)} />
           </g>
-
-          {/* Inner rings: the minutes arc and two fine guides. */}
           <circle cx={C} cy={C} r={ARCS.min} className="ring-inner" />
           <circle ref={minRef} cx={C} cy={C} r={ARCS.min} className="arc arc--min" strokeDasharray={circumference(ARCS.min)} transform={`rotate(-90 ${C} ${C})`} />
           <circle cx={C} cy={C} r="184" className="ring-dots" />
-
-          <g className="eddie-ring__process">
-            <circle cx={C} cy={C} r="184" className="process-arc" strokeDasharray="150 428" />
-            <circle cx={C} cy={C} r="168" className="process-arc process-arc--inner" strokeDasharray="80 448" />
-          </g>
-
-          {/* Dark core with the name. */}
           <circle cx={C} cy={C} r="174" className="eddie-ring__core" />
           <circle cx={C} cy={C} r="150" className="eddie-ring__core-guide" />
+        </Layer>
+
+        {/* Outer bezel: ticks and a few bright arcs (drifts slowly). */}
+        <Layer name="bezel">
+          {ticks.map((t, i) => (
+            <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} className={t.major ? 'tick tick--major' : 'tick'} />
+          ))}
+          <path d={arc(294, 100, 140)} className="bezel-arc" />
+          <path d={arc(294, 200, 215)} className="bezel-arc" />
+          <path d={arc(294, 300, 335)} className="bezel-arc" />
+        </Layer>
+
+        {/* Segmented light band (pulses while listening, spins while processing). */}
+        <Layer name="band">
+          <circle cx={C} cy={C} r={BAND.outer + 3} className="band-edge" />
+          <circle cx={C} cy={C} r={BAND.inner - 3} className="band-edge" />
+          {segments.map((s, i) => (
+            <path key={i} d={s.d} className={s.lit ? 'seg seg--lit' : 'seg'} style={s.lit ? { '--seg': 0.45 + s.strength * 0.5 } : undefined} />
+          ))}
+          {dots.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r="3.2" className="band-dot" />
+          ))}
+        </Layer>
+
+        {/* Amber arcs that race around the core while processing. */}
+        <Layer name="process">
+          <circle cx={C} cy={C} r="184" className="process-arc" strokeDasharray="150 428" />
+          <circle cx={C} cy={C} r="168" className="process-arc process-arc--inner" strokeDasharray="80 448" />
+        </Layer>
+
+        {/* The name. */}
+        <Layer name="name">
           <g className="eddie-ring__name">
             <text x={C} y={C + 13} textAnchor="middle" textLength="290" lengthAdjust="spacingAndGlyphs">
               E.D.D.I.E.
@@ -163,11 +181,12 @@ export default function EddieRing({ state, label, onActivate, actionLabel }) {
             <path d={`M${C - 120} ${C + 34}H${C + 120}`} className="name-rule" />
             <path d={`M${C - 60} ${C - 36}H${C + 60}`} className="name-rule name-rule--top" />
           </g>
+        </Layer>
 
-          <g ref={handRef} className="eddie-ring__hand">
-            <path d="M293 4L307 4L300 18Z" />
-          </g>
-        </svg>
+        {/* The amber pointer: one tick per second. */}
+        <Layer name="hand">
+          <path d="M293 4L307 4L300 18Z" className="eddie-ring__hand" />
+        </Layer>
       </button>
       <p className="eddie-ring__status" role="status">
         {label}

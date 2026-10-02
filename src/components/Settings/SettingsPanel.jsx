@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useVoice } from '../../context/VoiceContext';
 import { formatSeconds, useVoiceTimings } from '../../services/voiceTiming';
+import { isLite, lowPowerDevice, PERF_CHANGED_EVENT, readGuard, writeGuard } from '../../services/performance';
 import { useProviderHealth } from '../../hooks/useProviderHealth';
 import Icon from '../../layout/Icon';
 import { countItems } from '../../services/memory';
@@ -56,13 +57,19 @@ const LANGUAGES = [
 ];
 
 export default function SettingsPanel({ onOpenConversation }) {
-  const { settings, updateSettings, updateVoiceSettings, memory, forgetEverything } = useSettings();
+  const { settings, updateSettings, updateVoiceSettings, updateDisplaySettings, memory, forgetEverything } = useSettings();
   const { user, login, logout, deleteAccount } = useAuth();
   const { resetConversation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations } = useChat();
   const { ttsSupported, voices, sttEngine, whisperAvailable, ttsEngine, cloudVoiceAvailable, cloudVoices, cloudVoice, cloudVoiceError, speakWithSettings } =
     useVoice();
   const health = useProviderHealth();
   const timings = useVoiceTimings();
+  const [screenGuard, setScreenGuard] = useState(readGuard);
+  useEffect(() => {
+    const sync = () => setScreenGuard(readGuard());
+    window.addEventListener(PERF_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(PERF_CHANGED_EVENT, sync);
+  }, []);
   const [deleting, setDeleting] = useState(false);
   const [customModel, setCustomModel] = useState(false);
 
@@ -247,6 +254,38 @@ export default function SettingsPanel({ onOpenConversation }) {
             </select>
           </label>
         </div>
+      </div>
+
+      <div className="glass-panel settings-card">
+        <h2>Pantalla</h2>
+        <label>
+          <span className="field-label">Modo ligero</span>
+          <select className="select" value={settings.display?.perf || 'auto'} onChange={(e) => updateDisplaySettings({ perf: e.target.value })}>
+            <option value="auto">Automático (recomendado)</option>
+            <option value="lite">Siempre ligero</option>
+            <option value="full">Completo</option>
+          </select>
+        </label>
+        <p className="settings-placeholder">
+          El modo ligero apaga la rejilla, las líneas y las animaciones del anillo para que la pantalla no pese en equipos modestos.
+          {(settings.display?.perf || 'auto') === 'auto' &&
+            (screenGuard
+              ? ' Se activó solo porque la pantalla iba lenta.'
+              : isLite('auto', false, lowPowerDevice())
+                ? ' Está activo porque este equipo es pequeño o pides menos movimiento.'
+                : ' Si la pantalla va lenta, se activa solo.')}
+        </p>
+        {screenGuard && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              writeGuard(false);
+            }}
+          >
+            Volver a probar con todos los efectos
+          </button>
+        )}
       </div>
 
       <div className="glass-panel settings-card">

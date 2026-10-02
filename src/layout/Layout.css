@@ -32,37 +32,30 @@
   height: 100%;
 }
 
-/* ---- HUD effects (dark theme only) ---- */
-.hud-fx,
-.hud-fx > div {
+/* ---- HUD effects (dark theme only) ----
+   ONE fixed layer with the hex grid, scanlines and vignette stacked as
+   backgrounds (painted once, never again), and the corner brackets as plain
+   borders. Four separate full-screen layers with glow filters used to be
+   repainted all the time. "Modo ligero" turns the whole thing off. */
+.hud-fx {
   position: fixed;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(63, 232, 255, 0.14) 100%),
+    repeating-linear-gradient(0deg, rgba(63, 232, 255, 0.04) 0 1px, transparent 1px 4px),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='42' height='72.7'><path d='M21 0L42 12.1V36.3L21 48.4L0 36.3V12.1Z M0 60.6L21 48.4 M42 60.6L21 48.4 M21 48.4V72.7' fill='none' stroke='%233fe8ff' stroke-width='.6' opacity='.12'/></svg>");
 }
 
-.hud-fx {
-  z-index: 0;
+.hud-fx__frame {
+  position: absolute;
+  inset: 10px;
 }
 
 .app-shell > :not(.hud-fx) {
   position: relative;
   z-index: 1;
-}
-
-.hud-fx__hex {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='42' height='72.7'><path d='M21 0L42 12.1V36.3L21 48.4L0 36.3V12.1Z M0 60.6L21 48.4 M42 60.6L21 48.4 M21 48.4V72.7' fill='none' stroke='%233fe8ff' stroke-width='.6' opacity='.12'/></svg>");
-}
-
-.hud-fx__scan {
-  background: repeating-linear-gradient(0deg, rgba(63, 232, 255, 0.04) 0 1px, transparent 1px 4px);
-}
-
-.hud-fx__vignette {
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(63, 232, 255, 0.14) 100%);
-}
-
-.hud-fx .hud-fx__frame {
-  inset: 10px;
 }
 
 .hud-fx__frame::before,
@@ -74,7 +67,6 @@
   width: 48px;
   height: 48px;
   border: 3px solid var(--accent);
-  filter: drop-shadow(0 0 6px var(--accent));
 }
 
 .hud-fx__frame::before {
@@ -105,7 +97,8 @@
   border-top: 0;
 }
 
-:root[data-theme='light'] .hud-fx {
+:root[data-theme='light'] .hud-fx,
+:root[data-perf='lite'] .hud-fx {
   display: none;
 }
 
