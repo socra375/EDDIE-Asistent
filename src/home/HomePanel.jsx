@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useChat } from '../context/ChatContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
+import { useWakeWord } from '../context/wakeWordState';
+import { exportTxt } from '../utils/export';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
 import ConfirmCard from '../components/Chat/ConfirmCard';
 import StepTrace from '../components/Chat/StepTrace';
-import EddieRing from './EddieRing';
-import { LocationAndWeather, SystemPanel, TasksSummary, TimePanel } from './InfoPanels';
+import EddieOrb from './EddieOrb';
+import { SystemPanel, TasksSummary, UptimePanel, WeatherPanel } from './InfoPanels';
 import './Home.css';
 
 const LABELS = {
@@ -21,13 +23,14 @@ const LABELS = {
   error: 'ERROR',
 };
 
-// Visual states that reuse another state's ring animation.
+// Visual states that reuse another state's orb animation.
 const RING_STATE = { responding: 'speaking', transcribing: 'processing' };
 
 const PREVIEW_CHARS = 220;
 
 export default function HomePanel({ onOpenTasks }) {
-  const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation } = useChat();
+  const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
+  const wake = useWakeWord();
   const { settings, updateVoiceSettings } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, reset, speaking, stopSpeaking, sttError } =
     useVoice();
@@ -62,7 +65,9 @@ export default function HomePanel({ onOpenTasks }) {
   else if (sttError) visual = 'error';
 
   const errorText = status === 'error' ? errorMessage : sttError;
-  const label = visual === 'error' ? `ERROR · ${(errorText || '').toUpperCase()}` : LABELS[visual];
+  let label = visual === 'error' ? `ERROR · ${(errorText || '').toUpperCase()}` : LABELS[visual];
+  // At rest with the wake word on, say so: it is what the user can do now.
+  if (visual === 'idle' && wake.enabled && wake.status === 'listening') label = `ESCUCHANDO LA PALABRA CLAVE · «${wake.word.toUpperCase()}»`;
 
   function activate() {
     if (transcribing) return;
@@ -82,6 +87,21 @@ export default function HomePanel({ onOpenTasks }) {
     if (!voiceOn) updateVoiceSettings({ autoRead: true });
     ringListenRef.current = true;
     start();
+  }
+
+  // The conversation is always on screen on a wide window; on a narrow one it
+  // is a drawer, and the keyboard button opens it.
+  function openKeyboard() {
+    setChatOpen(true);
+    window.setTimeout(() => document.querySelector('.home__conversation .chat-panel__textarea')?.focus(), 50);
+  }
+
+  function exportConversation() {
+    const lines = messages
+      .filter((m) => !m.local && m.content)
+      .map((m) => `${m.role === 'user' ? 'Tú' : 'Eddie'}: ${m.content}`)
+      .join('\n\n');
+    if (lines) exportTxt('conversacion-eddie.txt', lines);
   }
 
   const actionLabel = transcribing
@@ -104,12 +124,14 @@ export default function HomePanel({ onOpenTasks }) {
   return (
     <section className="home">
       <div className="home__col">
-        <TimePanel />
-        <LocationAndWeather />
+        <SystemPanel />
+        <WeatherPanel />
+        <UptimePanel />
+        <TasksSummary onOpenTasks={onOpenTasks} />
       </div>
 
       <div className="home__center">
-        <EddieRing state={RING_STATE[visual] || visual} label={label} onActivate={activate} actionLabel={actionLabel} />
+        <EddieOrb state={RING_STATE[visual] || visual} label={label} onActivate={activate} actionLabel={actionLabel} />
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
@@ -146,51 +168,51 @@ export default function HomePanel({ onOpenTasks }) {
               ))}
             </>
           ) : visual === 'processing' ? null : (
-            <p className="home__hint">{sttSupported ? 'TOCA EL ANILLO PARA HABLAR' : 'ABRE EL CHAT PARA ESCRIBIRLE A EDDIE'}</p>
+            <p className="home__hint">{sttSupported ? 'TOCA EL ORBE PARA HABLAR' : 'ESCRÍBELE A EDDIE EN LA CONVERSACIÓN'}</p>
           )}
+        </div>
+
+        <div className="home__actions">
+          {sttSupported && (
+            <button
+              type="button"
+              className={`home__fab ${listening ? 'home__fab--live' : ''}`}
+              onClick={activate}
+              aria-label={actionLabel}
+              title={actionLabel}
+            >
+              <Icon name="mic" />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`home__fab ${chatOpen ? 'home__fab--live' : ''}`}
+            onClick={openKeyboard}
+            aria-label="Escribirle a Eddie"
+            title="Escribirle a Eddie"
+          >
+            <Icon name="chat" />
+          </button>
         </div>
       </div>
 
-      <div className="home__col">
-        <SystemPanel />
-        <TasksSummary onOpenTasks={onOpenTasks} />
-      </div>
-
-      <div className="home__fabs">
-        {sttSupported && (
-          <button
-            type="button"
-            className={`home__fab ${listening ? 'home__fab--live' : ''}`}
-            onClick={activate}
-            aria-label={actionLabel}
-            title={actionLabel}
-          >
-            <Icon name="mic" />
-          </button>
-        )}
-        <button
-          type="button"
-          className={`home__fab ${chatOpen ? 'home__fab--live' : ''}`}
-          onClick={() => setChatOpen((v) => !v)}
-          aria-label={chatOpen ? 'Cerrar chat' : 'Abrir chat'}
-          aria-expanded={chatOpen}
-          title={chatOpen ? 'Cerrar chat' : 'Abrir chat'}
-        >
-          <Icon name="chat" />
-        </button>
-      </div>
-
-      {chatOpen && (
-        <aside className="home__chat" aria-label="Chat con Eddie">
-          <div className="home__chat-head">
-            <span>CANAL DE TEXTO</span>
-            <button type="button" className="btn" onClick={() => setChatOpen(false)}>
+      <aside className={`home__conversation ${chatOpen ? 'home__conversation--open' : ''}`} aria-label="Conversación con Eddie">
+        <div className="home__conversation-head">
+          <h2>Conversación</h2>
+          <div className="home__conversation-tools">
+            <button type="button" className="btn" onClick={resetConversation} disabled={!messages.length}>
+              Limpiar
+            </button>
+            <button type="button" className="btn" onClick={exportConversation} disabled={!messages.length}>
+              Exportar
+            </button>
+            <button type="button" className="btn home__conversation-close" onClick={() => setChatOpen(false)}>
               Cerrar
             </button>
           </div>
-          <ChatPanel showCore={false} />
-        </aside>
-      )}
+        </div>
+        <ChatPanel showCore={false} embedded />
+      </aside>
     </section>
   );
 }

@@ -2,8 +2,8 @@
 .home {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(240px, 300px) 1fr minmax(240px, 300px);
-  gap: 1.5rem;
+  grid-template-columns: minmax(240px, 300px) 1fr minmax(300px, 380px);
+  gap: 1.4rem;
   min-height: 0;
 }
 
@@ -164,25 +164,24 @@
   transition: width 0.4s ease;
 }
 
-/* ---- Eddie ring ----
-   Light on purpose (the first version froze weak Chromebooks): no `filter`
-   or shadows inside the drawing, and every moving part is its own layer that
-   only changes `transform` or `opacity`, which the browser can do without
-   repainting. At rest the only movement is one tick per second. */
-.eddie-ring {
+/* ---- Eddie orb ----
+   Light on purpose (the first ring froze weak Chromebooks): no `filter` or
+   shadows inside the drawing, and every moving part is its own layer that only
+   changes `transform` or `opacity`, in steps, which the browser can do without
+   repainting. At rest only one thin ring drifts. */
+.eddie-orb {
   --ring: var(--accent);
   --ring-soft: var(--accent-2);
   --ring-dim: var(--accent-dim);
-  --ring-band: #8fdcff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  width: min(100%, calc(100vh - 290px), 620px);
-  min-width: 240px;
+  gap: 0.7rem;
+  width: min(100%, calc(100vh - 430px), 440px);
+  min-width: 220px;
 }
 
-.eddie-ring__hit {
+.eddie-orb__hit {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
@@ -193,24 +192,24 @@
   cursor: pointer;
 }
 
-.eddie-ring__hit:focus-visible {
+.eddie-orb__hit:focus-visible {
   outline: 2px dashed var(--ring);
   outline-offset: 6px;
 }
 
-/* The glow: one soft ring of light behind the drawing (a gradient, not a filter). */
-.eddie-ring__glow {
+/* One soft ring of light behind the drawing (a gradient, not a filter). */
+.eddie-orb__glow {
   position: absolute;
-  inset: -4%;
+  inset: -3%;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle, transparent 54%, color-mix(in srgb, var(--ring) 34%, transparent) 63%, transparent 74%);
-  opacity: 0.5;
+  background: radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--ring) 30%, transparent) 62%, transparent 74%);
+  opacity: 0.4;
   will-change: opacity, transform;
   transition: opacity 0.3s ease;
 }
 
-.eddie-ring__layer {
+.eddie-orb__layer {
   position: absolute;
   inset: 0;
   display: block;
@@ -220,276 +219,211 @@
   pointer-events: none;
 }
 
-.eddie-ring__layer--bezel,
-.eddie-ring__layer--band,
-.eddie-ring__layer--process,
-.eddie-ring__layer--name,
-.eddie-ring__layer--hand {
+.eddie-orb__layer--orbit,
+.eddie-orb__layer--orbit2 {
   will-change: transform;
 }
 
-.eddie-ring__layer--band,
-.eddie-ring__layer--process {
-  will-change: transform, opacity;
-}
-
-/* Outer bezel */
-.eddie-ring .tick {
-  stroke: var(--ring);
-  stroke-width: 1;
-  opacity: 0.45;
-}
-
-.eddie-ring .tick--major {
-  stroke-width: 2;
-  opacity: 0.85;
-}
-
-.eddie-ring .bezel-arc {
-  fill: none;
-  stroke: var(--ring-soft);
-  stroke-width: 4;
-  opacity: 0.8;
-}
-
-.eddie-ring .ring-line {
+.eddie-orb .orb-ring {
   fill: none;
   stroke: var(--ring);
   stroke-width: 1.5;
-  opacity: 0.7;
-}
-
-.eddie-ring .ring-track {
-  fill: none;
-  stroke: var(--ring-dim);
-  stroke-width: 3;
-  opacity: 0.45;
-}
-
-.eddie-ring .arc {
-  fill: none;
-}
-
-.eddie-ring .arc--sec {
-  stroke: var(--ring-soft);
-  stroke-width: 3;
-}
-
-/* Segmented light band */
-.eddie-ring .band-edge {
-  fill: none;
-  stroke: var(--ring);
-  stroke-width: 1;
   opacity: 0.55;
 }
 
-.eddie-ring .seg {
-  fill: color-mix(in srgb, var(--ring) 8%, transparent);
-  stroke: color-mix(in srgb, var(--ring) 45%, transparent);
-  stroke-width: 1;
-}
-
-.eddie-ring .seg--lit {
-  fill: var(--ring-band);
-  fill-opacity: var(--seg, 0.7);
-  stroke: var(--ring-soft);
-  stroke-opacity: 0.6;
-}
-
-.eddie-ring .band-dot {
-  fill: var(--warning);
-}
-
-.eddie-ring__amber path {
-  fill: none;
-  stroke: var(--warning);
-  stroke-width: 3;
-  stroke-linecap: square;
-}
-
-/* Inner rings */
-.eddie-ring .ring-inner {
-  fill: none;
-  stroke: var(--ring-dim);
-  stroke-width: 8;
-  opacity: 0.5;
-}
-
-.eddie-ring .arc--min {
-  stroke: var(--ring-band);
-  stroke-width: 8;
+.eddie-orb .orb-ring--outer {
   opacity: 0.85;
 }
 
-.eddie-ring .ring-dots {
-  fill: none;
-  stroke: var(--ring);
-  stroke-width: 1;
-  stroke-dasharray: 2 6;
-  opacity: 0.5;
+.eddie-orb .orb-ring--soft {
+  stroke: var(--ring-dim);
+  stroke-width: 10;
+  opacity: 0.3;
 }
 
-/* Dark core and the name */
-.eddie-ring__core {
-  fill: url(#eddie-core-bg);
+.eddie-orb .orb-core {
+  fill: url(#eddie-orb-core);
   stroke: var(--ring);
   stroke-width: 2;
 }
 
-.eddie-ring__core-guide {
+.eddie-orb .orb-arc {
   fill: none;
-  stroke: var(--ring);
-  stroke-width: 1;
-  stroke-dasharray: 1 5;
-  opacity: 0.35;
-}
-
-.eddie-ring__name text {
-  fill: url(#eddie-name);
-  font-family: 'Michroma', 'Eurostile', 'Arial Black', var(--font-sans);
-  font-size: 40px;
-  font-weight: 700;
-}
-
-.eddie-ring__name .name-rule {
-  fill: none;
-  stroke: var(--ring);
-  stroke-width: 1;
-  opacity: 0.5;
-}
-
-.eddie-ring__name .name-rule--top {
-  opacity: 0.3;
-}
-
-.eddie-ring__hand {
-  fill: var(--warning);
-}
-
-.eddie-ring__layer--process {
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.eddie-ring .process-arc {
-  fill: none;
-  stroke: var(--warning);
-  stroke-width: 5;
-  stroke-linecap: round;
-}
-
-.eddie-ring .process-arc--inner {
+  stroke: var(--ring-soft);
   stroke-width: 3;
-  opacity: 0.7;
-}
-
-.eddie-ring__status {
-  margin: 0;
-  padding-left: 0.6em;
-  font-size: 0.85rem;
-  letter-spacing: 0.6em;
-  text-align: center;
-  color: var(--ring-soft);
-}
-
-/* The pointer ticks once a second, in every state (it starts at the current second). */
-.eddie-ring__layer--hand {
-  animation: ring-spin 60s steps(60) infinite;
-  animation-delay: var(--hand-delay, 0s);
-}
-
-/* Idle: the bezel drifts one small step a second. Nothing else moves. */
-.eddie-ring[data-state='idle'] .eddie-ring__layer--bezel {
-  animation: ring-spin 120s steps(120) infinite;
-}
-
-/* The active states move in steps (20 frames a second for the pulses, 10 for
-   the turning arcs): to the eye it is still a pulse or a turn, but the screen
-   is redrawn a third to a sixth as often as at 60, which is what a weak
-   computer needs. */
-
-/* Listening: the band pulses like an audio meter. */
-.eddie-ring[data-state='listening'] .eddie-ring__layer--band {
-  animation: ring-pulse 0.9s steps(9) infinite;
-}
-
-.eddie-ring[data-state='listening'] .eddie-ring__glow {
+  stroke-linecap: round;
   opacity: 0.85;
 }
 
-/* Processing: the band spins, amber arcs race around the core. */
-.eddie-ring[data-state='processing'] {
+.eddie-orb .orb-arc--inner {
+  stroke-width: 2;
+  opacity: 0.6;
+}
+
+/* The five bars in the core. */
+.eddie-orb__bars {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 5%;
+  width: 22%;
+  height: 16%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.eddie-orb__bars i {
+  flex: 1;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ring-soft);
+  opacity: 0.9;
+  transform: scaleY(calc(0.22 + var(--h) * 0.3));
+  will-change: transform;
+}
+
+.eddie-orb__name {
+  margin: 0.2rem 0 0;
+  padding-left: 0.5em;
+  font-family: 'Michroma', 'Eurostile', 'Arial Black', var(--font-sans);
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-align: center;
+  color: var(--text);
+}
+
+.eddie-orb__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  background: var(--panel-bg-solid);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-align: center;
+  color: var(--ring-soft);
+  overflow-wrap: anywhere;
+}
+
+.eddie-orb__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success, #4dffa6);
+}
+
+.eddie-orb[data-state='error'] .eddie-orb__dot {
+  background: var(--danger);
+}
+
+.eddie-orb[data-state='disabled'] .eddie-orb__dot {
+  background: var(--text-faint);
+}
+
+/* Idle: one thin ring drifts a small step a second. */
+.eddie-orb[data-state='idle'] .eddie-orb__layer--orbit {
+  animation: orb-spin 120s steps(120) infinite;
+}
+
+/* Listening: the bars dance, the glow is up. Moves in steps (6 a second for
+   the bars, 10 for the turning arcs): to the eye it is still a pulse or a
+   turn, but the screen is redrawn a fraction as often as at 60, which is what
+   a weak computer needs. */
+.eddie-orb[data-state='listening'] .eddie-orb__bars i {
+  animation: orb-bar 0.7s steps(7) infinite;
+  animation-delay: var(--d);
+}
+
+.eddie-orb[data-state='listening'] .eddie-orb__glow {
+  opacity: 0.85;
+}
+
+.eddie-orb[data-state='listening'] .eddie-orb__layer--orbit {
+  animation: orb-spin 30s steps(60) infinite;
+}
+
+/* Processing: amber, the arcs race around the core. */
+.eddie-orb[data-state='processing'] {
   --ring-soft: var(--warning);
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__layer--band {
-  animation: ring-spin 4s steps(40) infinite;
+.eddie-orb[data-state='processing'] .eddie-orb__layer--orbit {
+  animation: orb-spin 3s steps(30) infinite;
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__layer--process {
-  opacity: 1;
-  animation: ring-spin 1.4s steps(14) infinite reverse;
+.eddie-orb[data-state='processing'] .eddie-orb__layer--orbit2 {
+  animation: orb-spin 1.6s steps(16) infinite reverse;
 }
 
-.eddie-ring[data-state='processing'] .eddie-ring__glow {
-  opacity: 0.7;
+.eddie-orb[data-state='processing'] .eddie-orb__glow {
+  opacity: 0.65;
 }
 
-/* Speaking: the glow beats (the only thing that moves). */
-.eddie-ring[data-state='speaking'] .eddie-ring__glow {
+/* Speaking: the bars follow the voice and the glow beats. */
+.eddie-orb[data-state='speaking'] .eddie-orb__bars i {
+  animation: orb-bar 0.5s steps(5) infinite;
+  animation-delay: var(--d);
+}
+
+.eddie-orb[data-state='speaking'] .eddie-orb__glow {
   opacity: 0.9;
-  animation: ring-glow 0.8s steps(8) infinite;
+  animation: orb-glow 0.8s steps(8) infinite;
 }
 
-/* Disabled: powered down — grey and faded, but still recognisably the same ring. */
-.eddie-ring[data-state='disabled'] {
+/* Disabled: powered down — grey and faded, still recognisably the same orb. */
+.eddie-orb[data-state='disabled'] {
   --ring: var(--text-faint);
   --ring-soft: var(--text-faint);
   --ring-dim: var(--text-faint);
-  --ring-band: var(--text-faint);
 }
 
-.eddie-ring[data-state='disabled'] .eddie-ring__hit {
+.eddie-orb[data-state='disabled'] .eddie-orb__hit {
   opacity: 0.55;
 }
 
-.eddie-ring[data-state='disabled'] .eddie-ring__glow {
+.eddie-orb[data-state='disabled'] .eddie-orb__glow {
   opacity: 0;
 }
 
 /* Error: red, with a short flash. */
-.eddie-ring[data-state='error'] {
+.eddie-orb[data-state='error'] {
   --ring: var(--danger);
   --ring-soft: #ffb3b3;
-  --ring-band: #ff7a7a;
 }
 
-.eddie-ring[data-state='error'] .eddie-ring__hit {
-  animation: ring-flash 0.35s ease-in-out 3;
+.eddie-orb[data-state='error'] .eddie-orb__hit {
+  animation: orb-flash 0.35s ease-in-out 3;
 }
 
-.eddie-ring[data-state='error'] .eddie-ring__status {
-  letter-spacing: 0.2em;
-  font-size: 0.72rem;
+.eddie-orb[data-state='error'] .eddie-orb__status {
+  letter-spacing: 0.1em;
 }
 
-@keyframes ring-spin {
+@keyframes orb-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes ring-pulse {
+@keyframes orb-bar {
   0%,
   100% {
-    opacity: 0.55;
+    transform: scaleY(0.22);
   }
   50% {
-    opacity: 1;
+    transform: scaleY(1);
   }
 }
 
-@keyframes ring-glow {
+@keyframes orb-glow {
   0%,
   100% {
     opacity: 0.45;
@@ -501,28 +435,28 @@
   }
 }
 
-@keyframes ring-flash {
+@keyframes orb-flash {
   50% {
     opacity: 0.4;
   }
 }
 
 /* "Modo ligero" (Configuración → Pantalla), and for people who ask their system
-   for less motion: the ring keeps its colors and state label but nothing moves. */
+   for less motion: the orb keeps its colors and state label but nothing moves. */
 @media (prefers-reduced-motion: reduce) {
-  .eddie-ring *,
-  .eddie-ring__hit {
+  .eddie-orb *,
+  .eddie-orb__hit {
     animation: none !important;
   }
 }
 
-:root[data-perf='lite'] .eddie-ring *,
-:root[data-perf='lite'] .eddie-ring__hit {
+:root[data-perf='lite'] .eddie-orb *,
+:root[data-perf='lite'] .eddie-orb__hit {
   animation: none !important;
   will-change: auto !important;
 }
 
-:root[data-perf='lite'] .eddie-ring__glow {
+:root[data-perf='lite'] .eddie-orb__glow {
   display: none;
 }
 
@@ -574,14 +508,12 @@
   cursor: pointer;
 }
 
-/* ---- Floating buttons + text chat drawer ---- */
-.home__fabs {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+/* ---- Buttons under the orb ---- */
+.home__actions {
   display: flex;
-  gap: 0.6rem;
-  z-index: 3;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.3rem;
 }
 
 .home__fab {
@@ -590,7 +522,7 @@
   width: 46px;
   height: 46px;
   border: 1px solid var(--accent);
-  border-radius: 50%;
+  border-radius: 10px;
   background: var(--panel-bg-solid);
   color: var(--accent);
   cursor: pointer;
@@ -605,50 +537,109 @@
   box-shadow: var(--glow);
 }
 
-.home__chat {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 60px;
+/* ---- Conversation: always on screen on a wide window ---- */
+.home__conversation {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  width: min(460px, 100%);
+  min-width: 0;
+  min-height: 0;
   padding: 0.8rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-dim);
   background: var(--panel-bg-solid);
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
-  z-index: 4;
 }
 
-.home__chat-head {
+/* The chat inside has its own framed body: no second frame, and the skill
+   buttons wrap instead of hiding behind a scroll in the narrow column. */
+.home__conversation .chat-panel__body {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.home__conversation .chat-panel__body::before,
+.home__conversation .chat-panel__body::after {
+  display: none;
+}
+
+.home__conversation .chat-panel__toolbar {
+  flex-wrap: wrap;
+}
+
+.home__conversation .skills {
+  flex-wrap: wrap;
+  overflow: visible;
+  flex-basis: 100%;
+}
+
+.home__conversation-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.68rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.home__conversation-head h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 400;
   letter-spacing: 0.3em;
   color: var(--accent-2);
 }
 
-.home__chat .chat-panel {
+.home__conversation-tools {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.home__conversation-close {
+  display: none;
+}
+
+.home__conversation .chat-panel {
   flex: 1;
   min-height: 0;
 }
 
 /* ---- Responsive ---- */
-/* Small laptops and Chromebooks keep the three columns, just narrower. */
+/* Small laptops and Chromebooks: the conversation slides over the content
+   (the keyboard button opens it) and the two columns stay narrow. */
 @media (max-width: 1100px) {
   .home {
-    grid-template-columns: minmax(200px, 250px) 1fr minmax(200px, 250px);
+    grid-template-columns: minmax(220px, 280px) 1fr;
     gap: 1rem;
+  }
+
+  .home__conversation {
+    position: fixed;
+    top: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: min(440px, calc(100% - 1rem));
+    z-index: 6;
+    background: var(--panel-bg-solid);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+    transform: translateX(calc(100% + 1rem));
+    visibility: hidden;
+  }
+
+  .home__conversation--open {
+    transform: none;
+    visibility: visible;
+  }
+
+  .home__conversation-close {
+    display: inline-flex;
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 760px) {
   .home {
     grid-template-columns: 1fr;
     height: auto !important;
-    padding-bottom: 8rem;
+    padding-bottom: 6rem;
   }
 
   .home__center {
@@ -659,18 +650,11 @@
     overflow: visible;
   }
 
-  .eddie-ring {
-    width: min(92%, 520px);
+  .eddie-orb {
+    width: min(86%, 380px);
   }
 
-  .home__fabs {
-    position: fixed;
-    right: 1rem;
-    bottom: 5rem;
-  }
-
-  .home__chat {
-    position: fixed;
+  .home__conversation {
     inset: 0.5rem;
     width: auto;
   }
@@ -682,4 +666,79 @@
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.4rem;
+}
+
+/* ---- Stat boxes, meters and weather (JARVIS-style panels) ---- */
+.hud-panel__aside {
+  position: absolute;
+  top: -0.6rem;
+  right: 0.75rem;
+  padding: 0 0.5rem;
+  background: var(--panel-bg-solid);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.hud-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.hud-stats--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.45rem 0.25rem;
+  border: 1px solid var(--accent-dim);
+  background: var(--accent-soft);
+  text-align: center;
+}
+
+.hud-stat span {
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+}
+
+.hud-stat b {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.hud-meter {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+}
+
+.hud-meter span {
+  color: var(--text-faint);
+}
+
+.hud-meter b {
+  font-weight: 400;
+  color: var(--accent-2);
+}
+
+.hud-place {
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
 }

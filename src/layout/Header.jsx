@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useLocation } from '../context/LocationContext';
 import { useProbeConfig } from '../services/probe';
+import { usePlaceAndWeather } from '../home/usePlaceAndWeather';
 import LiveClock from './LiveClock';
 import { EddieWordmark } from './EddieLogo';
 
@@ -33,7 +34,8 @@ export default function Header({ section }) {
   const { user, loading, login, logout } = useAuth();
   const { settings, updateSettings, updateVoiceSettings } = useSettings();
   const { ttsSupported, stopSpeaking } = useVoice();
-  const { status: gpsStatus } = useLocation();
+  const { status: gpsStatus, location } = useLocation();
+  const { place, weather } = usePlaceAndWeather(location);
   const online = useOnline();
   const probe = useProbeConfig();
   const voiceOn = settings.voice.autoRead;
@@ -46,23 +48,26 @@ export default function Header({ section }) {
 
   return (
     <header className="header">
-      <div className="chips chips--left">
-        <span className="chip on">
-          <LiveClock />
-        </span>
-        <span className={`chip ${online ? 'on' : 'bad'}`}>RED · {online ? 'EN LÍNEA' : 'SIN RED'}</span>
-        <span className={`chip ${gpsClass}`}>{gpsLabel}</span>
+      <div className="header__left">
+        <h1 className="header__title">
+          <EddieWordmark height={44} title="Eddie" />
+        </h1>
+        <span className={`chip ${online ? 'on' : 'bad'}`}>{online ? 'EN LÍNEA' : 'SIN RED'}</span>
+        <span className={`chip header__gps ${gpsClass}`}>{gpsLabel}</span>
         {probe.forced && <span className="chip warn" title="Lo que escribes en el chat va a la Sonda local, no a Eddie. Apágalo en el chat.">SONDA · ON</span>}
+        <span className="header__section">{section}</span>
       </div>
 
-      <div className="header__brand">
-        <h1 className="header__title">
-          <EddieWordmark height={64} title="Eddie" />
-        </h1>
-        <p className="header__section">{section}</p>
+      <div className="header__clockpill">
+        <LiveClock />
       </div>
 
       <div className="chips chips--right">
+        {weather && (
+          <span className="chip on header__weather" title={place || undefined}>
+            {weather.temperature}°C{place ? ` · ${place}` : ''}
+          </span>
+        )}
         {!loading &&
           (user ? (
             <button type="button" className="chip chip--button on" onClick={logout} title="Cerrar sesión">

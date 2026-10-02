@@ -1,7 +1,8 @@
-export function HudPanel({ title, children, className = '' }) {
+export function HudPanel({ title, aside, children, className = '' }) {
   return (
     <section className={`glass-panel hud-panel ${className}`}>
       <h2 className="hud-panel__title">{title}</h2>
+      {aside && <span className="hud-panel__aside">{aside}</span>}
       {children}
     </section>
   );
