@@ -40,7 +40,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 
 | Módulo | Qué hace |
 | --- | --- |
-| Inicio | Anillo central para hablar con Eddie (escuchando, procesando, hablando…), paneles de tiempo, ubicación, clima, sistema y tareas, y el chat como panel lateral. Es ligero a propósito: en reposo solo se mueve un tic por segundo, los estados activos se redibujan a 10–20 cuadros por segundo y cada parte móvil es su propia capa (solo cambia `transform`/`opacity`); sin desenfoques ni filtros de sombra. En Configuración → Pantalla, el **Modo ligero** (automático, siempre ligero o completo) apaga además la rejilla, las líneas y las animaciones; el automático se activa solo en equipos pequeños, si se pide menos movimiento o si la pantalla se ve lenta (menos de 20 cuadros por segundo) |
+| Inicio | Panel estilo J.A.R.V.I.S.: a la izquierda Sistema (núcleos, memoria, batería, red), Clima (temperatura, humedad, viento, sensación), Tiempo activo (sesión, comandos, carga de Eddie) y Tareas; al centro el **orbe** (círculos concéntricos con cinco barras de sonido) con el nombre, el estado («Escuchando la palabra clave…», escuchando, procesando, hablando…) y los botones de micrófono y teclado; a la derecha la **Conversación** siempre visible (Limpiar y Exportar). En ventanas de menos de 1100 px la conversación pasa a ser un cajón que abre el botón de teclado, y de menos de 760 px todo va en una columna. El encabezado es una barra delgada: marca y estado «En línea», reloj y fecha, clima y chips. Es ligero a propósito: en reposo solo gira un aro fino, los estados activos se redibujan por pasos y cada parte móvil es su propia capa (solo cambia `transform`/`opacity`); sin desenfoques ni filtros de sombra (GPU en reposo ≈ 2 % en la medición con render por software). En Configuración → Pantalla, el **Modo ligero** (automático, siempre ligero o completo) apaga además la rejilla, las líneas y las animaciones; el automático se activa solo en equipos pequeños, si se pide menos movimiento o si la pantalla se ve lenta (menos de 20 cuadros por segundo) |
 | Hoy | El día de un vistazo: saludo, agenda de hoy y mañana (Google Calendar), correos importantes sin leer (Gmail), tareas pendientes (vencidas primero), clima y titulares de noticias. Cada tarjeta explica qué falta si está vacía (iniciar sesión, conectar Gmail, conector apagado) y el botón "Resumen del día con Eddie" le pide que te lo cuente con sus herramientas, por voz si está activa. Se actualiza solo cada 5 minutos |
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
@@ -288,7 +288,7 @@ abierto en una pestaña, basta decirla:
 abre el micrófono ese tiempo para que sigas la conversación **sin repetir la palabra**. Si empiezas a
 hablar, se envía y, tras la siguiente respuesta, vuelve a abrirse; si no dices nada, se cierra y Eddie
 vuelve a esperar la palabra clave. Con 0 hay que decirla cada vez. Solo se aplica a las conversaciones
-que empezaste con la palabra (no a las del anillo de Inicio ni a las del chat); la tarjeta muestra
+que empezaste con la palabra (no a las del orbe de Inicio ni a las del chat); la tarjeta muestra
 "tienes N s para responder" mientras la ventana está abierta.
 
 **Apagar el micrófono:** di **"Eddie, suspéndete"** o **"apágate"** (también "desactiva el micrófono",
@@ -676,7 +676,7 @@ server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
   components/          Chat, Tasks, Settings, Core, Shared
-  home/                Pantalla de Inicio (anillo de voz y paneles HUD)
+  home/                Pantalla de Inicio (orbe de voz, paneles HUD y conversación)
   layout/              Barra de íconos, Mis chats, encabezado, logo, efectos HUD
   connectors/          Hub de conectores (tarjetas por estado e interruptores)
   context/             SettingsContext, AuthContext, VoiceContext, ChatContext

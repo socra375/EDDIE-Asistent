@@ -14,8 +14,12 @@ export default function LiveClock() {
   const date = new Intl.DateTimeFormat(settings.language, { dateStyle: 'medium' }).format(now);
 
   return (
-    <span className="header__clock" title={date}>
-      {time}
-    </span>
+    <>
+      <span className="header__clock">{time}</span>
+      <span className="header__sep" aria-hidden="true">
+        |
+      </span>
+      <span className="header__date">{date}</span>
+    </>
   );
 }

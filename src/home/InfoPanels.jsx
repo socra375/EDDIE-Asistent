@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useChat } from '../context/ChatContext';
 import { useLocation } from '../context/LocationContext';
 import { getTasks } from '../utils/storage';
 import { TASKS_CHANGED_EVENT } from '../services/taskActions';
@@ -7,14 +8,6 @@ import { usePlaceAndWeather } from './usePlaceAndWeather';
 
 const pad = (n) => String(n).padStart(2, '0');
 const sessionStart = Date.now();
-
-function isoWeek(d) {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  return Math.ceil(((t - yearStart) / 864e5 + 1) / 7);
-}
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => new Date());
@@ -25,24 +18,47 @@ function useNow(intervalMs = 1000) {
   return now;
 }
 
-export function TimePanel() {
+const clock = (seconds) => `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`;
+
+// Share of the JavaScript heap this tab uses (Chrome only), as a rough "load"
+// of Eddie itself — a browser can't see the computer's real CPU.
+function readHeap() {
+  const m = performance.memory;
+  return m?.jsHeapSizeLimit ? Math.min(100, Math.round((m.usedJSHeapSize / m.jsHeapSizeLimit) * 100)) : null;
+}
+
+function loadLabel(percent) {
+  if (percent === null) return 'N/D';
+  if (percent < 35) return 'Baja';
+  if (percent < 70) return 'Moderada';
+  return 'Alta';
+}
+
+export function UptimePanel() {
   const now = useNow();
-  const date = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
-  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
-  const offset = -now.getTimezoneOffset() / 60;
+  const { messages } = useChat();
   const uptime = Math.floor((now - sessionStart) / 1000);
+  const commands = messages.filter((m) => m.role === 'user' && !m.local).length;
+  const heap = readHeap();
 
   return (
-    <HudPanel title="TIEMPO">
-      <div className="hud-big">
-        {pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}
+    <HudPanel title="TIEMPO ACTIVO" aside={clock(uptime)}>
+      <div className="hud-stats">
+        <div className="hud-stat">
+          <span>SESIÓN</span>
+          <b>{clock(uptime)}</b>
+        </div>
+        <div className="hud-stat">
+          <span>COMANDOS</span>
+          <b>{commands}</b>
+        </div>
       </div>
-      <div className="hud-sub">{date.toUpperCase()}</div>
-      <div className="hud-rows">
-        <HudRow label="ZONA" value={`${Intl.DateTimeFormat().resolvedOptions().timeZone} UTC${offset >= 0 ? '+' : ''}${offset}`} />
-        <HudRow label="DÍA DEL AÑO" value={dayOfYear} />
-        <HudRow label="SEMANA" value={`S${pad(isoWeek(now))}`} />
-        <HudRow label="SESIÓN" value={`${pad(Math.floor(uptime / 3600))}:${pad(Math.floor(uptime / 60) % 60)}:${pad(uptime % 60)}`} />
+      <div className="hud-meter">
+        <span>CARGA DE EDDIE</span>
+        <b className={heap !== null && heap >= 70 ? 'tone-bad' : heap !== null && heap >= 35 ? 'tone-warn' : undefined}>{loadLabel(heap)}</b>
+      </div>
+      <div className="hud-bar" aria-hidden="true">
+        <i style={{ width: `${heap ?? 0}%` }} />
       </div>
     </HudPanel>
   );
@@ -55,7 +71,7 @@ const LOCATION_STATUS = {
   idle: 'SIN SEÑAL',
 };
 
-export function LocationAndWeather() {
+export function WeatherPanel() {
   const { location, status, requestLocation } = useLocation();
   const { place, weather, weatherError } = usePlaceAndWeather(location);
 
@@ -63,38 +79,41 @@ export function LocationAndWeather() {
   if (location) placeLabel = place === null ? 'IDENTIFICANDO…' : (place || 'SIN NOMBRE').toUpperCase();
 
   return (
-    <>
-      <HudPanel title="UBICACIÓN">
-        <div className="hud-rows">
-          <HudRow label="LUGAR" value={placeLabel} tone={status === 'denied' ? 'bad' : undefined} />
-          <HudRow label="LAT" value={location ? `${location.latitude.toFixed(5)}°` : '—'} />
-          <HudRow label="LON" value={location ? `${location.longitude.toFixed(5)}°` : '—'} />
-          <HudRow label="PRECISIÓN" value={location?.accuracy ? `±${Math.round(location.accuracy)} m` : '—'} />
-        </div>
-        {status !== 'granted' && status !== 'unsupported' && (
-          <div className="hud-actions">
-            <button type="button" className="btn" onClick={requestLocation} disabled={status === 'requesting'}>
-              Activar GPS
-            </button>
+    <HudPanel title="CLIMA">
+      <div className="hud-weather">
+        <div>
+          <div className="hud-big">
+            {weather ? weather.temperature : '--'}
+            <small>°C</small>
           </div>
-        )}
-      </HudPanel>
-
-      <HudPanel title="CLIMA">
-        <div className="hud-big">
-          {weather ? weather.temperature : '--'}
-          <small>°C</small>
+          <div className={`hud-place ${status === 'denied' ? 'tone-bad' : ''}`}>{placeLabel}</div>
+          <div className="hud-sub">
+            {weather ? weather.condition.toUpperCase() : weatherError ? 'CLIMA NO DISPONIBLE' : location ? 'CARGANDO…' : 'REQUIERE UBICACIÓN'}
+          </div>
         </div>
-        <div className="hud-sub">
-          {weather ? weather.condition.toUpperCase() : weatherError ? 'CLIMA NO DISPONIBLE' : location ? 'CARGANDO…' : 'REQUIERE UBICACIÓN'}
+      </div>
+      <div className="hud-stats hud-stats--3">
+        <div className="hud-stat">
+          <span>HUMEDAD</span>
+          <b>{weather ? `${weather.humidity}%` : '—'}</b>
         </div>
-        <div className="hud-rows">
-          <HudRow label="SENSACIÓN" value={weather ? `${weather.feelsLike} °C` : '—'} />
-          <HudRow label="HUMEDAD" value={weather ? `${weather.humidity} %` : '—'} />
-          <HudRow label="VIENTO" value={weather ? `${weather.wind} km/h` : '—'} />
+        <div className="hud-stat">
+          <span>VIENTO</span>
+          <b>{weather ? `${weather.wind} km/h` : '—'}</b>
         </div>
-      </HudPanel>
-    </>
+        <div className="hud-stat">
+          <span>SENSACIÓN</span>
+          <b>{weather ? `${weather.feelsLike}°C` : '—'}</b>
+        </div>
+      </div>
+      {status !== 'granted' && status !== 'unsupported' && (
+        <div className="hud-actions">
+          <button type="button" className="btn" onClick={requestLocation} disabled={status === 'requesting'}>
+            Activar GPS
+          </button>
+        </div>
+      )}
+    </HudPanel>
   );
 }
 
@@ -139,18 +158,33 @@ export function SystemPanel() {
   const network = online
     ? [connection?.effectiveType?.toUpperCase(), connection?.downlink ? `${connection.downlink} Mb/s` : null].filter(Boolean).join(' ') || 'EN LÍNEA'
     : 'SIN RED';
+  const lowBattery = battery && battery.level < 20 && !battery.charging;
 
   return (
     <HudPanel title="SISTEMA">
+      <div className="hud-stats hud-stats--3">
+        <div className="hud-stat">
+          <span>NÚCLEOS</span>
+          <b>{navigator.hardwareConcurrency || 'N/D'}</b>
+        </div>
+        <div className="hud-stat">
+          <span>MEMORIA</span>
+          <b>{navigator.deviceMemory ? `≈${navigator.deviceMemory} GB` : 'N/D'}</b>
+        </div>
+        <div className="hud-stat">
+          <span>RED</span>
+          <b className={online ? undefined : 'tone-bad'}>{online ? 'OK' : 'OFF'}</b>
+        </div>
+      </div>
+      <div className="hud-meter">
+        <span>BATERÍA</span>
+        <b className={lowBattery ? 'tone-bad' : undefined}>{battery ? `${battery.level}%${battery.charging ? ' · CARGANDO' : ''}` : 'N/D'}</b>
+      </div>
+      <div className="hud-bar" aria-hidden="true">
+        <i style={{ width: `${battery ? battery.level : 0}%` }} />
+      </div>
       <div className="hud-rows">
-        <HudRow
-          label="BATERÍA"
-          value={battery ? `${battery.level}%${battery.charging ? ' · CARGANDO' : ''}` : 'N/D'}
-          tone={battery && battery.level < 20 && !battery.charging ? 'bad' : undefined}
-        />
-        <HudRow label="RED" value={network} tone={online ? undefined : 'bad'} />
-        <HudRow label="NÚCLEOS CPU" value={navigator.hardwareConcurrency || 'N/D'} />
-        <HudRow label="MEMORIA" value={navigator.deviceMemory ? `≈${navigator.deviceMemory} GB` : 'N/D'} />
+        <HudRow label="CONEXIÓN" value={network} tone={online ? undefined : 'bad'} />
         <HudRow label="PANTALLA" value={screen} />
       </div>
     </HudPanel>

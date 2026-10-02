@@ -25,7 +25,8 @@ const QUICK_STARTS = [
   { label: 'Redactar un correo', icon: 'doc', skill: 'documents', action: 'correo' },
 ];
 
-export default function ChatPanel({ showCore = true }) {
+// `embedded`: inside Inicio's Conversación panel, which has its own Limpiar button.
+export default function ChatPanel({ showCore = true, embedded = false }) {
   const { messages, status, sendMessage, resetConversation, activity, liveSteps, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
@@ -241,17 +242,19 @@ export default function ChatPanel({ showCore = true }) {
             <span className="probe-toggle__label">Sonda local</span>
             <span className="probe-toggle__state">{probeOn ? 'ON' : 'OFF'}</span>
           </button>
-          <button
-            type="button"
-            className="btn chat-new"
-            onClick={resetConversation}
-            disabled={!messages.length}
-            aria-label="Nueva conversación"
-            title="Nueva conversación"
-          >
-            <Icon name="plus" size={14} />
-            <span className="chat-new__label">Nueva</span>
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              className="btn chat-new"
+              onClick={resetConversation}
+              disabled={!messages.length}
+              aria-label="Nueva conversación"
+              title="Nueva conversación"
+            >
+              <Icon name="plus" size={14} />
+              <span className="chat-new__label">Nueva</span>
+            </button>
+          )}
         </div>
 
         <div className="chat-panel__options">
