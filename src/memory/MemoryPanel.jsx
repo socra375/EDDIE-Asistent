@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { deleteAllEpisodes, deleteEpisode, listEpisodes } from '../services/episodes';
@@ -6,10 +6,50 @@ import { useWakeWord } from '../context/wakeWordState';
 import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, MAX_FOLLOW_UP_SECONDS } from '../services/wakeWord';
 import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
+import MemoryOrb from './MemoryOrb';
 import './Memory.css';
 
 const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', repo: '', lastChange: '', nextGoal: '' };
 const fmtDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+
+const ORB_CATEGORIES = [...CATEGORIES, { id: 'episodes', label: 'Conversaciones' }];
+
+// What each point of the orb says when you point at it.
+function orbText(category, item) {
+  if (category === 'projects') return [item.name, item.status && `(${item.status})`, item.nextGoal && `Próximo: ${item.nextGoal}`].filter(Boolean).join(' ');
+  if (category === 'profile' || category === 'preferences') return `${item.key}: ${item.text}`;
+  return item.text;
+}
+
+function orbItemsOf(memory, episodes) {
+  const items = [];
+  for (const c of CATEGORIES) {
+    for (const item of memory[c.id] || []) {
+      items.push({
+        id: item.id,
+        category: c.id,
+        label: c.label,
+        text: orbText(c.id, item),
+        meta: c.id === 'context' ? `vigente hasta ${fmtDate(item.expiresAt)}` : '',
+        kind: 'memory',
+        forgettable: true,
+      });
+    }
+  }
+  for (const e of episodes) {
+    items.push({
+      id: `ep-${e.id}`,
+      category: 'episodes',
+      label: 'Conversación',
+      text: e.summary,
+      meta: `${fmtDate(e.createdAt)}${e.source === 'telegram' ? ' · Telegram' : ''}`,
+      kind: 'episode',
+      forgettable: true,
+      rawId: e.id,
+    });
+  }
+  return items;
+}
 
 function ItemBody({ category, item }) {
   if (category === 'projects') {
@@ -158,16 +198,10 @@ function WakeWordCard() {
 
 const fmtLongDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
 
-// The notes Eddie keeps of past conversations (conversation memory): when
-// they are made, what they say, and the way to delete them. They are written
-// on the server and only exist for signed-in users.
-function ConversationMemoryCard() {
+// The notes of past conversations, loaded once for the orb and the card.
+function useEpisodes() {
   const { user } = useAuth();
-  const { settings, setConnectorEnabled } = useSettings();
   const [state, setState] = useState({ status: 'loading', episodes: [], configured: true, error: '' });
-  const [confirmAll, setConfirmAll] = useState(false);
-  const memoryOn = settings.memoryEnabled !== false;
-  const enabled = memoryOn && !(settings.disabledConnectors || []).includes('conversations');
 
   const apply = useCallback((data) => setState({ status: 'ready', episodes: data.episodes || [], configured: data.configured !== false, error: '' }), []);
   const fail = useCallback((err) => setState((s) => ({ ...s, status: 'error', error: err.message })), []);
@@ -181,24 +215,44 @@ function ConversationMemoryCard() {
     };
   }, [user, apply, fail]);
 
-  async function remove(id) {
-    setState((s) => ({ ...s, episodes: s.episodes.filter((e) => e.id !== id) }));
-    try {
-      await deleteEpisode(id);
-    } catch (err) {
-      setState((s) => ({ ...s, error: err.message }));
-      listEpisodes().then(apply, fail);
-    }
-  }
+  const remove = useCallback(
+    async (id) => {
+      setState((s) => ({ ...s, episodes: s.episodes.filter((e) => e.id !== id) }));
+      try {
+        await deleteEpisode(id);
+      } catch (err) {
+        setState((s) => ({ ...s, error: err.message }));
+        listEpisodes().then(apply, fail);
+      }
+    },
+    [apply, fail],
+  );
 
-  async function removeAll() {
-    setConfirmAll(false);
+  const removeAll = useCallback(async () => {
     try {
       await deleteAllEpisodes();
       setState((s) => ({ ...s, episodes: [], error: '' }));
     } catch (err) {
       setState((s) => ({ ...s, error: err.message }));
     }
+  }, []);
+
+  return { user, state, remove, removeAll };
+}
+
+// The notes Eddie keeps of past conversations (conversation memory): when
+// they are made, what they say, and the way to delete them. They are written
+// on the server and only exist for signed-in users.
+function ConversationMemoryCard({ episodes: data }) {
+  const { user, state, remove, removeAll: dropAll } = data;
+  const { settings, setConnectorEnabled } = useSettings();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const memoryOn = settings.memoryEnabled !== false;
+  const enabled = memoryOn && !(settings.disabledConnectors || []).includes('conversations');
+
+  function removeAll() {
+    setConfirmAll(false);
+    dropAll();
   }
 
   const { episodes } = state;
@@ -278,6 +332,8 @@ export default function MemoryPanel() {
   const [notice, setNotice] = useState('');
   const live = pruneExpired(memory);
   const total = countItems(live);
+  const episodes = useEpisodes();
+  const orbItems = useMemo(() => orbItemsOf(live, episodes.state.episodes), [live, episodes.state.episodes]);
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   function submit(e) {
@@ -340,7 +396,13 @@ export default function MemoryPanel() {
         {!settings.memoryEnabled && <p className="memory__warn">La memoria está apagada: Eddie no la consulta ni guarda nada nuevo.</p>}
       </div>
 
-      <ConversationMemoryCard />
+      <MemoryOrb
+        items={orbItems}
+        categories={ORB_CATEGORIES}
+        onForget={(item) => (item.kind === 'episode' ? episodes.remove(item.rawId) : forgetItem(item.id))}
+      />
+
+      <ConversationMemoryCard episodes={episodes} />
 
       <WakeWordCard />
 
