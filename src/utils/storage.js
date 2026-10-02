@@ -41,6 +41,10 @@ export const DEFAULT_SETTINGS = {
   voice: {
     autoRead: false,
   },
+  // "Modo ligero": auto | lite | full (see services/performance.js).
+  display: {
+    perf: 'auto',
+  },
   // Wake word: say it and Eddie starts listening (see services/wakeWord.js).
   wake: {
     enabled: false,
@@ -59,6 +63,7 @@ export function getSettings() {
     ...DEFAULT_SETTINGS,
     ...stored,
     voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) },
+    display: { ...DEFAULT_SETTINGS.display, ...(stored.display || {}) },
     wake: { ...DEFAULT_SETTINGS.wake, ...(stored.wake || {}) },
   };
 }

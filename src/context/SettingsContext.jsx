@@ -39,6 +39,10 @@ export function SettingsProvider({ children }) {
     setSettings((prev) => ({ ...prev, voice: { ...prev.voice, ...patch } }));
   }
 
+  function updateDisplaySettings(patch) {
+    setSettings((prev) => ({ ...prev, display: { ...DEFAULT_SETTINGS.display, ...(prev.display || {}), ...patch } }));
+  }
+
   function updateWakeSettings(patch) {
     setSettings((prev) => ({ ...prev, wake: { ...DEFAULT_SETTINGS.wake, ...(prev.wake || {}), ...patch } }));
   }
@@ -98,6 +102,7 @@ export function SettingsProvider({ children }) {
       settings,
       updateSettings,
       updateVoiceSettings,
+      updateDisplaySettings,
       updateWakeSettings,
       setConnectorEnabled,
       memory,

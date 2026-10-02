@@ -19,6 +19,7 @@ import MemoryPanel from './memory/MemoryPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
+import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
 
 // Reads Eddie's answers aloud when the voice is on. An answer that streams in
@@ -61,6 +62,37 @@ function AutoReadBridge() {
     streamRef.current.controller.end();
     streamRef.current = null;
   }, [status]);
+
+  return null;
+}
+
+// "Modo ligero": marks the page (data-perf="lite") when the effects should be
+// off — by the user's choice, or in "auto" when the device is small or the
+// screen was seen running slowly (see services/performance.js).
+function PerfBridge() {
+  const { settings } = useSettings();
+  const mode = settings.display?.perf || 'auto';
+  const [guard, setGuard] = useState(readGuard);
+  const lite = isLite(mode, guard);
+
+  useEffect(() => {
+    if (lite) document.documentElement.dataset.perf = 'lite';
+    else delete document.documentElement.dataset.perf;
+  }, [lite]);
+
+  useEffect(() => {
+    const sync = () => setGuard(readGuard());
+    window.addEventListener(PERF_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(PERF_CHANGED_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'auto' || lite) return undefined;
+    return watchFrameRate(() => {
+      writeGuard(true);
+      setGuard(true);
+    });
+  }, [mode, lite]);
 
   return null;
 }
@@ -136,6 +168,7 @@ function AppShell() {
       </div>
       <YouTubePlayer />
       <AutoReadBridge />
+      <PerfBridge />
       <SettingsSyncBridge />
     </div>
   );

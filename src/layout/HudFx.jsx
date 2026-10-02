@@ -1,11 +1,9 @@
-// Decorative HUD overlays (hex grid, scanlines, vignette, corner frame).
-// Fixed and click-through; hidden on the light theme via Layout.css.
+// Decorative HUD overlay (hex grid, scanlines, vignette and the corner
+// frame), drawn as a single fixed, click-through layer (see Layout.css).
+// Hidden on the light theme and in "Modo ligero".
 export default function HudFx() {
   return (
     <div className="hud-fx" aria-hidden="true">
-      <div className="hud-fx__hex" />
-      <div className="hud-fx__scan" />
-      <div className="hud-fx__vignette" />
       <div className="hud-fx__frame">
         <i />
       </div>
