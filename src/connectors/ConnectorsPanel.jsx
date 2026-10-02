@@ -3,6 +3,7 @@ import { useSettings } from '../context/SettingsContext';
 import TelegramControls from './TelegramControls';
 import WhatsAppControls from './WhatsAppControls';
 import ProbeControls from './ProbeControls';
+import OAuthLinkControls from './OAuthLinkControls';
 import ComputerControls from './ComputerControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
@@ -85,6 +86,7 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onC
         </a>
       )}
 
+      {connector.auth === 'oauth-link' && <OAuthLinkControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'telegram' && <TelegramControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'whatsapp' && <WhatsAppControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'probe' && <ProbeControls />}
@@ -124,13 +126,20 @@ function connectNotice(notice, connectors) {
   const name = connectors.find((c) => c.id === notice.connector)?.name || notice.connector;
   if (notice.type === 'connected') {
     const card = connectors.find((c) => c.id === notice.connector);
+    if (card && card.status !== 'connected' && card.auth === 'oauth-link') {
+      return { tone: 'warn', text: `No pude confirmar la conexión de ${name}. Vuelve a pulsar "Conectar ${name}".` };
+    }
     if (card && card.status !== 'connected') {
       return { tone: 'warn', text: `Google no dio todos los permisos de ${name}. Vuelve a pulsar "Conectar ${name}" y marca todas las casillas.` };
     }
     return { tone: 'ok', text: `${name} quedó conectado. Ya puedes pedírselo a Eddie.` };
   }
+  if (notice.error === 'login_required') return { tone: 'warn', text: `Inicia sesión con Google y vuelve a pulsar "Conectar ${name}".` };
+  if (notice.error === 'missing_setup') return { tone: 'bad', text: `Para conectar ${name} faltan variables en Vercel (revisa la tarjeta).` };
+  if (notice.error === 'bad_state') return { tone: 'bad', text: `La conexión con ${name} expiró o no coincide. Vuelve a pulsar "Conectar ${name}".` };
+  if (notice.error === 'exchange_failed') return { tone: 'bad', text: `${name} no entregó el acceso. Revisa la URI de redirección de la app y vuelve a intentarlo.` };
   if (notice.error === 'missing_secret') return { tone: 'bad', text: `Para conectar ${name} falta configurar CONNECTOR_SECRET en Vercel.` };
-  if (notice.error === 'access_denied') return { tone: 'warn', text: `No se conectó ${name}: cancelaste el permiso en Google.` };
+  if (notice.error === 'access_denied') return { tone: 'warn', text: `No se conectó ${name}: cancelaste el permiso.` };
   return { tone: 'bad', text: `No se pudo conectar ${name} (${notice.error}).` };
 }
 

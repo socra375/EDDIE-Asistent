@@ -20,6 +20,7 @@ import whatsapp from './whatsapp/index.js';
 import probe from './probe/index.js';
 import computer from './computer/index.js';
 import youtube from './youtube/index.js';
+import spotify from './spotify/index.js';
 import reminders from './reminders/index.js';
 import conversations from './conversations/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
@@ -27,7 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, telegram, whatsapp, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, websearch, news, wikipedia, currency, gmail, google, github, notion, youtube, spotify, telegram, whatsapp, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -290,6 +291,7 @@ export async function describeConnectors({ user = null, env = process.env } = {}
         routing: c.route ? 'topic' : 'always',
         auth: c.auth?.type || null,
         connectScope: c.auth?.scope || null,
+        connectUrl: c.auth?.connectUrl || null,
         status,
         missingEnv: missing,
         note: (typeof c.note === 'function' ? c.note(env) : c.note) || null,
