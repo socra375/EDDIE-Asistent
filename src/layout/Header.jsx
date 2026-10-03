@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
 import { useLocation } from '../context/LocationContext';
 import { useVision } from '../context/visionState';
 import { useProbeConfig } from '../services/probe';
+import { shareState, subscribeShare } from '../services/remoteShare';
 import { usePlaceAndWeather } from '../home/usePlaceAndWeather';
 import LiveClock from './LiveClock';
 import { EddieWordmark } from './EddieLogo';
@@ -40,6 +41,7 @@ export default function Header({ section }) {
   const online = useOnline();
   const probe = useProbeConfig();
   const vision = useVision();
+  const sharing = useSyncExternalStore(subscribeShare, () => shareState().sharing);
   const voiceOn = settings.voice.autoRead;
   const [gpsLabel, gpsClass] = GPS_CHIP[gpsStatus] || GPS_CHIP.idle;
 
@@ -61,6 +63,11 @@ export default function Header({ section }) {
           <button type="button" className="chip chip--button bad header__vigilance" onClick={vision.toggle} title="La cámara está en Modo Vigilancia. Pulsa para apagarla.">
             ● VIGILANCIA · ON
           </button>
+        )}
+        {sharing && (
+          <span className="chip bad header__vigilance" title="Otro dispositivo de tu cuenta está viendo lo que ve esta cámara. Se detiene al apagar la vigilancia.">
+            ● TRANSMITIENDO
+          </span>
         )}
         <span className="header__section">{section}</span>
       </div>

@@ -204,6 +204,7 @@ export function ChatProvider({ children }) {
         });
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
         if (actions.length) applyMemoryActions(actions);
+        if (actions.length) applyBrowserActions(actions);
         const summary = result.summary || 'Listo, hecho.';
         updateConfirmation(messageId, confirmationId, { state: 'done', result: summary });
         updateStep(messageId, card.stepId, { status: 'done', summary, verified: result.verified ?? null });

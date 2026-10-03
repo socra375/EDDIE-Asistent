@@ -438,7 +438,7 @@ export default function SettingsPanel({ onOpenConversation }) {
         </label>
         <div className="settings-row">
           <label>
-            <span className="field-label">Analizar cada</span>
+            <span className="field-label">Analizar como máximo cada</span>
             <select className="select" value={settings.vision?.intervalSeconds ?? 5} onChange={(e) => updateVisionSettings({ intervalSeconds: Number(e.target.value) })}>
               {[3, 5, 8, 15].map((n) => (
                 <option key={n} value={n}>
@@ -585,7 +585,7 @@ export default function SettingsPanel({ onOpenConversation }) {
 
       <div className="glass-panel settings-card settings-card--wide" data-section="devices">
         <h2>Dispositivos de tu cuenta</h2>
-        <p className="settings-card__sub">Dónde está abierto Eddie y a cuál le activas el Modo Vigilancia.</p>
+        <p className="settings-card__sub">Dónde está abierto Eddie, a cuál le activas el Modo Vigilancia y qué ve su cámara.</p>
         <DevicesCard />
       </div>
 

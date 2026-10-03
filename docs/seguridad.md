@@ -28,6 +28,7 @@ Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el có
 - **XSS**: sin `innerHTML` ni `eval`; el Markdown se pinta con elementos de React; la exportación a PDF escapa el contenido.
 - **Salida del modelo en la cámara**: se recorta a una forma fija antes de llegar a la página y solo se muestra como texto.
 - **Notificaciones push**: solo con sesión; el servidor solo llama a los servicios de notificaciones reales (lista cerrada de dominios, https, sin puerto ni credenciales: una suscripción no puede apuntar a una dirección interna); la llave VAPID privada se guarda cifrada (`CONNECTOR_SECRET`) y nunca se envía al navegador; el texto de la notificación se recorta y su enlace solo puede ser una ruta de este sitio; 4 pruebas por minuto y 10 dispositivos por cuenta.
+- **Vista remota de la cámara**: solo entre dispositivos de la misma cuenta y solo si el equipo observado activó el control remoto; el equipo solo sube imágenes si hay un espectador activo (el servidor lo comprueba en cada imagen y se lo dice), con chip «TRANSMITIENDO» visible, tope de 10 min y 120 imágenes/min; se acepta solo un JPEG en base64 de hasta 90 000 caracteres y los datos que lo acompañan se recortan (etiquetas, categorías, cajas); una sola imagen por equipo, sobrescrita, borrada al cerrar la vista y nunca servida con más de 30 s.
 - **Dependencias**: `npm audit --omit=dev` sin vulnerabilidades.
 
 ## Riesgos que quedan (y qué hacer)

@@ -15,4 +15,6 @@ export const visionBridge = {
   describe: () => '',
   // 'off' | 'consent' | 'starting' | 'watching' | 'error' (and the error text), for remote commands.
   status: () => ({ phase: 'off', error: '' }),
+  // A small picture of what the camera sees now plus what was found in it (for the remote view): { data (base64 JPEG), meta } or null.
+  snapshot: () => null,
 };

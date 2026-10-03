@@ -18,16 +18,33 @@ export function loadLocalDetector() {
     ]);
     // WebGL when the browser has it, plain CPU otherwise.
     await core.ready();
+    let model;
     try {
-      return await coco.load({ base: 'lite_mobilenet_v2', modelUrl: LOCAL_MODEL });
+      model = await coco.load({ base: 'lite_mobilenet_v2', modelUrl: LOCAL_MODEL });
     } catch {
-      return coco.load({ base: 'lite_mobilenet_v2' }); // Google's copy
+      model = await coco.load({ base: 'lite_mobilenet_v2' }); // Google's copy
     }
+    await warmUp(model);
+    return model;
   })().catch((err) => {
     loading = null; // a failed download may work next time
     throw err;
   });
   return loading;
+}
+
+// The first detection compiles the graphics shaders and takes seconds: do it
+// now, on a blank canvas, so the first real look at the camera is already fast.
+async function warmUp(model) {
+  if (typeof document === 'undefined') return;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    await model.detect(canvas, 1, 0.9);
+  } catch {
+    // The first real picture will show any problem.
+  }
 }
 
 // → [{ class, score, bbox: [x, y, w, h] }] for a video or image element.

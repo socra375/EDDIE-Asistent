@@ -91,9 +91,9 @@ function jpeg(video, side, quality) {
 const base64Of = (dataUrl) => dataUrl.slice(dataUrl.indexOf(',') + 1);
 
 // The frame to send: { mimeType, data (base64), thumb (data URL), name }.
-export function captureFrame(video, { withThumb = false } = {}) {
+export function captureFrame(video, { withThumb = false, side = SEND_SIDE, quality = SEND_QUALITY } = {}) {
   if (!ready(video)) return null;
-  const frame = { mimeType: 'image/jpeg', data: base64Of(jpeg(video, SEND_SIDE, SEND_QUALITY)), name: 'cámara.jpg' };
+  const frame = { mimeType: 'image/jpeg', data: base64Of(jpeg(video, side, quality)), name: 'cámara.jpg' };
   if (withThumb) frame.thumb = jpeg(video, THUMB_SIDE, 0.6);
   return frame;
 }

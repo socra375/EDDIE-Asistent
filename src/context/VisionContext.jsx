@@ -4,7 +4,7 @@ import { useVoice } from './VoiceContext';
 import { useChat } from './ChatContext';
 import { VisionContext } from './visionState';
 import { analyzeVisionFrame } from '../services/api';
-import { detectLocal, loadLocalDetector } from '../services/localVision';
+import { detectLocal, loadLocalDetector, localBackend } from '../services/localVision';
 import { describeScene, sceneFromPredictions } from '../services/localScene';
 import { cameraSupported, captureFrame, captureGray, createFeedVideo, describeCameraError, openCamera, readConsent, stopStream, writeConsent } from '../services/camera';
 import { createAnnouncer, createEventTracker, describeEvent, motionScore, shouldAnalyze } from '../services/vigilance';
@@ -14,7 +14,16 @@ const MAX_LOG = 20;
 const MAX_ERRORS = 3;
 // A hidden tab sends nothing; after this long hidden the camera is released.
 const HIDDEN_STOP_MS = 2 * 60 * 1000;
-const FIRST_LOOK_MS = 800;
+const FIRST_LOOK_MS = 500;
+// The detector in this browser costs only a bit of CPU, so it looks again as soon
+// as it can (about 2.5 times what one look takes, at least this often) instead
+// of waiting the full interval; the interval is the ceiling, and the pace of
+// the cloud AI.
+const LOCAL_MIN_MS = 1000;
+// The picture shared with the device that is watching: small, a few tens of KB.
+const SHARE_SIDE = 480;
+const SHARE_QUALITY = 0.55;
+const LOCAL_LOAD = 2.5;
 const NO_SCENE = { summary: '', objects: [], extras: [], provider: '' };
 // With the local detector doing the watching, the cloud AI is only asked now
 // and then for a better description (and the materials), to spare its free quota.
@@ -41,6 +50,7 @@ export function VisionProvider({ children }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [note, setNote] = useState('');
   const [events, setEvents] = useState([]);
+  const [perf, setPerf] = useState({ ms: 0, backend: '' }); // how long one look takes in this browser
 
   const intervalMs = Math.min(15, Math.max(3, Number(settings.vision?.intervalSeconds) || 5)) * 1000;
   const maxMinutes = Math.min(30, Math.max(1, Number(settings.vision?.maxMinutes) || 10));
@@ -190,7 +200,8 @@ export function VisionProvider({ children }) {
     async (id) => {
       const r = run.current;
       if (id !== r.id) return;
-      let next = live.current.intervalMs;
+      // While the local detector does the watching it looks again quickly (see LOCAL_MIN_MS).
+      let next = r.localMs ? Math.min(live.current.intervalMs, Math.max(LOCAL_MIN_MS, r.localMs * LOCAL_LOAD)) : live.current.intervalMs;
       try {
         if (document.hidden) {
           setNote('En pausa: la pestaña está oculta');
@@ -219,8 +230,16 @@ export function VisionProvider({ children }) {
           try {
             r.model ||= await loadLocalDetector();
             if (id !== r.id) return;
+            const began = performance.now();
             const predictions = await detectLocal(r.model, r.video);
             if (id !== r.id) return;
+            const took = performance.now() - began;
+            r.localMs = r.localMs ? r.localMs * 0.6 + took * 0.4 : took;
+            next = Math.min(live.current.intervalMs, Math.max(LOCAL_MIN_MS, r.localMs * LOCAL_LOAD));
+            if (!r.perfShown || Math.abs(r.localMs - r.perfShown) > Math.max(100, r.perfShown * 0.25)) {
+              r.perfShown = r.localMs;
+              localBackend().then((backend) => id === r.id && setPerf({ ms: Math.round(r.localMs), backend })).catch(() => {});
+            }
             local = sceneFromPredictions(predictions, r.video.videoWidth, r.video.videoHeight);
           } catch (err) {
             if (id !== r.id) return;
@@ -308,6 +327,8 @@ export function VisionProvider({ children }) {
     r.starting = true;
     setPhase('starting');
     setError('');
+    // The detector starts loading now, while the camera asks for permission and warms up.
+    if (live.current.engine !== 'cloud') loadLocalDetector().then((model) => id === r.id && (r.model ||= model)).catch(() => {});
     let media;
     try {
       media = await openCamera();
@@ -334,8 +355,9 @@ export function VisionProvider({ children }) {
     r.cloudOff = false;
     r.cloudSummaryAt = 0;
     r.scene = NO_SCENE;
-    // The detector starts downloading while the camera warms up.
-    if (live.current.engine !== 'cloud') loadLocalDetector().then((model) => id === r.id && (r.model ||= model)).catch(() => {});
+    r.localMs = 0;
+    r.perfShown = 0;
+    setPerf({ ms: 0, backend: '' });
     r.tracker.reset();
     r.announcer.reset();
     media.getVideoTracks()[0]?.addEventListener('ended', () => stopRef.current({ error: 'La cámara se desconectó.' }));
@@ -384,6 +406,13 @@ export function VisionProvider({ children }) {
       engine: () => live.current.engine || 'auto',
       describe: () => describeScene(run.current.scene),
       status: () => ({ phase: live.current.phase, error: live.current.error }),
+      snapshot: () => {
+        const r = run.current;
+        const frame = r.video ? captureFrame(r.video, { side: SHARE_SIDE, quality: SHARE_QUALITY }) : null;
+        if (!frame) return null;
+        const { summary, objects, extras } = r.scene;
+        return { data: frame.data, meta: { summary, objects: [...objects, ...(extras || [])], width: r.video.videoWidth, height: r.video.videoHeight } };
+      },
     });
     return () =>
       Object.assign(visionBridge, {
@@ -394,6 +423,7 @@ export function VisionProvider({ children }) {
         engine: () => 'auto',
         describe: () => '',
         status: () => ({ phase: 'off', error: '' }),
+        snapshot: () => null,
       });
   }, []);
 
@@ -426,6 +456,7 @@ export function VisionProvider({ children }) {
       analyzing,
       note,
       events,
+      perf,
       maxMinutes,
       start,
       stop,
@@ -433,7 +464,7 @@ export function VisionProvider({ children }) {
       grantConsent,
       cancelConsent,
     }),
-    [phase, settings.vision?.engine, error, stream, scene, analyzing, note, events, maxMinutes, start, stop, toggle, grantConsent, cancelConsent],
+    [phase, settings.vision?.engine, error, stream, scene, analyzing, note, events, perf, maxMinutes, start, stop, toggle, grantConsent, cancelConsent],
   );
 
   return <VisionContext.Provider value={value}>{children}</VisionContext.Provider>;

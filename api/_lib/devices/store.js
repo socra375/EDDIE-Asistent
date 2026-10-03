@@ -1,7 +1,7 @@
 // Database side of "dispositivos" (see db/migrations/0008_devices.sql).
 import { randomBytes } from 'node:crypto';
 import { getDb } from '../db.js';
-import { COMMAND_TTL_MS } from './logic.js';
+import { COMMAND_TTL_MS, FRAME_FRESH_MS, VIEWER_WINDOW_S } from './logic.js';
 
 const iso = (value) => (value ? new Date(value).toISOString() : null);
 
@@ -117,4 +117,43 @@ export async function expireCommand(id) {
   const sql = getDb();
   const rows = await sql`update device_commands set status = 'expired', finished_at = now() where id = ${id} and status in ('pending', 'delivered') returning id`;
   return rows.length > 0;
+}
+
+// ---- Remote view (see db/migrations/0010_device_frames.sql) ----
+
+// The device shares a picture. Returns whether somebody is still watching.
+export async function saveFrame(userId, deviceId, frame, meta) {
+  const sql = getDb();
+  const rows = await sql`
+    insert into device_frames (device_id, user_id, frame, meta, updated_at)
+    values (${deviceId}, ${userId}, ${frame}, ${JSON.stringify(meta)}::jsonb, now())
+    on conflict (device_id) do update set frame = excluded.frame, meta = excluded.meta, updated_at = now()
+    returning (viewer_seen_at is not null and viewer_seen_at > now() - make_interval(secs => ${VIEWER_WINDOW_S})) as watching
+  `;
+  return Boolean(rows[0]?.watching);
+}
+
+// The viewer asks for the latest picture (and, by asking, says "I am watching").
+// → { frame, meta, ageMs } or null when there is none yet / it is too old.
+export async function viewFrame(userId, deviceId) {
+  const sql = getDb();
+  const rows = await sql`
+    insert into device_frames (device_id, user_id, viewer_seen_at) values (${deviceId}, ${userId}, now())
+    on conflict (device_id) do update set viewer_seen_at = now()
+    returning frame, meta, (extract(epoch from (now() - updated_at)) * 1000)::int as age_ms
+  `;
+  const row = rows[0];
+  if (!row?.frame || row.age_ms == null || row.age_ms > FRAME_FRESH_MS) return null;
+  return { frame: row.frame, meta: row.meta, ageMs: row.age_ms };
+}
+
+// The viewer stopped (or the device did): nothing stays behind.
+export async function clearFrame(userId, deviceId) {
+  const sql = getDb();
+  await sql`delete from device_frames where device_id = ${deviceId} and user_id = ${userId}`;
+}
+
+export async function purgeFrames() {
+  const sql = getDb();
+  await sql`delete from device_frames where coalesce(updated_at, viewer_seen_at) < now() - interval '10 minutes'`;
 }

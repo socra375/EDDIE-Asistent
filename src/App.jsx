@@ -29,6 +29,7 @@ import { readLaunch } from './services/pwa';
 import SettingsSyncBridge from './components/Shared/SettingsSyncBridge';
 import BootSplash from './boot/BootSplash';
 import DeviceBridge from './devices/DeviceBridge';
+import RemoteViewer from './devices/RemoteViewer';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
 
@@ -297,6 +298,7 @@ export default function App() {
                     <HudProvider>
                       <AppShell />
                       <DeviceBridge />
+                      <RemoteViewer />
                       {/* Outside the app shell, whose children are all made `position: relative`. */}
                       <BootSplash />
                     </HudProvider>

@@ -2,6 +2,7 @@
 // Both functions take a normalized shape and stream their answer out via
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
+import { nextThinking, rejectsThinking, thinkingFor } from './geminiThinking.js';
 import { hasImages } from './images.js';
 import { createToolset, intentFromMessages } from './connectors/registry.js';
 import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
@@ -186,7 +187,6 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
   // longer explanatory answer under "explicativo" mode, which explicitly
   // asks for a step-by-step explanation and likely triggers more internal
   // reasoning than plain small talk does).
-  const generationConfig = { temperature: 0.7, maxOutputTokens: 8192 };
   const systemInstruction = { role: 'system', parts: [{ text: system }] };
 
   // A genuinely empty response (no function call, no text) sometimes clears
@@ -211,6 +211,8 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
     // tool results already in `contents` gave it. Same when the user switched
     // every connector off: Gemini rejects an empty functionDeclarations list.
     const forceTextOnly = round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0 || Date.now() - startedAt > TOOLS_CUTOFF_MS;
+    // As little invisible thinking as the model allows (see geminiThinking.js).
+    const generationConfig = { temperature: 0.7, maxOutputTokens: 8192, ...thinkingFor(model) };
     const body = forceTextOnly
       ? { systemInstruction, generationConfig, contents }
       : { systemInstruction, generationConfig, tools: [{ functionDeclarations: toolset.declarations }], contents };
@@ -228,6 +230,11 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         const rawMessage = data?.error?.message || `Gemini respondió con estado ${res.status}.`;
+        // This model doesn't take that thinking setting: try the next one, same round.
+        if (rejectsThinking(res.status, rawMessage) && 'thinkingConfig' in generationConfig && nextThinking(model)) {
+          round -= 1;
+          continue;
+        }
         const err = new Error(translateGeminiError(res.status, data?.error, rawMessage));
         err.code = 'PROVIDER_ERROR';
         err.status = res.status;
@@ -446,7 +453,8 @@ function fitToGroqBudget(chat, tools) {
 }
 
 function groqRequestBody(model, chat, tools) {
-  const body = { model, messages: fitToGroqBudget(chat, tools), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS };
+  // gpt-oss reasons before answering: ask for little, the wait is the user's.
+  const body = { model, messages: fitToGroqBudget(chat, tools), stream: true, temperature: 0.7, max_tokens: GROQ_MAX_OUTPUT_TOKENS, ...(/gpt-oss/i.test(model) ? { reasoning_effort: 'low' } : {}) };
   // gpt-oss models reason before answering; "low" keeps replies fast and
   // leaves more of the per-minute token budget for the answer itself. Other
   // model families reject this parameter, so it's only sent to gpt-oss.

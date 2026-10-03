@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useVision } from '../context/visionState';
 import Icon from '../layout/Icon';
 import { HudPanel } from './HudPanel';
+import { shareState, subscribeShare } from '../services/remoteShare';
 
 const ENGINES = {
   local: 'Detector de este equipo',
@@ -25,8 +26,9 @@ const time = (at) => new Intl.DateTimeFormat('es', { timeStyle: 'medium' }).form
 // over each thing the AI found, the list of what is there and a log of what
 // came and went. The picture is mirrored like a mirror, so the boxes are too.
 export default function CameraPanel() {
-  const { phase, active, busy, engine, error, stream, scene, analyzing, note, events, maxMinutes, toggle, grantConsent, cancelConsent } = useVision();
+  const { phase, active, busy, engine, error, stream, scene, analyzing, note, events, perf, maxMinutes, toggle, grantConsent, cancelConsent } = useVision();
   const videoRef = useRef(null);
+  const sharing = useSyncExternalStore(subscribeShare, () => shareState().sharing);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -113,12 +115,18 @@ export default function CameraPanel() {
               </span>
             ))}
           </div>
+          {sharing && <p className="camera-panel__hint">● Transmitiendo esta cámara a otro dispositivo de tu cuenta.</p>}
           <p className={`camera-panel__note ${analyzing ? 'camera-panel__note--busy' : ''}`} role="status">
             {note}
           </p>
 
           {scene.summary && <p className="camera-panel__summary">{scene.summary}</p>}
-          {scene.provider && <p className="camera-panel__hint">{engineLabel(scene.provider)}</p>}
+          {scene.provider && (
+            <p className="camera-panel__hint">
+              {engineLabel(scene.provider)}
+              {perf.ms > 0 && ` · cada análisis tarda ${(perf.ms / 1000).toFixed(1).replace('.', ',')} s (${perf.backend === 'webgl' ? 'gráficos' : 'procesador'})`}
+            </p>
+          )}
           {listed.length > 0 && (
             <ul className="camera-list" aria-label="Lo que se ve">
               {listed.map((o, i) => (
