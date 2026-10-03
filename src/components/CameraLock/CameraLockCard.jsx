@@ -192,7 +192,7 @@ function Manage({ status, onChange }) {
         <>
           <p>Si no recuerdas la contraseña o perdiste el equipo con la huella, se puede programar la eliminación: tarda <b>24 horas</b>, te avisaremos por notificación y Telegram, y puedes cancelarla.</p>
           <div className="camera-lock__row">
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(() => requestLockRemoval(null), (r) => `Eliminación programada para ${when(r.deleteAt)}.`)}>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(() => requestLockRemoval(null))}>
               Programar eliminación en 24 h
             </button>
             <button type="button" className="btn" onClick={() => setStep('')}>

@@ -19,6 +19,8 @@ const MAX_ERRORS = 5;
 const RTC_CONNECT_MS = 10_000; // no direct path by then: the one-picture-a-second view carries on
 const RTC_RETRY_MS = 8_000;
 const RTC_ATTEMPTS = 3;
+const NO_DATA_WARN_MS = 8_000; // picture but no detector data this long: say so instead of staying silent
+const BUSY_GRACE_MS = 12_000; // a voice "busy" this long is stuck: the report is spoken anyway
 const LIVE_STALE_S = 12; // the device says it is still there at least every 4 s
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -53,6 +55,8 @@ export default function RemoteViewer() {
   const [videoStream, setVideoStream] = useState(null); // live video (WebRTC) when there is a direct path
   const [rtcLive, setRtcLive] = useState(false);
   const [liveMeta, setLiveMeta] = useState({ objects: [], summary: '', at: 0 }); // what the detector found, next to the video
+  const [dataAt, setDataAt] = useState(0); // when the detector's data last arrived (for the status line)
+  const speech = useRef({ texts: [], busySince: 0 }); // what is waiting to be said out loud
   const rtcUp = useRef(false); // read by the picture loop: while live video is up it asks for no pictures
   const viewRef = useRef(null);
   const { speakWithSettings, speaking } = useVoice();
@@ -87,6 +91,7 @@ export default function RemoteViewer() {
         return;
       }
       setShot(null);
+      setDataAt(0);
       setReports([]);
       setPhase(attach ? 'waiting' : 'auth');
       setMessage('');
@@ -103,7 +108,8 @@ export default function RemoteViewer() {
     if (!view.attach && !view.token) return undefined;
     let alive = true;
     narrator.current.reset();
-    signal.current = { lastKey: null, lastAt: 0, lost: false, ever: false, id: signal.current.id };
+    signal.current = { lastKey: null, lastAt: 0, lost: false, ever: false, id: signal.current.id, liveAt: 0, warned: false };
+    speech.current = { texts: [], busySince: 0 };
     rtcUp.current = false;
 
     // 1. Ask the device to share (unless Eddie already did).
@@ -149,6 +155,7 @@ export default function RemoteViewer() {
     const noteScene = (objects, key) => {
       signal.current.lastAt = Date.now();
       signal.current.ever = true;
+      setDataAt(signal.current.lastAt);
       // Only a new look tells the narrator anything (the same one repeated would "confirm" a blur).
       if (key === undefined || key !== signal.current.lastKey) {
         signal.current.lastKey = key;
@@ -198,6 +205,7 @@ export default function RemoteViewer() {
           if (state === 'connected') {
             window.clearTimeout(rtcTimer);
             rtcUp.current = true;
+            signal.current.liveAt ||= Date.now();
             setRtcLive(true);
             setPhase('live');
             setMessage('');
@@ -247,6 +255,7 @@ export default function RemoteViewer() {
               img.src = url; // decoded before it replaces the one on screen: no flicker
             });
             if (!alive) return;
+            signal.current.liveAt ||= Date.now();
             setShot({ url, meta: data.meta, caption: data.caption, at: Date.now() - (data.ageMs || 0) });
             noteScene(data.meta?.objects, data.meta?.seq || data.frame);
             setPhase('live');
@@ -280,18 +289,22 @@ export default function RemoteViewer() {
     };
   }, [view]);
 
-  // Every few seconds: say what happened in that camera (and say if the signal is lost or back).
+  // Every few seconds: write down what happened in that camera (and say if the signal is lost or back). The written
+  // report never waits for the voice; what is to be said out loud waits for its turn (below).
   useEffect(() => {
     if (!view) return undefined;
     const timer = window.setInterval(() => {
       const s = signal.current;
-      const { speak, speaking: busy, prefs: p } = live.current;
-      if (!s.ever) return;
+      const { prefs: p } = live.current;
       const at = Date.now();
-      // Eddie is answering something else: the report waits for his turn instead of cutting in.
-      if (p.voice && busy) return;
       let report = null;
-      if (at - s.lastAt > LOST_AFTER_MS) {
+      if (!s.ever) {
+        // A picture is on screen but the other device sends no data about it: say so, once, instead of staying silent.
+        if (s.liveAt && !s.warned && at - s.liveAt > NO_DATA_WARN_MS) {
+          s.warned = true;
+          report = { kind: 'lost', text: `${view.name}: veo la imagen, pero ese equipo todavía no me manda lo que detecta.` };
+        }
+      } else if (at - s.lastAt > LOST_AFTER_MS) {
         if (!s.lost) {
           s.lost = true;
           report = { kind: 'lost', text: `${view.name}: perdí la señal de la cámara.` };
@@ -306,10 +319,34 @@ export default function RemoteViewer() {
       if (!report) return;
       s.id += 1;
       setReports((prev) => [{ id: s.id, at, ...report }, ...prev].slice(0, MAX_REPORTS));
-      if (p.voice) speak(report.text, undefined, { filler: true });
+      if (p.voice) speech.current.texts.push(report.text);
     }, prefs.every * 1000);
     return () => window.clearInterval(timer);
   }, [view, prefs.every]);
+
+  // Says what is waiting as soon as the voice is free (Eddie finishing another answer first); if the voice looks
+  // stuck "busy" for too long it is said anyway, and never more than the latest two reports at once.
+  useEffect(() => {
+    if (!view) return undefined;
+    const timer = window.setInterval(() => {
+      const { speak, speaking: busy, prefs: p } = live.current;
+      const q = speech.current;
+      if (!busy) q.busySince = 0;
+      if (!p.voice) {
+        q.texts.length = 0;
+        return;
+      }
+      if (!q.texts.length) return;
+      const at = Date.now();
+      if (busy) {
+        q.busySince ||= at;
+        if (at - q.busySince < BUSY_GRACE_MS) return;
+      }
+      q.busySince = 0;
+      speak(q.texts.splice(0).slice(-2).join(' '), undefined, { filler: true });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [view]);
 
   // The screen stays on while a camera is being watched (a phone left propped up).
   useEffect(() => {
@@ -332,6 +369,9 @@ export default function RemoteViewer() {
       lock?.release().catch(() => {});
     };
   }, [view]);
+
+  // The browser only lets a page talk after a tap on it: this is that tap, and a way to check the voice works.
+  const testVoice = () => speakWithSettings('Voz lista. Te iré contando lo que pase.', undefined, { filler: true });
 
   const close = useCallback(() => {
     const current = viewRef.current;
@@ -374,6 +414,9 @@ export default function RemoteViewer() {
       <div className="remote-view__controls">
         <button type="button" className={`chip chip--button ${prefs.voice ? 'on' : ''}`} aria-pressed={prefs.voice} onClick={() => updatePrefs({ voice: !prefs.voice })} title="Eddie cuenta en voz alta lo que pasa">
           {prefs.voice ? '🔊 VOZ ON' : '🔇 VOZ OFF'}
+        </button>
+        <button type="button" className="chip chip--button" onClick={testVoice} title="Toca aquí si no oyes a Eddie: el navegador exige un toque antes de dejar hablar a una página">
+          ▶ PROBAR VOZ
         </button>
         <label className="remote-view__every">
           <span>Reporta cada</span>
@@ -437,6 +480,11 @@ export default function RemoteViewer() {
         )}
       </div>
 
+      {!needsAuth && (
+        <p className="remote-view__diag" aria-label="Estado de la transmisión">
+          Imagen: {video ? 'video en vivo' : shot ? 'una por segundo' : 'esperando'} · Detector del otro equipo: {dataAt ? `datos hace ${Math.max(0, Math.round((now - dataAt) / 1000))} s` : 'sin datos aún'} · Voz: {prefs.voice ? (speaking ? 'hablando' : 'lista') : 'apagada'}
+        </p>
+      )}
       {caption && <p className="remote-view__caption">{caption}</p>}
       {hasPicture && !video && rtcSupported() && phase === 'live' && <p className="remote-view__note remote-view__note--quiet">Imagen cada segundo (intentando conectar el video en vivo…)</p>}
       {hasPicture && message && <p className="remote-view__note">{message}</p>}
