@@ -15,10 +15,13 @@
 // Everything needs the login cookie. A device can only be reached if the user
 // switched "control remoto" on in that very device, and it is on right now.
 import { requireUser, destroySession, SESSION_COOKIE_NAME } from '../session.js';
-import { hasTelegramLink } from '../telegram/store.js';
+import { getLinkByUser, hasTelegramLink } from '../telegram/store.js';
+import { sendMessage } from '../telegram/api.js';
+import { sendPush } from '../push/send.js';
 import { deviceByUser } from '../computer/store.js';
 import { ntfyBase, ringDoorbell } from '../computer/run.js';
 import { createRateLimiter } from '../rateLimit.js';
+import { LockError, authorize, cancelRemoval, consumeToken, createPasskeyLock, createPasswordLock, grantView, hasGrant, lockStatus, passkeyAuthOptions, passkeyRegistrationOptions, requestRemoval, revokeGrant } from './cameraLock.js';
 import { ACTIONS, CLIENT_ID_RE, SIGNAL_ROLES, cleanDeviceName, cleanMeta, cleanPlatform, cleanSignal, describeAck, describeMeta, iceServers, isOnline, validFrame, whyNotReachable } from './logic.js';
 import { ackCommand, addSignal, clearFrame, clearSignals, takeSignals, commandState, createCommand, deviceByClient, deviceById, expireCommand, listDevices, pendingCount, purgeFrames, removeDevice, renameDevice, saveFrame, takeCommands, touchDevice, viewFrame } from './store.js';
 
@@ -28,7 +31,58 @@ export const ACK_WAIT_MS = 12_000;
 const POLL_MS = 400;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const bad = (error, status = 400) => ({ status, json: { error } });
+const bad = (error, status = 400, code) => ({ status, json: { error, ...(code ? { code } : {}) } });
+
+// Tells the owner (a notification on their devices and Telegram) when something happens to the camera lock.
+export async function alertOwner(userId, title, body) {
+  await sendPush(userId, { title, body, url: '/?modulo=settings', tag: 'camera-lock' }).catch(() => {});
+  try {
+    const link = process.env.TELEGRAM_BOT_TOKEN ? await getLinkByUser(userId) : null;
+    if (link) await sendMessage(link.chatId, `🔒 ${title}. ${body}`);
+  } catch {
+    // The notification on the devices is enough if Telegram fails.
+  }
+}
+
+// Cameras that need the lock's proof to be switched on from another device.
+const CAMERA_ON = ['vigilance_on', 'view_start'];
+const CAMERA_OFF = ['vigilance_off', 'view_stop'];
+const NEEDS_GRANT = 'Falta la autorización de la cámara. Vuelve a empezar la vista y escribe tu contraseña (o usa tu huella).';
+
+function lockFailure(err) {
+  if (err instanceof LockError) return { status: err.status, json: { error: err.message, code: err.code } };
+  throw err;
+}
+
+// /api/connectors/devices/lock/*: the camera lock (create once, prove, remove).
+async function handleLockRoute({ user, method, path, body, headers }) {
+  const action = path[2];
+  const alert = (title, text) => alertOwner(user.id, title, text);
+  const done = (json) => ({ status: 200, headers: { 'Cache-Control': 'private, no-store' }, json });
+  try {
+    if (!action && method === 'GET') return done(await lockStatus(user.id));
+    if (method !== 'POST') return { status: 405, json: { error: 'Método no permitido.' } };
+    if (action === 'create-password') {
+      await createPasswordLock(user.id, body?.password, body?.confirm);
+      return done({ ok: true });
+    }
+    if (action === 'passkey-options') return done(await passkeyRegistrationOptions(user.id, user.email, headers));
+    if (action === 'create-passkey') {
+      await createPasskeyLock(user.id, body?.response, headers);
+      return done({ ok: true });
+    }
+    if (action === 'auth-options') return done(await passkeyAuthOptions(user.id, headers));
+    if (action === 'auth') return done(await authorize(user.id, { password: body?.password, passkey: body?.passkey }, headers, { alert }));
+    if (action === 'delete') return done(await requestRemoval(user.id, typeof body?.token === 'string' ? body.token : null, { alert }));
+    if (action === 'cancel-delete') {
+      await cancelRemoval(user.id);
+      return done({ ok: true });
+    }
+  } catch (err) {
+    return lockFailure(err);
+  }
+  return { status: 404, json: { error: 'Esa acción no existe.' } };
+}
 // A device shares about one picture a second; this only stops a loop gone wrong.
 const frameLimit = createRateLimiter({ perMinute: 120 });
 const signalLimit = createRateLimiter({ perMinute: 240 });
@@ -77,10 +131,12 @@ export async function waitForAck(userId, id, { ms = ACK_WAIT_MS, pollMs = POLL_M
   }
 }
 
-export async function handleDevicesRoute({ method, path = [], cookies = {}, query = {}, body }) {
+export async function handleDevicesRoute({ method, path = [], cookies = {}, query = {}, body, headers = {} }) {
   const user = await requireUser(cookies);
   const sessionId = cookies[SESSION_COOKIE_NAME] || null;
   const sub = path[1];
+
+  if (sub === 'lock') return handleLockRoute({ user, method, path, body, headers });
 
   if (!sub && method === 'GET') {
     const [devices, telegram, computer] = await Promise.all([listDevices(user.id), hasTelegramLink(user.id).catch(() => false), deviceByUser(user.id).catch(() => null)]);
@@ -130,7 +186,17 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     const target = await deviceById(user.id, body.targetId);
     if (!target) return bad('Ese dispositivo ya no existe.', 404);
     const action = String(body?.action || '');
-    // The viewer is leaving (or starting afresh): no old picture may be shown.
+    // A camera is switched on only with the proof of the lock (password or fingerprint), asked for just now.
+    if (CAMERA_ON.includes(action)) {
+      const why = whyNotReachable(target);
+      if (why) return bad(why, 409);
+      try {
+        await consumeToken(user.id, body?.token);
+      } catch (err) {
+        return lockFailure(err);
+      }
+    }
+    // Only now (a refused start must not disturb a session that is running): no old picture may be shown.
     if (action === 'view_stop' || action === 'view_start') {
       await clearFrame(user.id, target.id).catch(() => {});
       await clearSignals(target.id).catch(() => {});
@@ -138,6 +204,8 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     }
     const outcome = await sendCommand(user, { target, action });
     if (outcome.error) return bad(outcome.error, 409);
+    if (action === 'view_start') await grantView(user.id, target.id).catch(() => {});
+    if (CAMERA_OFF.includes(action)) await revokeGrant(user.id, target.id).catch(() => {});
     return { status: 200, json: { id: outcome.id, device: target.name, rang: outcome.rang } };
   }
 
@@ -174,6 +242,7 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     if (!UUID_RE.test(String(query.id || ''))) return bad('Indica el dispositivo.');
     const device = await deviceById(user.id, query.id);
     if (!device) return bad('Ese dispositivo ya no existe.', 404);
+    if (!(await hasGrant(user.id, device.id))) return bad(NEEDS_GRANT, 403, 'NEEDS_AUTH');
     const row = await viewFrame(user.id, device.id);
     return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { device: device.name, online: isOnline(device.lastSeen), ...(row ? publicFrame(row) : { frame: null }) } };
   }
@@ -189,6 +258,8 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     const device = role === 'viewer' ? (UUID_RE.test(String(body?.deviceId || '')) ? await deviceById(user.id, body.deviceId) : null) : CLIENT_ID_RE.test(String(body?.clientId || '')) ? await deviceByClient(user.id, body.clientId) : null;
     if (!device) return bad('Ese dispositivo ya no existe.', 404);
     if (!device.remoteEnabled) return bad('Ese dispositivo no permite compartir la cámara.', 403);
+    // The screen that watches must have started the camera with the proof; the device itself speaks with its own id.
+    if (role === 'viewer' && !(await hasGrant(user.id, device.id))) return bad(NEEDS_GRANT, 403, 'NEEDS_AUTH');
     if (!signalLimit(`signal:${user.id}`).ok) return bad('Demasiados mensajes seguidos.', 429);
     const signal = cleanSignal(String(body?.kind || ''), body?.payload);
     if (!signal) return bad('El mensaje no es válido.');
@@ -202,6 +273,7 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     if (!SIGNAL_ROLES.includes(role)) return bad('Indica quién lee.');
     const device = role === 'viewer' ? (UUID_RE.test(String(query.id || '')) ? await deviceById(user.id, query.id) : null) : CLIENT_ID_RE.test(String(query.clientId || '')) ? await deviceByClient(user.id, query.clientId) : null;
     if (!device) return bad('Ese dispositivo ya no existe.', 404);
+    if (role === 'viewer' && !(await hasGrant(user.id, device.id))) return bad(NEEDS_GRANT, 403, 'NEEDS_AUTH');
     return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { signals: await takeSignals(device.id, role) } };
   }
 

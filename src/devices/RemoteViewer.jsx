@@ -5,6 +5,7 @@ import { createNarrator } from '../services/narration';
 import { createViewerRtc, rtcSupported } from '../services/rtc';
 import { REMOTE_VIEW_EVENT } from '../services/remoteShare';
 import Icon from '../layout/Icon';
+import CameraAuth from '../components/CameraLock/CameraAuth';
 import './RemoteViewer.css';
 
 const POLL_MS = 1000;
@@ -87,7 +88,7 @@ export default function RemoteViewer() {
       }
       setShot(null);
       setReports([]);
-      setPhase(attach ? 'waiting' : 'starting');
+      setPhase(attach ? 'waiting' : 'auth');
       setMessage('');
       setView((current) => (current?.deviceId === deviceId ? current : { deviceId, name: name || 'el dispositivo', attach: Boolean(attach) }));
     };
@@ -98,6 +99,8 @@ export default function RemoteViewer() {
   useEffect(() => {
     viewRef.current = view;
     if (!view) return undefined;
+    // Switching a camera on needs the lock's proof first (one use); a view Eddie opened already had it.
+    if (!view.attach && !view.token) return undefined;
     let alive = true;
     narrator.current.reset();
     signal.current = { lastKey: null, lastAt: 0, lost: false, ever: false, id: signal.current.id };
@@ -111,7 +114,7 @@ export default function RemoteViewer() {
         return true;
       }
       try {
-        const sent = await sendCommand(view.deviceId, 'view_start');
+        const sent = await sendCommand(view.deviceId, 'view_start', view.token);
         // The offer can go at once: the device answers it as soon as its camera is on.
         startRtc();
         const started = Date.now();
@@ -129,6 +132,13 @@ export default function RemoteViewer() {
         }
       } catch (err) {
         if (!alive) return false;
+        // The proof was refused or ran out: ask for it again instead of giving up.
+        if (['NEEDS_AUTH', 'NO_LOCK'].includes(err.code)) {
+          setPhase('auth');
+          setMessage(err.message);
+          setView((v) => (v ? { ...v, token: '' } : v));
+          return false;
+        }
         setPhase('error');
         setMessage(err.message);
         return false;
@@ -347,13 +357,14 @@ export default function RemoteViewer() {
   const objects = (video ? liveMeta.objects : shot?.meta?.objects) || [];
   const caption = video ? liveMeta.summary : shot?.caption;
   const hasPicture = Boolean(video || shot);
+  const needsAuth = !view.attach && !view.token;
 
   return (
     <aside className="remote-view" role="dialog" aria-label={`Cámara de ${view.name}`}>
       <header className="remote-view__head">
         <strong>CÁMARA · {view.name}</strong>
         <span className={`chip ${phase === 'live' && !stale ? 'on' : phase === 'error' ? 'bad' : 'warn'}`}>
-          {phase === 'live' ? (stale ? `SIN SEÑAL · ${age} s` : video ? 'EN VIVO · VIDEO' : age <= 2 ? 'EN VIVO' : `HACE ${age} s`) : phase === 'error' ? 'ERROR' : 'CONECTANDO…'}
+          {needsAuth ? 'AUTORIZACIÓN' : phase === 'live' ? (stale ? `SIN SEÑAL · ${age} s` : video ? 'EN VIVO · VIDEO' : age <= 2 ? 'EN VIVO' : `HACE ${age} s`) : phase === 'error' ? 'ERROR' : 'CONECTANDO…'}
         </span>
         <button type="button" className="remote-view__close" onClick={close} aria-label="Cerrar la cámara remota" title="Cerrar (el dispositivo deja de transmitir)">
           <Icon name="close" size={16} />
@@ -380,7 +391,14 @@ export default function RemoteViewer() {
       </div>
 
       <div className="remote-view__stage" hidden={prefs.compact && phase === 'live'}>
-        {hasPicture ? (
+        {needsAuth ? (
+          <div className="remote-view__wait remote-view__auth">
+            <Icon name="camera" size={34} />
+            <p>Para encender la cámara de {view.name} confirma que eres tú.</p>
+            <CameraAuth onToken={(token) => token && setView((v) => (v ? { ...v, token } : v))} />
+            {message && <p className="remote-view__note">{message}</p>}
+          </div>
+        ) : hasPicture ? (
           <>
             {video ? (
               <video

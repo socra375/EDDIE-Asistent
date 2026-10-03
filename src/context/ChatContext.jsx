@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { sendChatMessage, confirmAction, EddieApiError } from '../services/api';
+import { withoutSecrets } from '../services/cameraLock';
 import { buildSystemPrompt, DEFAULT_MODE } from '../services/personality';
 import { getLocalAnswer } from '../services/localAnswers';
 import {
@@ -193,7 +194,8 @@ export function ChatProvider({ children }) {
       }
 
       const args = editedArgs || card.args;
-      updateConfirmation(messageId, confirmationId, { state: 'running', args });
+      // The camera lock's one-use proof goes to the server and is not kept in the conversation.
+      updateConfirmation(messageId, confirmationId, { state: 'running', args: withoutSecrets(args) });
       updateStep(messageId, card.stepId, { status: 'running', summary: 'Haciéndolo…' });
       try {
         const { result, actions } = await confirmAction({
@@ -362,6 +364,11 @@ export function ChatProvider({ children }) {
       if (pending) {
         const reply = normalizeReply(trimmed);
         const decision = YES_RE.test(reply) ? 'confirm' : NO_RE.test(reply) ? 'cancel' : null;
+        if (decision === 'confirm' && pending.card.preview?.fields?.some((f) => f.type === 'camera-auth')) {
+          // A camera needs the lock's proof typed (or touched) on the card: a spoken "sí" is not that.
+          addEddieMessage('Por seguridad, eso lo apruebas tú en la tarjeta: escribe tu contraseña de cámara o usa tu huella y pulsa el botón.');
+          return null;
+        }
         if (decision) {
           resolveConfirmation(pending.messageId, pending.card.id, decision);
           return null;

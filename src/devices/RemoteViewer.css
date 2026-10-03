@@ -195,3 +195,12 @@
 .remote-view__note--quiet {
   color: var(--text-faint);
 }
+
+.remote-view__auth {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.remote-view__auth .camera-auth {
+  width: 100%;
+}
