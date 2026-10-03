@@ -35,6 +35,9 @@ Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el có
 
 ## Candado de la cámara (3 oct 2026)
 
+**Estado: apagado por ahora** (pedido del dueño); se reactiva con `CAMERA_LOCK=on`. Con el candado apagado, cualquiera con sesión
+en la cuenta puede encender las cámaras de los equipos que permiten el control remoto (y Telegram vinculado, la vigilancia).
+
 Encender una cámara de otro dispositivo exige contraseña o huella (WebAuthn), creada una sola vez y nunca mostrada de nuevo:
 hash scrypt en servidor, pases de un solo uso (120 s, solo su hash), bloqueo por fallos, lectura de imágenes solo con permiso
 concedido al encender, Telegram sin poder encender cámaras, seguro por defecto (sin candado no hay encendido remoto) y

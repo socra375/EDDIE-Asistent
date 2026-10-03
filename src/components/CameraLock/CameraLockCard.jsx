@@ -243,7 +243,13 @@ export default function CameraLockCard() {
       <h3>SEGURIDAD DE LA CÁMARA</h3>
       {state.status === 'loading' && <p>Comprobando…</p>}
       {state.status === 'error' && <p className="camera-auth__note camera-auth__note--bad">{state.error}</p>}
-      {state.status === 'ready' && (state.lock.state === 'set' ? <Manage status={state.lock} onChange={load} /> : <Create onCreated={load} />)}
+      {state.status === 'ready' && state.lock.enforced === false && (
+        <p className="camera-auth__note">
+          La protección de la cámara está apagada por ahora: las cámaras se encienden a distancia sin pedir contraseña ni huella
+          {state.lock.state === 'set' ? '. La que creaste se conserva y volverá a pedirse cuando se reactive.' : '.'}
+        </p>
+      )}
+      {state.status === 'ready' && (state.lock.state === 'set' ? <Manage status={state.lock} onChange={load} /> : state.lock.enforced !== false && <Create onCreated={load} />)}
     </section>
   );
 }
