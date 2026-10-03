@@ -404,7 +404,8 @@ Abre **Notas** en la barra lateral, o di **«Eddie, toma notas durante 10 minuto
 
 **Configuración → Dispositivos** lista los equipos donde abriste Eddie con tu cuenta (Chromebook, teléfono, tablet…), con un
 punto verde si Eddie está abierto ahora, más Telegram y EDDIE Prime. Desde cualquiera puedes **activar o apagar el Modo
-Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la vigilancia en el Chromebook»; pide confirmación).
+Vigilancia de otro**, eligiéndolo en la lista, o por chat («activa la vigilancia en el Chromebook»). **Encender una cámara a
+distancia siempre pide tu contraseña de cámara o tu huella** (ver «Candado de la cámara» más abajo).
 
 - **Solo si está encendido**: un equipo cuenta como encendido mientras Eddie siga abierto en él (late cada 2 min, ventana de 4 min);
   si está apagado o sin conexión, el botón se deshabilita y Eddie lo dice, sin dejar la orden en espera.
@@ -417,15 +418,15 @@ Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la
   cámara y abre una ventana con el **video en vivo**, y Eddie, **cada 5 segundos** (5, 10, 15 o 30 s), **dice en voz alta lo que
   ocurre**: «PC: aparece una persona», «la persona ya no está», «ahora hay 2 personas», «aparece un perro»… y cada 30 s «sin novedades,
   veo un laptop» para saber que sigue vivo; si se pierde la señal lo avisa. Todo queda también en el **REPORTE** de la ventana (con
-  botón para quitar la voz y otro para ocultar la imagen y dejar solo el reporte). Lo mismo por chat o voz, **sin tarjeta de
-  confirmación**: «Eddie, activa la vigilancia en mi PC» o «enséñame lo que ve el Chromebook» (desde Telegram solo se enciende la
-  cámara: no hay pantalla donde mostrarla). «Apagar vigilancia» (o «desactiva la vigilancia en mi PC») la apaga y cierra la ventana.
-- **Por qué no se pide aprobación** (pensado para dejar el PC en casa y llevarte el teléfono): las órdenes son tuyas, a tus equipos.
-  Lo que protege es (1) el control remoto, **apagado por defecto y activado equipo por equipo**; (2) el **permiso de la cámara, que
-  se da una sola vez delante de ese equipo** con **«Dar permiso de cámara»** (Configuración → Dispositivos → «Este dispositivo»; muestra
-  «CÁMARA LISTA PARA USO REMOTO»): después se enciende desde cualquier lugar sin que nadie tenga que aceptar nada; (3) la sesión de tu
-  cuenta; y (4) el chip rojo «VIGILANCIA · ON / ● TRANSMITIENDO» en el equipo observado. Si falta ese permiso, la orden dice que hay que
-  darlo una vez allí.
+  botón para quitar la voz y otro para ocultar la imagen y dejar solo el reporte). Lo mismo por chat o voz: «Eddie, activa la
+  vigilancia en mi PC» o «enséñame lo que ve el Chromebook» muestra una **tarjeta donde escribes tu contraseña de cámara** (o usas tu
+  huella) y, con eso, enciende la cámara y abre la ventana. «Apagar vigilancia» (o «desactiva la vigilancia en mi PC») la apaga y
+  cierra la ventana, y **no pide nada**: apagar nunca es un riesgo. Desde Telegram **no se puede encender una cámara** (solo apagarla).
+- **Qué protege la cámara** (pensado para dejar el PC en casa y llevarte el teléfono): (1) el **candado de la cámara** (abajo): sin él
+  creado no se enciende nada a distancia, y con él cada encendido pide la prueba; (2) el control remoto, **apagado por defecto y
+  activado equipo por equipo**; (3) el **permiso de la cámara, que se da una sola vez delante de ese equipo** con **«Dar permiso de
+  cámara»** (muestra «CÁMARA LISTA PARA USO REMOTO»); (4) la sesión de tu cuenta; y (5) el chip rojo «VIGILANCIA · ON / ● TRANSMITIENDO»
+  en el equipo observado. Si falta el permiso de la cámara, la orden dice que hay que darlo una vez allí.
 - **Video fluido (WebRTC)**: la cámara viaja **directamente de un equipo a otro** (~20 imágenes por segundo, 640×480, menos de 1 Mbit,
   cifrado) sin pasar por el servidor; los dos navegadores se encuentran con mensajes cortos que el servidor guarda un minuto
   (`device_signals`, migración `0011`) y con servidores STUN públicos de Google/Cloudflare. Junto al video viaja por un canal de datos lo que
@@ -440,6 +441,31 @@ Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la
 - **Privacidad de la cámara**: encender la cámara en otro equipo no se salta nada: la primera vez ese equipo pide permiso
   (la orden queda en «necesita tu permiso») y el chip rojo «VIGILANCIA · ON» se ve siempre. Una pestaña oculta pausa la vigilancia.
 - **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
+
+### Candado de la cámara (contraseña o huella, una sola vez)
+
+Para que nadie que entre a tu cuenta (o a tu Telegram) pueda espiarte con tus cámaras, **antes de encender una cámara a distancia hay
+que probar que eres tú**. Se configura en **Configuración → Dispositivos → Seguridad de la cámara**:
+
+- **Se crea una sola vez y no vuelve a mostrarse**: eliges **contraseña** (la escribes y la repites, o pulsas «Generar una segura»,
+  y **«Copiar»** para llevártela a tu gestor de contraseñas; tienes que marcar que la guardaste) o **huella / rostro / PIN del equipo**
+  (una llave de acceso WebAuthn «passkey»: la huella nunca sale del dispositivo y el servidor solo guarda una llave pública). Al crearla
+  desaparece de la pantalla: **no hay «ver» ni «cambiar»**, y del servidor solo queda un hash (scrypt) que no se puede revertir.
+- **Se pide cada vez que se enciende una cámara a distancia**: en el botón «Activar vigilancia y ver» (aparece dentro de la ventana de
+  la cámara), en la tarjeta que sale cuando se lo pides a Eddie por chat o voz, y en cualquier otro equipo. La prueba se canjea en el
+  servidor por un **pase de un solo uso que dura 2 minutos** (se guarda su hash, se gasta al encender), así que ni la contraseña
+  viaja con la orden ni se puede reutilizar. **Nunca pasa por el chat**: Eddie no la ve, no la pide y un «sí» hablado no sustituye a la tarjeta.
+- **Solo se elimina pidiéndoselo a Eddie** («Eddie, elimina la contraseña de la cámara», o el botón de la tarjeta): si la recuerdas, la
+  escribes (o usas tu huella) y se borra **al instante**; si la **olvidaste** o perdiste el equipo de la huella, se **programa para dentro
+  de 24 horas**: te llega un aviso por notificación y por Telegram y **puedes cancelarla** en la misma tarjeta. Mientras tanto la cámara
+  sigue protegida. Después podrás crear otra.
+- **Contra intentos de adivinarla**: 5 fallos bloquean 5 min, 8 fallos 15 min… hasta 6 h; al tercer fallo te avisamos por
+  notificación y Telegram. Las imágenes de una cámara solo se leen desde un equipo que la encendió con la prueba (permiso de 8 h) y se
+  quita al apagarla.
+- **Seguro por defecto**: sin candado creado, ninguna cámara se enciende a distancia (la orden lo dice y te lleva a crearlo).
+- **Límites que quedan**: quien tenga tu sesión abierta podría **programar** la eliminación (te avisamos y puedes cancelarla en 24 h; si
+  no miras tus avisos, esa persona podría crear otro candado a las 24 h); y si olvidas la contraseña, no hay forma de recuperarla,
+  solo de eliminarla esperando. Migración `0012_camera_lock.sql`; `api/_lib/devices/cameraLock.js`.
 
 ## Notificaciones en segundo plano (Eddie con la app cerrada)
 
@@ -830,6 +856,7 @@ db/
   migrations/0009_push.sql           Notificaciones push (llaves, suscripciones)
   migrations/0010_device_frames.sql  Última imagen compartida para la vista remota (respaldo)
   migrations/0011_device_signals.sql Mensajes para conectar el video en vivo entre dos equipos
+  migrations/0012_camera_lock.sql    Candado de la cámara (hash de la contraseña, llaves, pases de un solo uso, permisos de lectura)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

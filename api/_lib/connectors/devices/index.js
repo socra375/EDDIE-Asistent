@@ -1,18 +1,16 @@
 // The devices where the user is signed in to Eddie (their Chromebook, phone,
-// another computer) and the one thing that can be asked of them from any other
-// (or from Telegram): switch Modo Vigilancia on or off and watch its camera.
-// Only a device that is on right now and whose owner switched "control remoto"
-// on there (and gave it the camera permission once) can be reached. There is no
-// confirmation card: the orders are the user's own, to their own devices, and
-// the point is to use a phone as the screen of a camera left at home. What
-// protects it is that opt-in per device, the camera permission given at the
-// device itself, and the red chip shown there. The screen for this is
-// Configuración → Dispositivos.
+// another computer) and what can be asked of them from any other: switch their
+// camera on and watch it (Modo Vigilancia), or off. Only a device that is on right
+// now and whose owner switched "control remoto" on there (and gave it the camera
+// permission once) can be reached. Switching a camera ON always needs the camera
+// lock's proof (a password or fingerprint typed in the confirmation card, never in
+// the chat) and only works from the app, not from Telegram; switching it off needs nothing.
 import { hasTelegramLink } from '../../telegram/store.js';
 import { deviceByUser } from '../../computer/store.js';
 import { describeAck, findDevice, isOnline, whyNotReachable } from '../../devices/logic.js';
 import { clearFrame, listDevices } from '../../devices/store.js';
-import { publicDevice, sendCommand, waitForAck } from '../../devices/handlers.js';
+import { LockError, consumeToken, grantView, lockStatus, requestRemoval, revokeGrant } from '../../devices/cameraLock.js';
+import { alertOwner, publicDevice, sendCommand, waitForAck } from '../../devices/handlers.js';
 import { clip } from '../http.js';
 
 const getUser = async (context) => context.getUser?.();
@@ -55,56 +53,124 @@ export default {
       },
     },
     {
-      label: 'Activar o apagar el Modo Vigilancia en un dispositivo',
-      activity: 'Enviando la orden al dispositivo…',
-      risk: 'write',
-      sensitive: false,
+      label: 'Activar la cámara de otro dispositivo y ver lo que ve',
+      activity: 'Pidiéndole la cámara al dispositivo…',
+      risk: 'confirm',
+      sensitive: true,
       declaration: {
-        name: 'set_vigilance',
+        name: 'watch_device',
         description:
-          'Activa o apaga el Modo Vigilancia (la cámara con visión) en OTRO dispositivo del usuario ("activa la vigilancia en mi PC"), aunque hable desde el teléfono. Se ejecuta de inmediato, SIN pedir confirmación (el usuario ya lo pidió). Al activar desde la app, además abre la vista de esa cámara en esta pantalla y Eddie va contando en voz alta lo que ocurre cada pocos segundos. Solo funciona si el otro dispositivo está encendido (con Eddie abierto) y permite el control remoto. Usa list_devices si no sabes cómo se llaman.',
+          'Activa el Modo Vigilancia (la cámara) en OTRO dispositivo del usuario ("activa la vigilancia en mi PC", "enséñame lo que ve el Chromebook", "¿qué ve el PC?"), abre la vista en vivo en esta pantalla y Eddie va contando en voz alta, cada pocos segundos, lo que pasa. Por seguridad SIEMPRE aparece una tarjeta donde el usuario escribe su contraseña de cámara (o usa su huella): tú no la pidas, no la veas ni la repitas, y no rellenes `token`. Solo funciona si el otro dispositivo está encendido y permite el control remoto, y solo desde la app (no desde Telegram). Para apagarla usa stop_watching.',
         parameters: {
           type: 'OBJECT',
           properties: {
             device: { type: 'STRING', description: 'Nombre (o parte del nombre) del dispositivo, ej. "PC" o "Chromebook".' },
-            action: { type: 'STRING', description: '"on" para activar (y empezar a vigilar y contar lo que se ve), "off" para apagar.' },
-          },
-          required: ['device', 'action'],
-        },
-      },
-      run: async (args, context) => {
-        const resolved = await resolve(args, context);
-        if (resolved.error) return { error: resolved.error };
-        const { user, device } = resolved;
-        // From the app the camera is also watched here (and narrated); from Telegram there is no screen to show it on.
-        const watch = resolved.action === 'vigilance_on' && context.channel !== 'telegram';
-        return changeDevice({ user, device, command: watch ? 'view_start' : resolved.action, context, closeView: resolved.action === 'vigilance_off' });
-      },
-      summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
-    },
-    {
-      label: 'Ver lo que ve la cámara de otro dispositivo',
-      activity: 'Pidiéndole la cámara al dispositivo…',
-      risk: 'write',
-      sensitive: false,
-      declaration: {
-        name: 'watch_device',
-        description:
-          'Muestra al usuario lo que ve la cámara de OTRO de sus dispositivos (su PC, Chromebook…): enciende allí la vigilancia, abre la vista en vivo en esta pantalla y Eddie va contando en voz alta, cada pocos segundos, lo que pasa ("¿qué ve el PC?", "enséñame la cámara del portátil", "avísame lo que veas en la PC"). Se ejecuta de inmediato, SIN pedir confirmación. Solo funciona si ese dispositivo está encendido y permite el control remoto. action "start" (por defecto) o "stop" para dejar de ver.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            device: { type: 'STRING', description: 'Nombre (o parte del nombre) del dispositivo, ej. "PC".' },
-            action: { type: 'STRING', description: '"start" para ver su cámara, "stop" para dejar de verla.' },
+            token: { type: 'STRING', description: 'Lo rellena la tarjeta con la autorización del usuario. Déjalo vacío.' },
           },
           required: ['device'],
         },
       },
-      run: async (args, context) => {
+      prepare: async (args, context) => {
+        if (context.channel === 'telegram') return { error: 'Por seguridad, la cámara de tus dispositivos solo se activa desde la app de Eddie, con tu contraseña de cámara o tu huella. Abre Eddie en el teléfono y pídemelo allí.' };
         const resolved = await resolveWatch(args, context);
         if (resolved.error) return { error: resolved.error };
-        const { user, device, action } = resolved;
-        return changeDevice({ user, device, command: action, context, closeView: action === 'view_stop' });
+        const lock = await lockStatus(resolved.user.id);
+        if (lock.state === 'none') return { error: 'Antes de usar la cámara a distancia hay que crear la contraseña de la cámara (Configuración → Dispositivos → Seguridad de la cámara). Se crea una sola vez.' };
+        return {
+          args: { device: resolved.device.name, token: typeof args.token === 'string' ? args.token : '' },
+          preview: {
+            title: `Activar la cámara de ${resolved.device.name} y verla aquí`,
+            confirmLabel: 'Activar y ver',
+            fields: [
+              { key: 'device', label: 'Dispositivo', value: resolved.device.name },
+              { key: 'token', label: 'Tu contraseña de cámara', type: 'camera-auth', value: '' },
+            ],
+          },
+        };
+      },
+      run: async (args, context) => {
+        const resolved = await resolveWatch({ device: args.device }, context);
+        if (resolved.error) return { error: resolved.error };
+        const { user, device } = resolved;
+        try {
+          await consumeToken(user.id, args.token);
+        } catch (err) {
+          if (err instanceof LockError) return { error: err.message };
+          throw err;
+        }
+        return changeDevice({ user, device, command: 'view_start', context });
+      },
+      summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
+    },
+    {
+      label: 'Apagar la cámara de otro dispositivo',
+      activity: 'Apagando la cámara del dispositivo…',
+      risk: 'write',
+      sensitive: false,
+      declaration: {
+        name: 'stop_watching',
+        description: 'Apaga la vigilancia y la cámara de OTRO dispositivo del usuario y cierra la vista en vivo ("apaga la vigilancia del PC", "deja de ver la cámara"). No necesita contraseña.',
+        parameters: { type: 'OBJECT', properties: { device: { type: 'STRING', description: 'Nombre (o parte del nombre) del dispositivo.' } }, required: ['device'] },
+      },
+      run: async (args, context) => {
+        const resolved = await resolveWatch({ device: args.device }, context);
+        if (resolved.error) return { error: resolved.error };
+        return changeDevice({ user: resolved.user, device: resolved.device, command: 'vigilance_off', context, closeView: true });
+      },
+      summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
+    },
+    {
+      label: 'Eliminar la contraseña de la cámara',
+      activity: 'Preparando la eliminación de la contraseña de la cámara…',
+      risk: 'confirm',
+      sensitive: true,
+      declaration: {
+        name: 'remove_camera_lock',
+        description:
+          'Elimina la contraseña (o huella) de la cámara, SOLO cuando el usuario lo pide ("elimina la contraseña de la cámara"). Aparece una tarjeta: si la recuerda, la escribe ahí y se elimina al instante; si la olvidó, pon forgot=true y la eliminación se programa para dentro de 24 horas (se le avisa y puede cancelarla). Nunca la pidas por el chat ni rellenes `token`. No existe forma de ver ni cambiar esa contraseña: solo crearla una vez y eliminarla. Solo desde la app, no desde Telegram.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            forgot: { type: 'BOOLEAN', description: 'true solo si el usuario dice que olvidó la contraseña o perdió el equipo con su huella.' },
+            token: { type: 'STRING', description: 'Lo rellena la tarjeta. Déjalo vacío.' },
+          },
+        },
+      },
+      prepare: async (args, context) => {
+        if (context.channel === 'telegram') return { error: 'Por seguridad, la protección de la cámara solo se elimina desde la app de Eddie.' };
+        const user = await getUser(context);
+        if (!user) return { error: SIGN_IN };
+        const lock = await lockStatus(user.id);
+        if (lock.state === 'none') return { error: 'No hay ninguna contraseña de cámara que eliminar.' };
+        const forgot = args.forgot === true;
+        if (forgot && lock.pendingDelete) return { error: `Ya hay una eliminación programada para ${new Date(lock.pendingDelete).toLocaleString('es')}.` };
+        return {
+          args: { forgot, token: typeof args.token === 'string' ? args.token : '' },
+          preview: {
+            title: forgot ? 'Programar la eliminación de la contraseña de la cámara (24 h)' : 'Eliminar la contraseña de la cámara',
+            confirmLabel: forgot ? 'Programar en 24 h' : 'Eliminar ahora',
+            danger: true,
+            fields: forgot
+              ? [{ key: 'info', label: 'Qué pasa', value: 'Tarda 24 horas, te avisaremos por notificación y Telegram y puedes cancelarla. Hasta entonces la cámara sigue protegida.' }]
+              : [
+                  { key: 'info', label: 'Qué pasa', value: 'La protección desaparece y habrá que crear otra para usar cámaras a distancia.' },
+                  { key: 'token', label: 'Tu contraseña de cámara', type: 'camera-auth', value: '' },
+                ],
+          },
+        };
+      },
+      run: async (args, context) => {
+        const user = await getUser(context);
+        if (!user) return { error: SIGN_IN };
+        if (args.forgot !== true && !args.token) return { error: 'Falta la autorización: escribe tu contraseña de cámara (o usa tu huella) en la tarjeta.' };
+        try {
+          const out = await requestRemoval(user.id, args.forgot === true ? null : args.token || '', { alert: (title, text) => alertOwner(user.id, title, text) });
+          if (out.removed) return { removed: true, summary: 'Listo: eliminé la contraseña de la cámara. Para usar cámaras a distancia tendrás que crear una nueva.' };
+          return { removed: false, deleteAt: out.deleteAt, summary: `Programé la eliminación para el ${new Date(out.deleteAt).toLocaleString('es')}. Hasta entonces la cámara sigue protegida; puedes cancelarla en Configuración → Dispositivos.` };
+        } catch (err) {
+          if (err instanceof LockError) return { error: err.message };
+          throw err;
+        }
       },
       summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
     },
@@ -112,13 +178,16 @@ export default {
   webhook: null,
 };
 
-// Sends the order and waits for the device's answer. A start also opens the
-// camera view on this screen (which narrates it); a stop closes that view. Nothing
-// is asked of the user: they already said what they want, on their own devices.
+// Sends the order and waits for the device's answer. A start (which already went
+// through the lock's proof) also opens the camera view on this screen, which narrates
+// it; a stop closes that view.
 async function changeDevice({ user, device, command, context, closeView }) {
   if (command === 'view_start' || command === 'view_stop') await clearFrame(user.id, device.id).catch(() => {});
   const sent = await sendCommand(user, { target: device, action: command });
   if (sent.error) return { error: sent.error };
+  // The camera was started with the lock's proof: this screen may read it. Switching off takes that away.
+  if (command === 'view_start') await grantView(user.id, device.id).catch(() => {});
+  if (command === 'vigilance_off' || command === 'view_stop') await revokeGrant(user.id, device.id).catch(() => {});
   const answer = await waitForAck(user.id, sent.id);
   const base = { device: device.name, status: answer.status };
   if (closeView) context.emit?.({ type: 'close_remote_view', deviceId: device.id });
@@ -133,30 +202,13 @@ async function changeDevice({ user, device, command, context, closeView }) {
   return { ...base, summary: describeAck(device, command, answer.status, answer.message) };
 }
 
-// The user, the device and 'view_start' | 'view_stop', or an { error }.
+// The user and the device they meant, or an { error }.
 async function resolveWatch(args, context) {
   const user = await getUser(context);
   if (!user) return { error: SIGN_IN };
-  const raw = String(args.action || 'start').trim();
-  const action = /^(start|ver|mostrar|muestra|on|activar|activa)$/i.test(raw) ? 'view_start' : /^(stop|dejar|parar|para|off|apagar|apaga|cerrar)$/i.test(raw) ? 'view_stop' : null;
-  if (!action) return { error: 'La acción debe ser "start" (ver su cámara) o "stop" (dejar de verla).' };
   const found = findDevice(await listDevices(user.id), args.device);
   if (found.error) return { error: found.error };
   const why = whyNotReachable(found.device);
   if (why) return { error: why };
-  return { user, device: found.device, action };
-}
-
-// The user, the device they meant and the action, or an { error } written for the model.
-async function resolve(args, context) {
-  const user = await getUser(context);
-  if (!user) return { error: SIGN_IN };
-  const action = /^(on|activar|activa|encender|enciende)$/i.test(String(args.action || '').trim()) ? 'vigilance_on' : /^(off|apagar|apaga|desactivar|desactiva)$/i.test(String(args.action || '').trim()) ? 'vigilance_off' : null;
-  if (!action) return { error: 'La acción debe ser "on" (activar el Modo Vigilancia) o "off" (apagarlo).' };
-  const devices = await listDevices(user.id);
-  const found = findDevice(devices, args.device);
-  if (found.error) return { error: found.error };
-  const why = whyNotReachable(found.device);
-  if (why) return { error: why };
-  return { user, device: found.device, action };
+  return { user, device: found.device };
 }

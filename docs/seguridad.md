@@ -33,6 +33,15 @@ Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el có
 - **Vista remota de la cámara (respaldo por imágenes)**: solo entre dispositivos de la misma cuenta y solo si el equipo observado activó el control remoto; el equipo solo sube imágenes si hay un espectador activo (el servidor lo comprueba en cada imagen y se lo dice), con chip «TRANSMITIENDO» visible, tope de 10 min y 120 imágenes/min; se acepta solo un JPEG en base64 de hasta 90 000 caracteres y los datos que lo acompañan se recortan (etiquetas, categorías, cajas); una sola imagen por equipo, sobrescrita, borrada al cerrar la vista y nunca servida con más de 30 s.
 - **Dependencias**: `npm audit --omit=dev` sin vulnerabilidades.
 
+## Candado de la cámara (3 oct 2026)
+
+Encender una cámara de otro dispositivo exige contraseña o huella (WebAuthn), creada una sola vez y nunca mostrada de nuevo:
+hash scrypt en servidor, pases de un solo uso (120 s, solo su hash), bloqueo por fallos, lectura de imágenes solo con permiso
+concedido al encender, Telegram sin poder encender cámaras, seguro por defecto (sin candado no hay encendido remoto) y
+eliminación inmediata con prueba o programada a 24 h con avisos (push y Telegram) y cancelación. El secreto nunca pasa por la IA ni
+queda en la conversación (campo `camera-auth` de la tarjeta). Detalle en el README («Candado de la cámara»).
+Riesgo residual: una sesión robada puede programar la eliminación (hay aviso y 24 h para cancelarla).
+
 ## Riesgos que quedan (y qué hacer)
 
 1. **Uso anónimo de la cuota por llamadas que no son de navegador** (curl, scripts): pueden omitir las cabeceras `Sec-Fetch-*`.

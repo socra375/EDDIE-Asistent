@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from '../../layout/Icon';
+import CameraAuth from '../CameraLock/CameraAuth';
 import './ConfirmCard.css';
 
 const STATE_TEXT = {
@@ -17,12 +18,16 @@ export default function ConfirmCard({ card, onResolve, compact = false }) {
   const editable = fields.filter((f) => f.editable);
   const [draft, setDraft] = useState(() => Object.fromEntries(editable.map((f) => [f.key, card.args?.[f.key] ?? f.value ?? ''])));
   const pending = card.state === 'pending';
+  // A camera card asks for the lock's proof right here (never in the chat); what comes back is a one-use token.
+  const authField = fields.find((f) => f.type === 'camera-auth');
+  const [token, setToken] = useState('');
   const confirmLabel = card.preview?.confirmLabel || 'Confirmar';
 
   // Edits stay once "Listo" closes the fields; they're what gets confirmed.
   function confirm() {
     setEditing(false);
-    onResolve('confirm', editable.length ? { ...card.args, ...draft } : card.args);
+    const base = authField ? { ...card.args, [authField.key]: token } : card.args;
+    onResolve('confirm', editable.length ? { ...base, ...draft } : base);
   }
 
   function valueOf(field) {
@@ -46,7 +51,13 @@ export default function ConfirmCard({ card, onResolve, compact = false }) {
           <div key={f.key} className="confirm-card__field">
             <dt>{f.label}</dt>
             <dd>
-              {editing && f.editable ? (
+              {f.type === 'camera-auth' ? (
+                pending ? (
+                  <CameraAuth label={f.label} onToken={setToken} />
+                ) : (
+                  '••••••••'
+                )
+              ) : editing && f.editable ? (
                 f.multiline ? (
                   <textarea
                     className="input"
@@ -68,7 +79,7 @@ export default function ConfirmCard({ card, onResolve, compact = false }) {
 
       {pending ? (
         <div className="confirm-card__actions">
-          <button type="button" className={`btn ${card.preview?.danger ? 'btn-danger' : 'btn-primary'}`} onClick={confirm}>
+          <button type="button" className={`btn ${card.preview?.danger ? 'btn-danger' : 'btn-primary'}`} onClick={confirm} disabled={Boolean(authField) && !token} title={authField && !token ? 'Primero confirma tu contraseña o tu huella' : undefined}>
             {confirmLabel}
           </button>
           {editable.length > 0 && (

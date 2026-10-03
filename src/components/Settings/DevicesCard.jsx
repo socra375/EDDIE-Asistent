@@ -4,6 +4,7 @@ import { ago } from '../../services/devicePlatform';
 import { commandState, listDevices, removeDevice, renameDevice, sendCommand } from '../../services/devices';
 import { readIdentity, updateIdentity } from '../../services/deviceIdentity';
 import { REMOTE_VIEW_EVENT } from '../../services/remoteShare';
+import CameraLockCard from '../CameraLock/CameraLockCard';
 import { cameraSupported, describeCameraError, readConsent, stopStream, writeConsent } from '../../services/camera';
 
 const REFRESH_MS = 15_000;
@@ -132,7 +133,7 @@ function DeviceRow({ device, busy, result, onCommand, onRename, onRemove, identi
               type="button"
               className="btn btn-primary"
               disabled={!reachable}
-              title={why || 'Enciende su cámara, mira lo que ve aquí y Eddie te va contando lo que pasa'}
+              title={why || 'Pide tu contraseña o huella, enciende su cámara, mira lo que ve aquí y Eddie te va contando lo que pasa'}
               onClick={() => window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: device.id, name: device.name } }))}
             >
               Activar vigilancia y ver
@@ -263,6 +264,7 @@ export default function DevicesCard() {
 
   return (
     <>
+      <CameraLockCard />
       {state.status === 'error' && <p className="settings-warning">{state.error}</p>}
       {state.status === 'loading' && <p className="settings-placeholder">Buscando tus dispositivos…</p>}
       {state.status === 'ready' && (
@@ -294,7 +296,7 @@ export default function DevicesCard() {
                 <span className="device__meta">
                   {o.kind === 'telegram'
                     ? o.linked
-                      ? 'Vinculado: puedes pedirle a Eddie que active o apague la vigilancia en un dispositivo (te pide confirmar).'
+                      ? 'Vinculado: puedes pedirle a Eddie que apague la vigilancia en un dispositivo. Encender cámaras solo se puede desde la app, con tu contraseña o huella.'
                       : 'Sin vincular: vincúlalo en Conectores para manejar tus dispositivos desde el chat de Telegram.'
                     : `${o.online ? 'encendido ahora' : `visto ${ago(o.lastSeen)}`} · agente de tu equipo`}
                 </span>
@@ -309,7 +311,7 @@ export default function DevicesCard() {
         </button>
         <p className="settings-placeholder device__note">
           Un dispositivo aparece cuando abres Eddie en él con esta misma cuenta, y cuenta como «encendido» mientras Eddie siga abierto. Para que otro dispositivo pueda activarle la
-          vigilancia, el control remoto debe estar permitido allí (apagado por defecto). La cámara siempre muestra el chip rojo y, la primera vez, pide permiso en ese equipo.
+          vigilancia, el control remoto debe estar permitido allí (apagado por defecto) y hay que haber creado la protección de la cámara (arriba). Cada activación pide tu contraseña o tu huella. La cámara siempre muestra el chip rojo y, la primera vez, pide permiso en ese equipo.
         </p>
       </div>
     </>
