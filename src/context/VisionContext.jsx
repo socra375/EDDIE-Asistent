@@ -89,6 +89,7 @@ export function VisionProvider({ children }) {
     limit: 0,
     hidden: 0,
     eventId: 0,
+    quiet: false,
     tracker: createEventTracker(),
     announcer: createAnnouncer(),
     scene: NO_SCENE,
@@ -111,6 +112,7 @@ export function VisionProvider({ children }) {
   const stop = useCallback(({ error: failure = '', note: message = '' } = {}) => {
     const r = run.current;
     r.id += 1; // anything still running for the old session ends quietly
+    r.quiet = false;
     r.starting = false;
     window.clearTimeout(r.tick);
     window.clearTimeout(r.limit);
@@ -146,6 +148,9 @@ export function VisionProvider({ children }) {
     setEvents((prev) => [...entries.reverse(), ...prev].slice(0, MAX_LOG));
     const s = live.current;
     if (!s.announce || !s.voiceOn || s.speaking || !s.chatIdle) return;
+    // A camera started from another device (or being watched from one) is narrated by THAT device, not here:
+    // the PC left at home says nothing out loud.
+    if (r.quiet || shareState().sharing) return;
     for (const event of found) {
       const line = r.announcer.next(event, at);
       if (line) {
@@ -405,8 +410,11 @@ export function VisionProvider({ children }) {
   // The command ("Modo Vigilancia" / "desactiva el modo vigilancia") arrives as an event from the chat.
   useEffect(() => {
     const onCommand = (e) => {
-      if (e.detail?.action === 'on') start();
-      else if (e.detail?.action === 'off' && (run.current.stream || run.current.starting)) stop({ note: 'Vigilancia desactivada.' });
+      if (e.detail?.action === 'on') {
+        // Started by an order from another device: no voice announcements on this one. A local start (chat, button) keeps them.
+        if (!run.current.stream && !run.current.starting) run.current.quiet = e.detail?.remote === true;
+        start();
+      } else if (e.detail?.action === 'off' && (run.current.stream || run.current.starting)) stop({ note: 'Vigilancia desactivada.' });
       else if (e.detail?.action === 'off') setPhase((p) => (p === 'consent' || p === 'error' ? 'off' : p));
     };
     window.addEventListener(VIGILANCE_EVENT, onCommand);

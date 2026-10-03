@@ -204,3 +204,10 @@
 .remote-view__auth .camera-auth {
   width: 100%;
 }
+
+.remote-view__diag {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--text-dim);
+}

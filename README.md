@@ -422,6 +422,12 @@ distancia siempre pide tu contraseña de cámara o tu huella** (ver «Candado de
   vigilancia en mi PC» o «enséñame lo que ve el Chromebook» muestra una **tarjeta donde escribes tu contraseña de cámara** (o usas tu
   huella) y, con eso, enciende la cámara y abre la ventana. «Apagar vigilancia» (o «desactiva la vigilancia en mi PC») la apaga y
   cierra la ventana, y **no pide nada**: apagar nunca es un riesgo. Desde Telegram **no se puede encender una cámara** (solo apagarla).
+- **Quién habla**: solo el equipo que mira. El equipo observado (el PC) **no dice nada en voz alta** mientras su cámara se enciende por orden
+  de otro dispositivo o lo están mirando; el que narra es el teléfono. El reporte escrito de la ventana **no depende de la voz**: si Eddie
+  está contestando otra cosa o la voz se queda atascada, el reporte sigue apareciendo y se dice en cuanto pueda (como mucho a los 12 s).
+  La ventana muestra una línea de estado («Imagen: video en vivo · Detector del otro equipo: datos hace 1 s · Voz: lista»), avisa si ve la
+  imagen pero el otro equipo no manda datos, y tiene **▶ PROBAR VOZ**: el navegador del teléfono solo deja hablar a una página después de un
+  toque, así que si no oyes a Eddie toca ahí una vez.
 - **Qué protege la cámara** (pensado para dejar el PC en casa y llevarte el teléfono): (1) el **candado de la cámara** (abajo): sin él
   creado no se enciende nada a distancia, y con él cada encendido pide la prueba; (2) el control remoto, **apagado por defecto y
   activado equipo por equipo**; (3) el **permiso de la cámara, que se da una sola vez delante de ese equipo** con **«Dar permiso de
