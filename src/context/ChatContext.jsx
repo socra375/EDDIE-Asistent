@@ -348,11 +348,11 @@ export function ChatProvider({ children }) {
       // listener) off, by voice or by typing. Turning it back on is up to the
       // user, in Memoria — with the microphone off Eddie can't hear them.
       if (!tag && isSleepCommand(trimmed, settings.wake?.word)) {
-        const wasOn = Boolean(settings.wake?.enabled);
-        updateWakeSettings({ enabled: false });
+        const wasOn = Boolean(settings.wake?.enabled || settings.wake?.clap);
+        updateWakeSettings({ enabled: false, clap: false });
         addEddieMessage(
           wasOn
-            ? 'Me suspendo: apagué el micrófono y ya no escucho la palabra clave. Cuando quieras, actívame otra vez en Memoria.'
+            ? 'Me suspendo: apagué el micrófono y ya no escucho la palabra clave ni los aplausos. Cuando quieras, actívame otra vez en Memoria.'
             : 'El micrófono de la palabra clave ya estaba apagado. Puedes activarlo en Memoria.',
         );
         return null;

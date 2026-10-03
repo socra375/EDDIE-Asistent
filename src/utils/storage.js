@@ -61,6 +61,9 @@ export const DEFAULT_SETTINGS = {
     enabled: false,
     word: 'eddie',
     followUpSeconds: 5,
+    // Two claps wake Eddie too (services/clap.js).
+    clap: false,
+    clapSensitivity: 'medium',
   },
   // Connectors switched off in the Conectores hub; everything else is on,
   // so a newly added connector works without the user opting in.

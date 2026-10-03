@@ -217,7 +217,8 @@
   color: var(--success);
 }
 
-.memory__wake-status--paused {
+.memory__wake-status--paused,
+.memory__wake-status--starting {
   color: var(--text-dim);
 }
 

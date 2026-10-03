@@ -3,6 +3,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { deleteAllEpisodes, deleteEpisode, listEpisodes } from '../services/episodes';
 import { useWakeWord } from '../context/wakeWordState';
+import { SENSITIVITY, cleanSensitivity } from '../services/clap';
 import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, MAX_FOLLOW_UP_SECONDS } from '../services/wakeWord';
 import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
@@ -168,6 +169,69 @@ function WakeWordCard() {
       <p className="memory__wake-note">
         Funciona con Eddie abierto en una pestaña del navegador. El navegador procesa el audio con su servicio de voz (en Chrome, el de Google) y
         Eddie solo reacciona a lo que empieza con la palabra clave; no guarda lo demás.
+      </p>
+    </section>
+  );
+}
+
+const CLAP_STATUS = {
+  starting: 'Iniciando el micrófono…',
+  listening: 'Esperando dos aplausos…',
+  paused: 'En pausa mientras hablas con Eddie o él contesta.',
+  unsupported: 'Tu navegador no permite escuchar el micrófono de esta forma (usa Chrome o Edge).',
+  denied: 'El navegador bloqueó el micrófono: permítelo en el candado de la barra de direcciones.',
+  error: 'No se pudo usar el micrófono (¿lo usa otra app?).',
+};
+
+// Two claps wake Eddie, like saying the word alone: a chime and the microphone opens.
+function ClapCard() {
+  const { settings, updateWakeSettings } = useSettings();
+  const wake = useWakeWord();
+  const sensitivity = cleanSensitivity(settings.wake?.clapSensitivity);
+
+  return (
+    <section className="glass-panel memory__wake" aria-label="Activar con dos aplausos">
+      <h3>Activar con dos aplausos</h3>
+      <p className="memory__wake-desc">
+        Aplaude dos veces seguidas y Eddie suena y te escucha, sin tocar nada ni decir la palabra clave. Para apagarlo di “{wake.word}, suspéndete”
+        o desactívalo aquí.
+      </p>
+      <label className="settings-toggle">
+        <input
+          type="checkbox"
+          checked={wake.clapEnabled}
+          disabled={!wake.clapSupported}
+          onChange={(e) => {
+            updateWakeSettings({ clap: e.target.checked });
+            wake.clapRetry();
+          }}
+        />
+        <span>Despertar a Eddie con dos aplausos</span>
+      </label>
+      <label className="memory__field memory__wake-wait">
+        <span className="field-label">Sensibilidad</span>
+        <select className="select" value={sensitivity} onChange={(e) => updateWakeSettings({ clapSensitivity: e.target.value })}>
+          {Object.entries(SENSITIVITY).map(([id, v]) => (
+            <option key={id} value={id}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {wake.clapEnabled && (
+        <p className={`memory__wake-status memory__wake-status--${wake.clapStatus}`} role="status">
+          {CLAP_STATUS[wake.clapStatus] || ''}
+          {(wake.clapStatus === 'denied' || wake.clapStatus === 'error') && (
+            <button type="button" className="btn" onClick={wake.clapRetry}>
+              Reintentar
+            </button>
+          )}
+        </p>
+      )}
+      <p className="memory__wake-note">
+        Funciona con Eddie abierto en una pestaña del navegador (si la pestaña queda en segundo plano el navegador puede dormirla y no oír los
+        aplausos). Mientras esté activo el navegador muestra que el micrófono está en uso; el audio se analiza en tu equipo y no se envía ni se
+        guarda. Si se activa solo con ruidos, baja la sensibilidad; si no te oye, súbela.
       </p>
     </section>
   );
@@ -394,7 +458,7 @@ export default function MemoryPanel() {
       </form>
 
       <details className="glass-panel memory__settings">
-        <summary>Ajustes de la memoria y palabra clave</summary>
+        <summary>Ajustes de la memoria, palabra clave y aplausos</summary>
         <div className="memory__settings-body">
           <section className="memory__settings-block" aria-label="Memoria">
             <label className="settings-toggle">
@@ -427,6 +491,7 @@ export default function MemoryPanel() {
           </section>
           <ConversationSettings episodes={episodes} />
           <WakeWordCard />
+          <ClapCard />
         </div>
       </details>
     </section>

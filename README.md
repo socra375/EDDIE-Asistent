@@ -46,7 +46,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 | Chat | Conversación con Eddie (con dictado por micrófono), historial persistente, estilos de respuesta y habilidades: Estudio (explicaciones, resúmenes, cuestionarios, flashcards, esquemas, planes de repaso), Código (explicar, depurar, refactorizar, generar ejemplos) y Documentos (resúmenes, informes, guías, esquemas, correos). Las respuestas se copian o exportan a TXT, DOC o PDF y, con sesión iniciada, se guardan en Google Drive |
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
 | Notas | Una **hoja en blanco** que Eddie va escribiendo mientras hablas: el micrófono se queda abierto (dictado continuo) durante el tiempo que elijas (5, 10, 15, 30 min, 1 h, o cualquier valor de 1 a 180 min) con cuenta atrás, «+5 min» y «Detener»; ves el texto aparecer (y la frase a medias) en la hoja. Por voz: **«Eddie, toma notas durante 10 minutos»** (también «media hora», «una hora y media»; sin tiempo usa el elegido) abre Notas con una hoja nueva; **«fin de la nota»** o «termina la nota» la cierra. Puntuación hablada («coma», «punto», «punto y aparte», «nueva línea»…), título opcional, edición a mano, copiar y descargar `.txt`. Se guardan en este dispositivo |
-| Memoria | Todo lo que Eddie recuerda de ti vive en un **orbe**: una esfera de puntos donde cada recuerdo (perfil, preferencias, proyectos, decisiones, conocimientos, contexto temporal) y cada conversación recordada es un punto con otros pequeños alrededor y líneas a sus vecinos; al pasar el mouse dice qué recuerdo es, al hacer clic lo fija (con *Olvidar*, y *Editar* en los proyectos) y se arrastra para girarla; los nuevos aparecen creciendo; la leyenda aísla una categoría; con Modo ligero o «reducir movimiento» no gira sola. Debajo, **Agregar memoria** para escribir cosas que se guardan en el orbe (nunca contraseñas ni tarjetas). Eddie también guarda lo que le cuentas sin que se lo pidas (y te avisa) y usa solo lo que viene al caso en cada respuesta. Al final, plegado, *Ajustes de la memoria y palabra clave*: permitir que Eddie recuerde, borrar toda la memoria, recordar conversaciones y su borrado, y la **palabra clave de activación** (por defecto "Eddie"): dila y Eddie te escucha sin tocar nada |
+| Memoria | Todo lo que Eddie recuerda de ti vive en un **orbe**: una esfera de puntos donde cada recuerdo (perfil, preferencias, proyectos, decisiones, conocimientos, contexto temporal) y cada conversación recordada es un punto con otros pequeños alrededor y líneas a sus vecinos; al pasar el mouse dice qué recuerdo es, al hacer clic lo fija (con *Olvidar*, y *Editar* en los proyectos) y se arrastra para girarla; los nuevos aparecen creciendo; la leyenda aísla una categoría; con Modo ligero o «reducir movimiento» no gira sola. Debajo, **Agregar memoria** para escribir cosas que se guardan en el orbe (nunca contraseñas ni tarjetas). Eddie también guarda lo que le cuentas sin que se lo pidas (y te avisa) y usa solo lo que viene al caso en cada respuesta. Al final, plegado, *Ajustes de la memoria, palabra clave y aplausos*: permitir que Eddie recuerde, borrar toda la memoria, recordar conversaciones y su borrado, y la **palabra clave de activación** (por defecto "Eddie"): dila y Eddie te escucha sin tocar nada |
 | Conectores | Qué servicios puede usar Eddie y en qué estado están (listo, conectado, por conectar, falta configurar, próximamente). Cada conector se enciende o apaga: al apagarlo, sus herramientas dejan de ofrecerse en el chat. Se ve como una **órbita**: el reactor de Eddie al centro y cada conector como un icono en dos anillos que giran al entrar, van apareciendo y se detienen (tocar un icono abre su tarjeta); el botón *Lista* muestra las tarjetas de siempre y se recuerda. Con Modo ligero o «reducir movimiento» no gira |
 | Configuración | Con menú a la izquierda (01 Voz y audio, 02 Motor de IA, 03 Interfaz HUD, 04 Cuenta, 05 Dispositivos, 06 Privacidad), tarjetas en dos columnas, interruptores y deslizadores; en Voz: leer respuestas, **activar con la palabra clave**, **volumen** (20–100 %) y **velocidad** (0,8–1,2; ElevenLabs la aplica en el servidor, la voz del navegador en su propio ritmo); en Interfaz HUD: **color del núcleo** del orbe (cian, azul, verde, ámbar). Los cambios se guardan al instante y hay «Restablecer ajustes». Contiene: proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (activar/borrar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
@@ -313,6 +313,24 @@ activa la lectura de respuestas en voz alta. Usa el reconocimiento de voz del na
 Chrome el audio lo procesa el servicio de voz de Google): funciona en Chrome y Edge, con la
 pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagada ni en Firefox.
 Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
+
+
+## Despertar con dos aplausos
+
+En **Memoria → Ajustes de la memoria, palabra clave y aplausos → Activar con dos aplausos** (apagado por defecto)
+activas «Despertar a Eddie con dos aplausos». Aplaudes dos veces seguidas (entre 0,13 y 0,9 s de separación) y suena
+un timbre corto; Eddie abre el micrófono y te escucha, igual que al decir la palabra clave sola (y la ventana de espera
+tras su respuesta funciona igual). «Eddie, suspéndete» también lo apaga.
+
+- **Cómo distingue un aplauso** (`src/services/clap.js`, puro y con pruebas): una ráfaga corta (< 220 ms), repentina
+  (≥ 3× más fuerte que los últimos 60 ms y ≥ 4× el ruido del cuarto) y con mucha energía sobre 2 kHz; una voz, música o
+  un ventilador sostenidos no cuentan. Después de despertar ignora los aplausos 2,5 s.
+- **Sensibilidad** Baja / Media / Alta en la misma tarjeta (si se activa solo, bájala; si no te oye, súbela).
+- Se escucha con el micrófono sin cancelación de eco ni supresión de ruido (se comerían el aplauso) y **se suelta mientras
+  Eddie te escucha, piensa o habla**, así no se despierta con su propia voz. El audio se analiza en tu equipo: no se envía
+  ni se guarda. El navegador muestra «micrófono en uso» mientras esté activo.
+- **Límites:** solo con Eddie abierto en una pestaña (en segundo plano el navegador duerme los temporizadores y puede no
+  oírlos) y con el permiso del micrófono. Los aplausos muy suaves o lejanos pueden no detectarse.
 
 ## Visión (Eddie ve imágenes)
 

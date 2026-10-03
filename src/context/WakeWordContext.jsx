@@ -3,6 +3,8 @@ import { useSettings } from './SettingsContext';
 import { useVoice } from './VoiceContext';
 import { useChat } from './ChatContext';
 import { useWakeWordListener, wakeWordSupported } from '../hooks/useWakeWordListener';
+import { clapSupported, playWakeChime, useClapListener } from '../hooks/useClapListener';
+import { cleanSensitivity } from '../services/clap';
 import { DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, cleanFollowUpSeconds } from '../services/wakeWord';
 import { useNotes } from './notesState';
 import { WakeWordContext } from './wakeWordState';
@@ -40,6 +42,10 @@ export function WakeWordProvider({ children }) {
   const { dictating } = useNotes();
 
   const enabled = Boolean(settings.wake?.enabled);
+  const clapEnabled = Boolean(settings.wake?.clap);
+  const clapSensitivity = cleanSensitivity(settings.wake?.clapSensitivity);
+  // Either way of waking Eddie keeps the follow-up window going after an answer.
+  const awake = enabled || clapEnabled;
   const word = settings.wake?.word || DEFAULT_WAKE_WORD;
   const followUp = cleanFollowUpSeconds(settings.wake?.followUpSeconds, DEFAULT_FOLLOW_UP_SECONDS);
   const lang = STT_LANG_MAP[settings.language] || 'es-ES';
@@ -116,7 +122,7 @@ export function WakeWordProvider({ children }) {
   // spoken and gone quiet, open the window. Switching the wake word off (or
   // leaving) ends anything it had going.
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!awake) return undefined;
     const poll = window.setInterval(() => {
       const s = live.current;
       const a = awaitRef.current;
@@ -149,7 +155,7 @@ export function WakeWordProvider({ children }) {
       if (wakeListenRef.current && live.current.listening) live.current.stop({ silent: true });
       wakeListenRef.current = false;
     };
-  }, [enabled, openWindow]);
+  }, [awake, openWindow]);
 
   const onWake = useCallback(
     (rest) => {
@@ -168,8 +174,14 @@ export function WakeWordProvider({ children }) {
   );
 
   // The window is open, the microphone is listening and the user hasn't started yet.
-  const waiting = enabled && windowOpen && listening && !speechDetected;
+  const waiting = awake && windowOpen && listening && !speechDetected;
   const listener = useWakeWordListener({ enabled, word, lang, paused: busy, onWake });
+  // Two claps: like saying the word alone — a chime, then the microphone opens for the command.
+  const onDoubleClap = useCallback(() => {
+    playWakeChime();
+    onWake('');
+  }, [onWake]);
+  const clap = useClapListener({ enabled: clapEnabled, paused: busy, sensitivity: clapSensitivity, onDouble: onDoubleClap });
   const value = useMemo(
     () => ({
       enabled,
@@ -178,6 +190,11 @@ export function WakeWordProvider({ children }) {
       waiting,
       secondsLeft,
       supported: wakeWordSupported,
+      clapEnabled,
+      clapSupported,
+      clapSensitivity,
+      clapStatus: clap.status,
+      clapRetry: clap.retry,
       status: listener.status,
       reason: listener.reason,
       heard: listener.heard,
@@ -186,7 +203,7 @@ export function WakeWordProvider({ children }) {
       // follow-up window as one that started with the word.
       noteVoiceSend: beginAwait,
     }),
-    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry, beginAwait],
+    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry, beginAwait, clapEnabled, clapSensitivity, clap.status, clap.retry],
   );
 
   return <WakeWordContext.Provider value={value}>{children}</WakeWordContext.Provider>;
