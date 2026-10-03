@@ -9,6 +9,9 @@
 //   GET  devices/state           `?id=` the sender asks how a command went
 //   POST devices/frame           { clientId, frame, meta } the device shares a camera picture (only while someone watches)
 //   GET  devices/frame           `?id=` the viewer takes the latest picture (and, by asking, says it is watching)
+//   GET  devices/ice             the STUN/TURN servers for live video
+//   POST devices/signal          { role, deviceId | clientId, kind, payload } a message of the live-video handshake, for the other side
+//   GET  devices/signals         `?role=viewer&id=` or `?role=target&clientId=` takes the messages waiting for that side
 // Everything needs the login cookie. A device can only be reached if the user
 // switched "control remoto" on in that very device, and it is on right now.
 import { requireUser, destroySession, SESSION_COOKIE_NAME } from '../session.js';
@@ -16,8 +19,8 @@ import { hasTelegramLink } from '../telegram/store.js';
 import { deviceByUser } from '../computer/store.js';
 import { ntfyBase, ringDoorbell } from '../computer/run.js';
 import { createRateLimiter } from '../rateLimit.js';
-import { ACTIONS, CLIENT_ID_RE, cleanDeviceName, cleanMeta, cleanPlatform, describeAck, describeMeta, isOnline, validFrame, whyNotReachable } from './logic.js';
-import { ackCommand, clearFrame, commandState, createCommand, deviceByClient, deviceById, expireCommand, listDevices, pendingCount, purgeFrames, removeDevice, renameDevice, saveFrame, takeCommands, touchDevice, viewFrame } from './store.js';
+import { ACTIONS, CLIENT_ID_RE, SIGNAL_ROLES, cleanDeviceName, cleanMeta, cleanPlatform, cleanSignal, describeAck, describeMeta, iceServers, isOnline, validFrame, whyNotReachable } from './logic.js';
+import { ackCommand, addSignal, clearFrame, clearSignals, takeSignals, commandState, createCommand, deviceByClient, deviceById, expireCommand, listDevices, pendingCount, purgeFrames, removeDevice, renameDevice, saveFrame, takeCommands, touchDevice, viewFrame } from './store.js';
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const ACK_STATUS = ['done', 'consent', 'error'];
@@ -28,6 +31,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const bad = (error, status = 400) => ({ status, json: { error } });
 // A device shares about one picture a second; this only stops a loop gone wrong.
 const frameLimit = createRateLimiter({ perMinute: 120 });
+const signalLimit = createRateLimiter({ perMinute: 240 });
 
 // What the viewer's screen needs: the picture, what was found in it and how old it is.
 export function publicFrame(row) {
@@ -129,6 +133,7 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     // The viewer is leaving (or starting afresh): no old picture may be shown.
     if (action === 'view_stop' || action === 'view_start') {
       await clearFrame(user.id, target.id).catch(() => {});
+      await clearSignals(target.id).catch(() => {});
       if (action === 'view_start') await purgeFrames().catch(() => {});
     }
     const outcome = await sendCommand(user, { target, action });
@@ -171,6 +176,33 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     if (!device) return bad('Ese dispositivo ya no existe.', 404);
     const row = await viewFrame(user.id, device.id);
     return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { device: device.name, online: isOnline(device.lastSeen), ...(row ? publicFrame(row) : { frame: null }) } };
+  }
+
+  if (sub === 'ice' && method === 'GET') {
+    return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { iceServers: iceServers() } };
+  }
+
+  // The handshake of live video. The watching screen speaks with the session; the watched device with its client id.
+  if (sub === 'signal' && method === 'POST') {
+    const role = String(body?.role || '');
+    if (!SIGNAL_ROLES.includes(role)) return bad('Indica quién envía.');
+    const device = role === 'viewer' ? (UUID_RE.test(String(body?.deviceId || '')) ? await deviceById(user.id, body.deviceId) : null) : CLIENT_ID_RE.test(String(body?.clientId || '')) ? await deviceByClient(user.id, body.clientId) : null;
+    if (!device) return bad('Ese dispositivo ya no existe.', 404);
+    if (!device.remoteEnabled) return bad('Ese dispositivo no permite compartir la cámara.', 403);
+    if (!signalLimit(`signal:${user.id}`).ok) return bad('Demasiados mensajes seguidos.', 429);
+    const signal = cleanSignal(String(body?.kind || ''), body?.payload);
+    if (!signal) return bad('El mensaje no es válido.');
+    // What the viewer says goes to the watched device, and the other way round.
+    await addSignal(user.id, device.id, role === 'viewer' ? 'target' : 'viewer', signal.kind, signal.payload);
+    return { status: 200, json: { ok: true } };
+  }
+
+  if (sub === 'signals' && method === 'GET') {
+    const role = String(query.role || '');
+    if (!SIGNAL_ROLES.includes(role)) return bad('Indica quién lee.');
+    const device = role === 'viewer' ? (UUID_RE.test(String(query.id || '')) ? await deviceById(user.id, query.id) : null) : CLIENT_ID_RE.test(String(query.clientId || '')) ? await deviceByClient(user.id, query.clientId) : null;
+    if (!device) return bad('Ese dispositivo ya no existe.', 404);
+    return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { signals: await takeSignals(device.id, role) } };
   }
 
   if (sub === 'state' && method === 'GET') {

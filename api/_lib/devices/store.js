@@ -1,7 +1,7 @@
 // Database side of "dispositivos" (see db/migrations/0008_devices.sql).
 import { randomBytes } from 'node:crypto';
 import { getDb } from '../db.js';
-import { COMMAND_TTL_MS, FRAME_FRESH_MS, VIEWER_WINDOW_S } from './logic.js';
+import { COMMAND_TTL_MS, FRAME_FRESH_MS, SIGNAL_MAX_PENDING, SIGNAL_TTL_S, VIEWER_WINDOW_S } from './logic.js';
 
 const iso = (value) => (value ? new Date(value).toISOString() : null);
 
@@ -156,4 +156,40 @@ export async function clearFrame(userId, deviceId) {
 export async function purgeFrames() {
   const sql = getDb();
   await sql`delete from device_frames where coalesce(updated_at, viewer_seen_at) < now() - interval '10 minutes'`;
+}
+
+// ---- Live video signalling (see db/migrations/0011_device_signals.sql) ----
+
+export async function addSignal(userId, deviceId, toRole, kind, payload) {
+  const sql = getDb();
+  // A new offer replaces the old one(s): only the latest attempt matters.
+  if (kind === 'offer') await sql`delete from device_signals where device_id = ${deviceId} and to_role = ${toRole} and kind in ('offer', 'ice')`;
+  const rows = await sql`insert into device_signals (user_id, device_id, to_role, kind, payload) values (${userId}, ${deviceId}, ${toRole}, ${kind}, ${payload}) returning id`;
+  // A runaway sender can't pile up rows.
+  await sql`
+    delete from device_signals where device_id = ${deviceId} and to_role = ${toRole} and id not in (
+      select id from device_signals where device_id = ${deviceId} and to_role = ${toRole} order by created_at desc limit ${SIGNAL_MAX_PENDING}
+    )
+  `;
+  if (Math.random() < 0.05) await sql`delete from device_signals where created_at < now() - interval '10 minutes'`;
+  return rows[0].id;
+}
+
+// The reader takes what is waiting for it, oldest first, and it is gone.
+export async function takeSignals(deviceId, toRole) {
+  const sql = getDb();
+  const rows = await sql`
+    delete from device_signals where device_id = ${deviceId} and to_role = ${toRole}
+    returning kind, payload, created_at
+  `;
+  const fresh = Date.now() - SIGNAL_TTL_S * 1000;
+  return rows
+    .filter((r) => new Date(r.created_at).getTime() >= fresh)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .map((r) => ({ kind: r.kind, payload: r.payload }));
+}
+
+export async function clearSignals(deviceId) {
+  const sql = getDb();
+  await sql`delete from device_signals where device_id = ${deviceId}`;
 }

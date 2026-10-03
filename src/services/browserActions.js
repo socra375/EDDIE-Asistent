@@ -55,6 +55,8 @@ export function applyBrowserActions(actions) {
       links.push({ url, label: video.title || 'el video', opened: true, played: true });
     } else if (action?.type === 'open_remote_view' && /^[0-9a-f-]{36}$/i.test(String(action.deviceId || ''))) {
       window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: action.deviceId, name: String(action.name || '').slice(0, 40), attach: action.attach === true } }));
+    } else if (action?.type === 'close_remote_view' && /^[0-9a-f-]{36}$/i.test(String(action.deviceId || ''))) {
+      window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: action.deviceId, close: true } }));
     } else if (action?.type === 'player_control' && CONTROLS.has(action.action)) {
       window.dispatchEvent(new CustomEvent(PLAYER_CONTROL_EVENT, { detail: { action: action.action } }));
     }

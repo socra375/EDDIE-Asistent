@@ -413,14 +413,30 @@ Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la
 - **Cómo llega la orden** (sin sondeo constante, para cuidar la cuota de Neon): la orden se guarda en `device_commands` y se toca un
   timbre sin datos en un tema secreto de ntfy; el equipo lo oye, pide la orden con su cookie de sesión y responde (`done`,
   `consent` o `error`); si no hay timbre, la recoge en su siguiente latido. Las órdenes caducan a los 2 min.
-- **Ver lo que ve el otro equipo**: junto a cada dispositivo, **«Ver cámara»** abre una ventana flotante con la imagen de su cámara
-  (una foto por segundo, ~480 px, con una caja sobre cada cosa que detecta y lo que dice el análisis). También por chat o voz:
-  «Eddie, enséñame lo que ve el Chromebook» (pide confirmación, abre la ventana y te cuenta qué se ve, también desde Telegram en texto).
-  Funciona sin abrir puertos: el equipo observado sube la imagen a tu cuenta (tabla `device_frames`, migración `0010`, **una sola fila
-  que se sobrescribe**, nunca se sirve una imagen de más de 30 s y se borra al cerrar la ventana) **solo mientras alguien la mira**:
-  si dejas de mirar, se corta a los pocos segundos, y se corta sola a los 10 min. Si fue la ventana quien encendió la cámara, al cerrarla
-  la cámara se apaga. En el equipo observado se ve siempre el chip rojo **«● TRANSMITIENDO»** (y en su panel Cámara). Limitaciones:
-  la pestaña observada debe estar visible (una pestaña oculta no envía), y mientras se mira, Neon trabaja ~2 consultas por segundo.
+- **Vigilar desde otro equipo y que Eddie te cuente lo que pasa**: junto a cada dispositivo, **«Activar vigilancia y ver»** enciende su
+  cámara y abre una ventana con el **video en vivo**, y Eddie, **cada 5 segundos** (5, 10, 15 o 30 s), **dice en voz alta lo que
+  ocurre**: «PC: aparece una persona», «la persona ya no está», «ahora hay 2 personas», «aparece un perro»… y cada 30 s «sin novedades,
+  veo un laptop» para saber que sigue vivo; si se pierde la señal lo avisa. Todo queda también en el **REPORTE** de la ventana (con
+  botón para quitar la voz y otro para ocultar la imagen y dejar solo el reporte). Lo mismo por chat o voz, **sin tarjeta de
+  confirmación**: «Eddie, activa la vigilancia en mi PC» o «enséñame lo que ve el Chromebook» (desde Telegram solo se enciende la
+  cámara: no hay pantalla donde mostrarla). «Apagar vigilancia» (o «desactiva la vigilancia en mi PC») la apaga y cierra la ventana.
+- **Por qué no se pide aprobación** (pensado para dejar el PC en casa y llevarte el teléfono): las órdenes son tuyas, a tus equipos.
+  Lo que protege es (1) el control remoto, **apagado por defecto y activado equipo por equipo**; (2) el **permiso de la cámara, que
+  se da una sola vez delante de ese equipo** con **«Dar permiso de cámara»** (Configuración → Dispositivos → «Este dispositivo»; muestra
+  «CÁMARA LISTA PARA USO REMOTO»): después se enciende desde cualquier lugar sin que nadie tenga que aceptar nada; (3) la sesión de tu
+  cuenta; y (4) el chip rojo «VIGILANCIA · ON / ● TRANSMITIENDO» en el equipo observado. Si falta ese permiso, la orden dice que hay que
+  darlo una vez allí.
+- **Video fluido (WebRTC)**: la cámara viaja **directamente de un equipo a otro** (~20 imágenes por segundo, 640×480, menos de 1 Mbit,
+  cifrado) sin pasar por el servidor; los dos navegadores se encuentran con mensajes cortos que el servidor guarda un minuto
+  (`device_signals`, migración `0011`) y con servidores STUN públicos de Google/Cloudflare. Junto al video viaja por un canal de datos lo que
+  detecta (cajas y reporte). **Si no hay camino directo** (algunas redes móviles o empresas lo impiden), Eddie lo intenta 3 veces y cae a
+  **una imagen por segundo** por tu cuenta (`device_frames`, una sola fila que se sobrescribe, borrada al cerrar y nunca servida con más de 30 s).
+  Para esas redes puedes añadir un relé TURN (gratis en varios proveedores): `TURN_URLS`, `TURN_USERNAME` y `TURN_CREDENTIAL` en Vercel.
+- **Cuánto dura y qué necesita cada lado**: la cámara observada sigue mientras la ventana esté abierta (máximo 8 h; sin espectador se
+  corta a los pocos segundos); en el equipo observado funciona aunque la pestaña esté en segundo plano (un navegador no congela una página que
+  captura la cámara), pero **el equipo debe seguir encendido y despierto, sin suspender al cerrar la tapa** y con Eddie abierto. En el teléfono
+  que vigila, Eddie mantiene la pantalla encendida mientras la ventana esté abierta; con la pantalla bloqueada o Eddie cerrado el navegador
+  detiene las voces y los reportes (para avisos con el teléfono en el bolsillo harían falta alertas push por evento: no están hechas).
 - **Privacidad de la cámara**: encender la cámara en otro equipo no se salta nada: la primera vez ese equipo pide permiso
   (la orden queda en «necesita tu permiso») y el chip rojo «VIGILANCIA · ON» se ve siempre. Una pestaña oculta pausa la vigilancia.
 - **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
@@ -812,7 +828,8 @@ db/
   migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya se borraron de Neon)
   migrations/0008_devices.sql        Dispositivos de la cuenta y sus órdenes
   migrations/0009_push.sql           Notificaciones push (llaves, suscripciones)
-  migrations/0010_device_frames.sql  Última imagen compartida para la vista remota
+  migrations/0010_device_frames.sql  Última imagen compartida para la vista remota (respaldo)
+  migrations/0011_device_signals.sql Mensajes para conectar el video en vivo entre dos equipos
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

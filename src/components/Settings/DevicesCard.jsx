@@ -4,11 +4,72 @@ import { ago } from '../../services/devicePlatform';
 import { commandState, listDevices, removeDevice, renameDevice, sendCommand } from '../../services/devices';
 import { readIdentity, updateIdentity } from '../../services/deviceIdentity';
 import { REMOTE_VIEW_EVENT } from '../../services/remoteShare';
+import { cameraSupported, describeCameraError, readConsent, stopStream, writeConsent } from '../../services/camera';
 
 const REFRESH_MS = 15_000;
 const RESULT_POLL_MS = 500;
 const RESULT_WAIT_MS = 18_000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// This device's camera, ready for use from another device: Eddie's own consent and the browser's permission
+// are both given here, once, while sitting in front of it — after that another device can switch it on from
+// anywhere without anyone having to accept anything (the point of leaving a PC at home as a camera).
+function CameraReady() {
+  const [consent, setConsent] = useState(readConsent);
+  const [permission, setPermission] = useState('unknown'); // granted | prompt | denied | unknown
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let status = null;
+    let alive = true;
+    const read = () => alive && setPermission(status?.state || 'unknown');
+    navigator.permissions
+      ?.query({ name: 'camera' })
+      .then((s) => {
+        status = s;
+        read();
+        s.onchange = read;
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      if (status) status.onchange = null;
+    };
+  }, []);
+
+  async function grant() {
+    setBusy(true);
+    setMessage('');
+    writeConsent();
+    setConsent(true);
+    try {
+      // Opened and closed at once: it is only so the browser asks now and remembers the answer.
+      stopStream(await navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
+      setPermission('granted');
+      setMessage('Listo: esta cámara se puede activar desde otro dispositivo sin preguntar.');
+    } catch (err) {
+      setMessage(describeCameraError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!cameraSupported()) return <p className="device__meta">Este navegador no permite usar la cámara.</p>;
+  const ready = consent && permission === 'granted';
+  return (
+    <div className="device__camera">
+      <span className={`chip ${ready ? 'on' : permission === 'denied' ? 'bad' : 'warn'}`}>{ready ? 'CÁMARA LISTA PARA USO REMOTO' : permission === 'denied' ? 'CÁMARA BLOQUEADA' : 'FALTA EL PERMISO DE LA CÁMARA'}</span>
+      {!ready && (
+        <button type="button" className="btn" disabled={busy || permission === 'denied'} onClick={grant} title="Se pide una sola vez, delante de este equipo">
+          Dar permiso de cámara
+        </button>
+      )}
+      {permission === 'denied' && <span className="device__meta">Desbloquéala en el candado de la barra de direcciones.</span>}
+      {message && <span className="device__meta">{message}</span>}
+    </div>
+  );
+}
 
 // One of the account's devices: where it is, whether it is on, and what can
 // be done with it from here.
@@ -60,24 +121,33 @@ function DeviceRow({ device, busy, result, onCommand, onRename, onRemove, identi
         {device.current ? (
           <label className="settings-toggle device__toggle">
             <input type="checkbox" checked={identity.allowRemote} onChange={(e) => onToggleRemote(e.target.checked)} />
-            <span>Permitir que mis otros dispositivos activen el Modo Vigilancia aquí</span>
+            <span>Permitir que mis otros dispositivos activen la cámara y vean lo que ve (sin preguntar)</span>
           </label>
+        ) : null}
+        {device.current ? (
+          <CameraReady />
         ) : (
           <div className="device__actions">
-            <button type="button" className="btn" disabled={!reachable || busy} title={why} onClick={() => onCommand(device, 'vigilance_on')}>
-              Activar vigilancia
-            </button>
-            <button type="button" className="btn" disabled={!reachable || busy} title={why} onClick={() => onCommand(device, 'vigilance_off')}>
-              Apagar vigilancia
-            </button>
             <button
               type="button"
               className="btn btn-primary"
               disabled={!reachable}
-              title={why || 'Ver en esta pantalla lo que ve su cámara'}
+              title={why || 'Enciende su cámara, mira lo que ve aquí y Eddie te va contando lo que pasa'}
               onClick={() => window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: device.id, name: device.name } }))}
             >
-              Ver cámara
+              Activar vigilancia y ver
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={!reachable || busy}
+              title={why}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: device.id, close: true } }));
+                onCommand(device, 'vigilance_off');
+              }}
+            >
+              Apagar vigilancia
             </button>
             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => onRemove(device)}>
               Quitar

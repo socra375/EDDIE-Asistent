@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
-import { ackCommand, heartbeat, shareFrame, takeCommands } from '../services/devices';
+import { ackCommand, heartbeat, iceServers, sendSignal, shareFrame, takeCommands, takeSignals } from '../services/devices';
+import { createTargetRtc, rtcSupported } from '../services/rtc';
 import { setSharing } from '../services/remoteShare';
 import { readConsent } from '../services/camera';
 import { DEVICE_CHANGED_EVENT, readIdentity } from '../services/deviceIdentity';
@@ -15,7 +16,7 @@ const POLL_MS = 250;
 // Remote view: a picture about every second, while somebody watches.
 const SHARE_EVERY_MS = 1000;
 const SHARE_CHECK_MS = 400; // looks this often; the first picture goes out as soon as the camera is ready
-const SHARE_MAX_MS = 10 * 60 * 1000;
+const SHARE_MAX_MS = 8 * 60 * 60 * 1000; // the camera's own time limit (VisionContext) ends it sooner unless it is being watched
 const SHARE_ACTIVATE_MS = 2 * 60 * 1000; // the camera never came on (permission not given)
 const SHARE_IDLE_LIMIT = 3; // answers in a row saying "nobody is watching"
 const SHARE_ERROR_LIMIT = 5;
@@ -108,13 +109,15 @@ export default function DeviceBridge() {
     }
 
     // ---- Remote view: this device shares a picture while another one watches ----
-    const share = { want: false, timer: null, busy: false, idle: 0, errors: 0, startedAt: 0, lastSent: 0, sawActive: false, turnedOn: false };
+    const share = { want: false, timer: null, busy: false, idle: 0, errors: 0, startedAt: 0, lastSent: 0, sawActive: false, turnedOn: false, rtc: null, lastSeq: -1, lastMetaAt: 0 };
 
     function stopShare(message) {
       if (!share.want) return;
       share.want = false;
       window.clearInterval(share.timer);
       share.timer = null;
+      share.rtc?.close();
+      share.rtc = null;
       setSharing(false);
       // The camera was turned on for the viewer: it goes off with them.
       if (share.turnedOn && visionBridge.isActive()) window.dispatchEvent(new CustomEvent(VIGILANCE_EVENT, { detail: { action: 'off', remote: true } }));
@@ -124,14 +127,29 @@ export default function DeviceBridge() {
     async function shareTick() {
       if (!share.want || share.busy || stopped) return;
       const now = Date.now();
-      if (now - share.startedAt > SHARE_MAX_MS) return stopShare('Dejé de compartir la cámara: pasaron 10 minutos.');
+      if (now - share.startedAt > SHARE_MAX_MS) return stopShare('Dejé de compartir la cámara: pasaron 8 horas.');
       if (!visionBridge.isActive()) {
         if (share.sawActive) return stopShare('Dejé de compartir la cámara: la vigilancia se apagó.');
         if (now - share.startedAt > SHARE_ACTIVATE_MS) return stopShare('Dejé de compartir la cámara: no se encendió (¿falta el permiso?).');
         return undefined;
       }
       share.sawActive = true;
-      if (document.hidden || now - share.lastSent < SHARE_EVERY_MS) return undefined;
+      // Live video is up: the pictures go straight to the other screen, and only what the detector
+      // found is sent next to it (when it changes, and now and then to say the camera is still there).
+      if (share.rtc?.connected()) {
+        const scene = visionBridge.scene();
+        if (scene) {
+          const changed = scene.seq !== share.lastSeq;
+          if (changed || now - share.lastMetaAt > 4000) {
+            share.rtc.sendMeta({ ...scene, dup: !changed });
+            share.lastSeq = scene.seq;
+            share.lastMetaAt = now;
+          }
+        }
+        return undefined;
+      }
+      // Hidden tab or not: a camera left on at home is still being watched from elsewhere.
+      if (now - share.lastSent < SHARE_EVERY_MS) return undefined;
       const snap = visionBridge.snapshot();
       if (!snap) return undefined;
       share.busy = true;
@@ -150,6 +168,31 @@ export default function DeviceBridge() {
       return undefined;
     }
 
+    // Live video: the screen that watches sends an offer (see services/rtc.js); this device answers with
+    // its camera. Until it connects — or if it cannot — the one-picture-a-second view above carries on.
+    async function setupRtc() {
+      if (!rtcSupported() || share.rtc) return;
+      let servers;
+      try {
+        servers = (await iceServers()).iceServers;
+      } catch {
+        servers = [{ urls: 'stun:stun.l.google.com:19302' }];
+      }
+      if (!share.want || share.rtc || stopped) return;
+      let round = 0;
+      share.rtc = createTargetRtc({
+        iceServers: servers,
+        getStream: () => visionBridge.stream(),
+        post: (kind, payload) => sendSignal({ role: 'target', clientId, kind, payload }),
+        take: () => takeSignals({ role: 'target', clientId }),
+        onState: (state) => {
+          if (state === 'connected') share.idle = 0;
+        },
+      });
+      // Listens often until connected, then only now and then (a new offer, or a goodbye).
+      share.rtc.listen(() => !share.rtc?.connected() || round++ % 8 === 0);
+    }
+
     function startShare({ turnedOn }) {
       if (share.want) {
         share.idle = 0;
@@ -159,6 +202,7 @@ export default function DeviceBridge() {
       Object.assign(share, { want: true, idle: 0, errors: 0, startedAt: Date.now(), lastSent: 0, sawActive: false, turnedOn });
       setSharing(true);
       share.timer = window.setInterval(shareTick, SHARE_CHECK_MS);
+      setupRtc();
     }
 
     // Takes whatever is waiting for this device and does it, one at a time.

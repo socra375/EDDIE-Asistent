@@ -39,3 +39,10 @@ export const ackCommand = (clientId, id, status, message = '') => call('/ack', {
 export const shareFrame = ({ clientId, frame, meta }) => call('/frame', { method: 'POST', body: { clientId, frame, meta } });
 // → { device, online, frame (base64 JPEG) | null, meta, caption, ageMs }
 export const viewFrame = (id) => call('/frame', { query: { id } });
+
+// Live video (WebRTC) handshake. → { iceServers }
+export const iceServers = () => call('/ice');
+// role 'viewer' names the watched device by `deviceId`; role 'target' speaks with its `clientId`.
+export const sendSignal = ({ role, deviceId, clientId, kind, payload }) => call('/signal', { method: 'POST', body: { role, deviceId, clientId, kind, payload } });
+// → { signals: [{ kind, payload }] } waiting for this side (and gone once read)
+export const takeSignals = ({ role, id, clientId }) => call('/signals', { query: { role, ...(id ? { id } : {}), ...(clientId ? { clientId } : {}) } });
