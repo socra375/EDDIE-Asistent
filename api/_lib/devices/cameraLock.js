@@ -98,13 +98,18 @@ async function currentLock(userId, now = Date.now()) {
   return lock;
 }
 
+// The lock is switched off for now: cameras start without the proof. It comes back with CAMERA_LOCK=on
+// (a lock already created is kept as it was and applies again at once).
+export const lockEnforced = (env = process.env) => String(env.CAMERA_LOCK || '').trim().toLowerCase() === 'on';
+
 // What a screen may know: that there is a lock, how it opens and whether it is going away. Never the secret.
 export async function lockStatus(userId) {
+  const enforced = lockEnforced();
   const lock = await currentLock(userId);
-  if (!lock) return { state: 'none' };
+  if (!lock) return { state: 'none', enforced };
   const passkeys = await passkeysOf(userId);
   const locked = Boolean(lock.lockedUntil && new Date(lock.lockedUntil).getTime() > Date.now());
-  return { state: 'set', methods: { password: Boolean(lock.passwordHash), passkey: passkeys.length > 0 }, createdAt: lock.createdAt, pendingDelete: lock.deleteAt, locked, lockedUntil: locked ? lock.lockedUntil : null };
+  return { state: 'set', enforced, methods: { password: Boolean(lock.passwordHash), passkey: passkeys.length > 0 }, createdAt: lock.createdAt, pendingDelete: lock.deleteAt, locked, lockedUntil: locked ? lock.lockedUntil : null };
 }
 
 // ---- creating it, once ----
@@ -259,6 +264,7 @@ export async function authorize(userId, proof, headers, { alert } = {}) {
 
 // The camera is about to start: the lock must exist and the proof be a fresh one (used up here).
 export async function consumeToken(userId, token) {
+  if (!lockEnforced()) return;
   const lock = await currentLock(userId);
   if (!lock) throw new LockError('Antes de usar la cámara a distancia crea la contraseña de la cámara (Configuración → Dispositivos).', 403, 'NO_LOCK');
   if (typeof token !== 'string' || token.length < 20 || token.length > 100) throw new LockError('Falta la autorización de la cámara: escribe tu contraseña (o usa tu huella).', 403, 'NEEDS_AUTH');
@@ -278,6 +284,7 @@ export async function grantView(userId, deviceId) {
 }
 
 export async function hasGrant(userId, deviceId) {
+  if (!lockEnforced()) return true;
   const sql = getDb();
   const rows = await sql`select 1 from camera_grants where user_id = ${userId} and device_id = ${deviceId} and expires_at > now()`;
   return rows.length > 0;

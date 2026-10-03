@@ -9,11 +9,16 @@ import { hasTelegramLink } from '../../telegram/store.js';
 import { deviceByUser } from '../../computer/store.js';
 import { describeAck, findDevice, isOnline, whyNotReachable } from '../../devices/logic.js';
 import { clearFrame, listDevices } from '../../devices/store.js';
-import { LockError, consumeToken, grantView, lockStatus, requestRemoval, revokeGrant } from '../../devices/cameraLock.js';
+import { LockError, consumeToken, grantView, lockEnforced, lockStatus, requestRemoval, revokeGrant } from '../../devices/cameraLock.js';
 import { alertOwner, publicDevice, sendCommand, waitForAck } from '../../devices/handlers.js';
 import { clip } from '../http.js';
 
 const getUser = async (context) => context.getUser?.();
+// The camera lock is off for now (CAMERA_LOCK=on brings it back): see lockEnforced().
+const WATCH_LOCKED =
+  'Activa el Modo Vigilancia (la cámara) en OTRO dispositivo del usuario ("activa la vigilancia en mi PC", "enséñame lo que ve el Chromebook", "¿qué ve el PC?"), abre la vista en vivo en esta pantalla y Eddie va contando en voz alta, cada pocos segundos, lo que pasa. Por seguridad SIEMPRE aparece una tarjeta donde el usuario escribe su contraseña de cámara (o usa su huella): tú no la pidas, no la veas ni la repitas, y no rellenes `token`. Solo funciona si el otro dispositivo está encendido y permite el control remoto, y solo desde la app (no desde Telegram). Para apagarla usa stop_watching.';
+const WATCH_OPEN =
+  'Activa el Modo Vigilancia (la cámara) en OTRO dispositivo del usuario ("activa la vigilancia en mi PC", "enséñame lo que ve el Chromebook", "¿qué ve el PC?"), abre la vista en vivo en esta pantalla y Eddie va contando en voz alta, cada pocos segundos, lo que pasa. Se ejecuta de inmediato, sin tarjeta ni contraseña. Solo funciona si el otro dispositivo está encendido y permite el control remoto. Desde Telegram solo enciende la vigilancia (no hay pantalla donde mostrarla). Para apagarla usa stop_watching.';
 const SIGN_IN = 'Para usar tus dispositivos, inicia sesión con tu cuenta de Google.';
 
 export default {
@@ -55,12 +60,18 @@ export default {
     {
       label: 'Activar la cámara de otro dispositivo y ver lo que ve',
       activity: 'Pidiéndole la cámara al dispositivo…',
-      risk: 'confirm',
-      sensitive: true,
+      // With the lock off it runs at once, as before the lock existed; with it on there is a card for the proof.
+      get risk() {
+        return lockEnforced() ? 'confirm' : 'write';
+      },
+      get sensitive() {
+        return lockEnforced();
+      },
       declaration: {
         name: 'watch_device',
-        description:
-          'Activa el Modo Vigilancia (la cámara) en OTRO dispositivo del usuario ("activa la vigilancia en mi PC", "enséñame lo que ve el Chromebook", "¿qué ve el PC?"), abre la vista en vivo en esta pantalla y Eddie va contando en voz alta, cada pocos segundos, lo que pasa. Por seguridad SIEMPRE aparece una tarjeta donde el usuario escribe su contraseña de cámara (o usa su huella): tú no la pidas, no la veas ni la repitas, y no rellenes `token`. Solo funciona si el otro dispositivo está encendido y permite el control remoto, y solo desde la app (no desde Telegram). Para apagarla usa stop_watching.',
+        get description() {
+          return lockEnforced() ? WATCH_LOCKED : WATCH_OPEN;
+        },
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -98,7 +109,8 @@ export default {
           if (err instanceof LockError) return { error: err.message };
           throw err;
         }
-        return changeDevice({ user, device, command: 'view_start', context });
+        // From Telegram (only possible with the lock off) there is no screen to show it on: just switch the camera on.
+        return changeDevice({ user, device, command: context.channel === 'telegram' ? 'vigilance_on' : 'view_start', context });
       },
       summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
     },

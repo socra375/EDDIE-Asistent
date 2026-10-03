@@ -404,8 +404,8 @@ Abre **Notas** en la barra lateral, o di **«Eddie, toma notas durante 10 minuto
 
 **Configuración → Dispositivos** lista los equipos donde abriste Eddie con tu cuenta (Chromebook, teléfono, tablet…), con un
 punto verde si Eddie está abierto ahora, más Telegram y EDDIE Prime. Desde cualquiera puedes **activar o apagar el Modo
-Vigilancia de otro**, eligiéndolo en la lista, o por chat («activa la vigilancia en el Chromebook»). **Encender una cámara a
-distancia siempre pide tu contraseña de cámara o tu huella** (ver «Candado de la cámara» más abajo).
+Vigilancia de otro**, eligiéndolo en la lista, o por chat («activa la vigilancia en el Chromebook»). **Por ahora el candado de la cámara está
+apagado** (ver «Candado de la cámara» más abajo): las cámaras se encienden a distancia sin pedir contraseña.
 
 - **Solo si está encendido**: un equipo cuenta como encendido mientras Eddie siga abierto en él (late cada 2 min, ventana de 4 min);
   si está apagado o sin conexión, el botón se deshabilita y Eddie lo dice, sin dejar la orden en espera.
@@ -449,6 +449,11 @@ distancia siempre pide tu contraseña de cámara o tu huella** (ver «Candado de
 - **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
 
 ### Candado de la cámara (contraseña o huella, una sola vez)
+
+> **Apagado por ahora** (decisión del dueño, 3 oct 2026). Todo el código sigue ahí: para volver a exigirlo pon la variable de entorno
+> `CAMERA_LOCK=on` en Vercel y haz Redeploy. Mientras esté apagado, `watch_device` actúa al instante sin tarjeta, Telegram puede
+> encender la vigilancia, la vista no pide permiso de lectura y Configuración solo muestra el aviso (la contraseña que ya existiera
+> se conserva y vuelve a pedirse al reactivarlo). Lo descrito abajo es el comportamiento con `CAMERA_LOCK=on`.
 
 Para que nadie que entre a tu cuenta (o a tu Telegram) pueda espiarte con tus cámaras, **antes de encender una cámara a distancia hay
 que probar que eres tú**. Se configura en **Configuración → Dispositivos → Seguridad de la cámara**:

@@ -133,7 +133,7 @@ function DeviceRow({ device, busy, result, onCommand, onRename, onRemove, identi
               type="button"
               className="btn btn-primary"
               disabled={!reachable}
-              title={why || 'Pide tu contraseña o huella, enciende su cámara, mira lo que ve aquí y Eddie te va contando lo que pasa'}
+              title={why || 'Enciende su cámara, mira lo que ve aquí y Eddie te va contando lo que pasa'}
               onClick={() => window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: device.id, name: device.name } }))}
             >
               Activar vigilancia y ver
@@ -296,7 +296,7 @@ export default function DevicesCard() {
                 <span className="device__meta">
                   {o.kind === 'telegram'
                     ? o.linked
-                      ? 'Vinculado: puedes pedirle a Eddie que apague la vigilancia en un dispositivo. Encender cámaras solo se puede desde la app, con tu contraseña o huella.'
+                      ? 'Vinculado: puedes pedirle a Eddie que active o apague la vigilancia en un dispositivo (con la protección de la cámara encendida, encenderla solo se puede desde la app).'
                       : 'Sin vincular: vincúlalo en Conectores para manejar tus dispositivos desde el chat de Telegram.'
                     : `${o.online ? 'encendido ahora' : `visto ${ago(o.lastSeen)}`} · agente de tu equipo`}
                 </span>
@@ -311,7 +311,7 @@ export default function DevicesCard() {
         </button>
         <p className="settings-placeholder device__note">
           Un dispositivo aparece cuando abres Eddie en él con esta misma cuenta, y cuenta como «encendido» mientras Eddie siga abierto. Para que otro dispositivo pueda activarle la
-          vigilancia, el control remoto debe estar permitido allí (apagado por defecto) y hay que haber creado la protección de la cámara (arriba). Cada activación pide tu contraseña o tu huella. La cámara siempre muestra el chip rojo y, la primera vez, pide permiso en ese equipo.
+          vigilancia, el control remoto debe estar permitido allí (apagado por defecto) y, si la protección de la cámara está encendida (arriba), cada activación pide tu contraseña o tu huella. La cámara siempre muestra el chip rojo y, la primera vez, pide permiso en ese equipo.
         </p>
       </div>
     </>

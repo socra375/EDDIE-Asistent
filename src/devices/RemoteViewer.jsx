@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useVoice } from '../context/VoiceContext';
-import { commandState, iceServers, sendCommand, sendSignal, takeSignals, viewFrame } from '../services/devices';
+import { commandState, iceServers, lockStatus, sendCommand, sendSignal, takeSignals, viewFrame } from '../services/devices';
 import { createNarrator } from '../services/narration';
 import { createViewerRtc, rtcSupported } from '../services/rtc';
 import { REMOTE_VIEW_EVENT } from '../services/remoteShare';
@@ -93,9 +93,14 @@ export default function RemoteViewer() {
       setShot(null);
       setDataAt(0);
       setReports([]);
-      setPhase(attach ? 'waiting' : 'auth');
+      setPhase(attach ? 'waiting' : 'starting');
       setMessage('');
-      setView((current) => (current?.deviceId === deviceId ? current : { deviceId, name: name || 'el dispositivo', attach: Boolean(attach) }));
+      setView((current) => (current?.deviceId === deviceId ? current : { deviceId, name: name || 'el dispositivo', attach: Boolean(attach), enforced: attach ? false : undefined }));
+      // Whether the camera lock is on decides if the proof is asked for (when in doubt, it is).
+      if (!attach) {
+        const known = (enforced) => setView((v) => (v?.deviceId === deviceId && v.enforced === undefined ? { ...v, enforced } : v));
+        lockStatus().then((status) => known(status.enforced !== false), () => known(true));
+      }
     };
     window.addEventListener(REMOTE_VIEW_EVENT, open);
     return () => window.removeEventListener(REMOTE_VIEW_EVENT, open);
@@ -104,8 +109,8 @@ export default function RemoteViewer() {
   useEffect(() => {
     viewRef.current = view;
     if (!view) return undefined;
-    // Switching a camera on needs the lock's proof first (one use); a view Eddie opened already had it.
-    if (!view.attach && !view.token) return undefined;
+    // With the lock on, switching a camera on needs its proof first (one use); a view Eddie opened already had it.
+    if (!view.attach && !view.token && view.enforced !== false) return undefined;
     let alive = true;
     narrator.current.reset();
     signal.current = { lastKey: null, lastAt: 0, lost: false, ever: false, id: signal.current.id, liveAt: 0, warned: false };
@@ -142,7 +147,7 @@ export default function RemoteViewer() {
         if (['NEEDS_AUTH', 'NO_LOCK'].includes(err.code)) {
           setPhase('auth');
           setMessage(err.message);
-          setView((v) => (v ? { ...v, token: '' } : v));
+          setView((v) => (v ? { ...v, token: '', enforced: true } : v));
           return false;
         }
         setPhase('error');
@@ -397,7 +402,7 @@ export default function RemoteViewer() {
   const objects = (video ? liveMeta.objects : shot?.meta?.objects) || [];
   const caption = video ? liveMeta.summary : shot?.caption;
   const hasPicture = Boolean(video || shot);
-  const needsAuth = !view.attach && !view.token;
+  const needsAuth = view.enforced === true && !view.attach && !view.token;
 
   return (
     <aside className="remote-view" role="dialog" aria-label={`Cámara de ${view.name}`}>
