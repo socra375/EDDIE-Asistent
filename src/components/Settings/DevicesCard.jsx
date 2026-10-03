@@ -3,9 +3,10 @@ import { useAuth } from '../../context/AuthContext';
 import { ago } from '../../services/devicePlatform';
 import { commandState, listDevices, removeDevice, renameDevice, sendCommand } from '../../services/devices';
 import { readIdentity, updateIdentity } from '../../services/deviceIdentity';
+import { REMOTE_VIEW_EVENT } from '../../services/remoteShare';
 
 const REFRESH_MS = 15_000;
-const RESULT_POLL_MS = 1200;
+const RESULT_POLL_MS = 500;
 const RESULT_WAIT_MS = 18_000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -68,6 +69,15 @@ function DeviceRow({ device, busy, result, onCommand, onRename, onRemove, identi
             </button>
             <button type="button" className="btn" disabled={!reachable || busy} title={why} onClick={() => onCommand(device, 'vigilance_off')}>
               Apagar vigilancia
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!reachable}
+              title={why || 'Ver en esta pantalla lo que ve su cámara'}
+              onClick={() => window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: device.id, name: device.name } }))}
+            >
+              Ver cámara
             </button>
             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => onRemove(device)}>
               Quitar

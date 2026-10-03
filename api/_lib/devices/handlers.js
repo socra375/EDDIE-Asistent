@@ -7,22 +7,32 @@
 //   GET  devices/commands        `?clientId=` the device takes the commands waiting for it
 //   POST devices/ack             { clientId, id, status, message } the device answers a command
 //   GET  devices/state           `?id=` the sender asks how a command went
+//   POST devices/frame           { clientId, frame, meta } the device shares a camera picture (only while someone watches)
+//   GET  devices/frame           `?id=` the viewer takes the latest picture (and, by asking, says it is watching)
 // Everything needs the login cookie. A device can only be reached if the user
 // switched "control remoto" on in that very device, and it is on right now.
 import { requireUser, destroySession, SESSION_COOKIE_NAME } from '../session.js';
 import { hasTelegramLink } from '../telegram/store.js';
 import { deviceByUser } from '../computer/store.js';
 import { ntfyBase, ringDoorbell } from '../computer/run.js';
-import { ACTIONS, CLIENT_ID_RE, cleanDeviceName, cleanPlatform, describeAck, isOnline, whyNotReachable } from './logic.js';
-import { ackCommand, commandState, createCommand, deviceByClient, deviceById, expireCommand, listDevices, pendingCount, removeDevice, renameDevice, takeCommands, touchDevice } from './store.js';
+import { createRateLimiter } from '../rateLimit.js';
+import { ACTIONS, CLIENT_ID_RE, cleanDeviceName, cleanMeta, cleanPlatform, describeAck, describeMeta, isOnline, validFrame, whyNotReachable } from './logic.js';
+import { ackCommand, clearFrame, commandState, createCommand, deviceByClient, deviceById, expireCommand, listDevices, pendingCount, purgeFrames, removeDevice, renameDevice, saveFrame, takeCommands, touchDevice, viewFrame } from './store.js';
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const ACK_STATUS = ['done', 'consent', 'error'];
 export const ACK_WAIT_MS = 12_000;
-const POLL_MS = 700;
+const POLL_MS = 400;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const bad = (error, status = 400) => ({ status, json: { error } });
+// A device shares about one picture a second; this only stops a loop gone wrong.
+const frameLimit = createRateLimiter({ perMinute: 120 });
+
+// What the viewer's screen needs: the picture, what was found in it and how old it is.
+export function publicFrame(row) {
+  return row ? { frame: row.frame, meta: cleanMeta(row.meta), caption: describeMeta(row.meta), ageMs: row.ageMs } : null;
+}
 
 // What a screen needs to know about a device (never its secret topic).
 export function publicDevice(device, { currentSession, meClient, now } = {}) {
@@ -115,7 +125,13 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     if (!UUID_RE.test(String(body?.targetId || ''))) return bad('Elige el dispositivo.');
     const target = await deviceById(user.id, body.targetId);
     if (!target) return bad('Ese dispositivo ya no existe.', 404);
-    const outcome = await sendCommand(user, { target, action: String(body?.action || '') });
+    const action = String(body?.action || '');
+    // The viewer is leaving (or starting afresh): no old picture may be shown.
+    if (action === 'view_stop' || action === 'view_start') {
+      await clearFrame(user.id, target.id).catch(() => {});
+      if (action === 'view_start') await purgeFrames().catch(() => {});
+    }
+    const outcome = await sendCommand(user, { target, action });
     if (outcome.error) return bad(outcome.error, 409);
     return { status: 200, json: { id: outcome.id, device: target.name, rang: outcome.rang } };
   }
@@ -136,6 +152,25 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
     if (!device) return bad('Dispositivo desconocido.', 404);
     const ok = await ackCommand(device.id, body.id, body.status, cleanPlatform(body?.message).slice(0, 160));
     return { status: 200, json: { ok } };
+  }
+
+  if (sub === 'frame' && method === 'POST') {
+    const clientId = String(body?.clientId || '');
+    if (!CLIENT_ID_RE.test(clientId)) return bad('Falta el identificador de este dispositivo.');
+    const device = await deviceByClient(user.id, clientId);
+    if (!device || !device.remoteEnabled) return bad('Este dispositivo no permite compartir la cámara.', 403);
+    if (!frameLimit(`frame:${device.id}`).ok) return bad('Demasiadas imágenes seguidas.', 429);
+    if (!validFrame(body?.frame)) return bad('La imagen no es válida o es demasiado grande.');
+    const watching = await saveFrame(user.id, device.id, body.frame, cleanMeta(body?.meta));
+    return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { watching } };
+  }
+
+  if (sub === 'frame' && method === 'GET') {
+    if (!UUID_RE.test(String(query.id || ''))) return bad('Indica el dispositivo.');
+    const device = await deviceById(user.id, query.id);
+    if (!device) return bad('Ese dispositivo ya no existe.', 404);
+    const row = await viewFrame(user.id, device.id);
+    return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { device: device.name, online: isOnline(device.lastSeen), ...(row ? publicFrame(row) : { frame: null }) } };
   }
 
   if (sub === 'state' && method === 'GET') {

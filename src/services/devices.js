@@ -33,3 +33,9 @@ export const sendCommand = (targetId, action) => call('/command', { method: 'POS
 export const commandState = (id) => call('/state', { query: { id } });
 export const takeCommands = (clientId) => call('/commands', { query: { clientId } });
 export const ackCommand = (clientId, id, status, message = '') => call('/ack', { method: 'POST', body: { clientId, id, status, message } });
+
+// Remote view: the device that is being watched shares pictures; the viewer takes them.
+// → { watching }
+export const shareFrame = ({ clientId, frame, meta }) => call('/frame', { method: 'POST', body: { clientId, frame, meta } });
+// → { device, online, frame (base64 JPEG) | null, meta, caption, ageMs }
+export const viewFrame = (id) => call('/frame', { query: { id } });

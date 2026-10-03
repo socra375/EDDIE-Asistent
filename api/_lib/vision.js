@@ -5,6 +5,7 @@
 // The answer of the model is treated as untrusted: it is cut down to a fixed
 // shape (a few short labels, categories from a list, numbers in range) before
 // it reaches the page, which only ever shows it as text.
+import { nextThinking, rejectsThinking, thinkingFor } from './geminiThinking.js';
 import { sanitizeImages } from './images.js';
 import { fetchWithRetry } from './fetchWithRetry.js';
 import { createRateLimiter, tooMany } from './rateLimit.js';
@@ -119,6 +120,8 @@ export function parseSceneText(text) {
 }
 
 async function callGeminiVision(image, { apiKey, model }) {
+  // As little invisible thinking as the model allows: the picture is waiting (see geminiThinking.js).
+  const thinking = thinkingFor(model);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const res = await fetchWithRetry(
     url,
@@ -127,7 +130,7 @@ async function callGeminiVision(image, { apiKey, model }) {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: PROMPT }, { inline_data: { mime_type: image.mimeType, data: image.data } }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, ...thinking },
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }),
@@ -135,6 +138,7 @@ async function callGeminiVision(image, { apiKey, model }) {
   );
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    if (rejectsThinking(res.status, data?.error?.message) && 'thinkingConfig' in thinking && nextThinking(model)) return callGeminiVision(image, { apiKey, model });
     if (res.status === 429) throw visionError('Se alcanzó el límite de solicitudes de Gemini para la visión. Eddie lo reintenta enseguida.', 429, 'RATE_LIMITED');
     throw visionError(data?.error?.message || `Gemini respondió con estado ${res.status}.`, res.status >= 500 ? 502 : 400, res.status >= 500 ? 'UPSTREAM' : 'VISION_ERROR');
   }

@@ -7,8 +7,9 @@ export const ONLINE_MS = 4 * 60 * 1000;
 // A command nobody picked up for this long is dropped: the user has moved on.
 export const COMMAND_TTL_MS = 2 * 60 * 1000;
 
-export const ACTIONS = ['vigilance_on', 'vigilance_off'];
-export const ACTION_LABEL = { vigilance_on: 'activar el Modo Vigilancia', vigilance_off: 'apagar el Modo Vigilancia' };
+export const ACTIONS = ['vigilance_on', 'vigilance_off', 'view_start', 'view_stop'];
+export const VIGILANCE_ACTIONS = ['vigilance_on', 'vigilance_off'];
+export const ACTION_LABEL = { vigilance_on: 'activar el Modo Vigilancia', vigilance_off: 'apagar el Modo Vigilancia', view_start: 'compartir su cámara contigo', view_stop: 'dejar de compartir su cámara' };
 
 export const CLIENT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
@@ -63,8 +64,44 @@ export function whyNotReachable(device, now = Date.now()) {
 
 // What to tell the user when the device answered.
 export function describeAck(device, action, status, message) {
-  if (status === 'done') return `${device.name}: ${action === 'vigilance_on' ? 'Modo Vigilancia activado' : 'Modo Vigilancia apagado'}.`;
+  if (status === 'done') {
+    const done = { vigilance_on: 'Modo Vigilancia activado', vigilance_off: 'Modo Vigilancia apagado', view_start: 'compartiendo su cámara', view_stop: 'dejó de compartir su cámara' };
+    return `${device.name}: ${done[action] || 'listo'}.`;
+  }
   if (status === 'consent') return `${device.name} necesita que aceptes el permiso de la cámara en ese equipo; ya le aparece la pregunta.`;
   if (status === 'error') return `${device.name}: ${message || 'no se pudo'}.`;
   return `${device.name} no respondió a tiempo. Puede que Eddie esté cerrado o en segundo plano allí.`;
+}
+
+// ---- Remote view: what a device may share ----------------------------------
+export const FRAME_MAX_CHARS = 90_000; // base64 of a ~480 px JPEG is ~30 000; this is the ceiling
+export const FRAME_FRESH_MS = 30_000; // an older picture is never shown
+export const VIEWER_WINDOW_S = 20; // the device keeps sending this long after the viewer last asked
+const CATEGORIES = ['persona', 'animal', 'objeto', 'material', 'vehículo', 'otro'];
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+export function validFrame(frame) {
+  return typeof frame === 'string' && frame.length >= 200 && frame.length <= FRAME_MAX_CHARS && frame.length % 4 === 0 && BASE64_RE.test(frame) && frame.startsWith('/9j/'); // JPEG
+}
+
+const int = (n, min, max) => (Number.isFinite(Number(n)) ? Math.min(max, Math.max(min, Math.round(Number(n)))) : min);
+
+// What the device says it sees: text only, bounded, nothing else gets through.
+export function cleanMeta(meta) {
+  const m = meta && typeof meta === 'object' ? meta : {};
+  const objects = (Array.isArray(m.objects) ? m.objects : []).slice(0, 12).map((o) => {
+    const out = { label: plain(o?.label, 40), category: CATEGORIES.includes(o?.category) ? o.category : 'objeto', count: int(o?.count ?? 1, 1, 99), confidence: Math.round(Math.min(1, Math.max(0, Number(o?.confidence) || 0)) * 100) / 100 };
+    if (Array.isArray(o?.box) && o.box.length === 4 && o.box.every((v) => Number.isFinite(Number(v)))) out.box = o.box.map((v) => int(v, 0, 1000));
+    return out;
+  });
+  return { summary: plain(m.summary, 300), objects: objects.filter((o) => o.label), width: int(m.width, 0, 4000), height: int(m.height, 0, 4000) };
+}
+
+// "Veo 2 personas y 1 laptop." for the model (and the viewer's caption) from what a device shared.
+export function describeMeta(meta) {
+  const m = cleanMeta(meta);
+  if (m.summary) return m.summary;
+  if (!m.objects.length) return 'No veo nada destacable.';
+  const parts = m.objects.slice(0, 6).map((o) => (o.count > 1 ? `${o.count} ${o.label}` : `1 ${o.label}`));
+  return `Veo ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts.at(-1)}` : parts[0]}.`;
 }

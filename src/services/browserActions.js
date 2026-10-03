@@ -4,6 +4,8 @@
 // it). Only YouTube is ever opened or played, re-checked here even though the
 // server already builds those addresses (the same list as
 // api/_lib/connectors/youtube) — a defence in depth, not a second source of truth.
+import { REMOTE_VIEW_EVENT } from './remoteShare.js';
+
 const HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be']);
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const CONTROLS = new Set(['pause', 'resume', 'close']);
@@ -51,6 +53,8 @@ export function applyBrowserActions(actions) {
       const video = { videoId: action.videoId, title: String(action.title || '').slice(0, 160), channel: String(action.channel || '').slice(0, 120) };
       window.dispatchEvent(new CustomEvent(PLAY_VIDEO_EVENT, { detail: video }));
       links.push({ url, label: video.title || 'el video', opened: true, played: true });
+    } else if (action?.type === 'open_remote_view' && /^[0-9a-f-]{36}$/i.test(String(action.deviceId || ''))) {
+      window.dispatchEvent(new CustomEvent(REMOTE_VIEW_EVENT, { detail: { deviceId: action.deviceId, name: String(action.name || '').slice(0, 40), attach: action.attach === true } }));
     } else if (action?.type === 'player_control' && CONTROLS.has(action.action)) {
       window.dispatchEvent(new CustomEvent(PLAYER_CONTROL_EVENT, { detail: { action: action.action } }));
     }

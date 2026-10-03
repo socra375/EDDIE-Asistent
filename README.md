@@ -374,6 +374,10 @@ el chip rojo **● VIGILANCIA · ON** del encabezado (se ve en cualquier pantall
   cámara se apaga sola a los 5/10/30 min (Configuración), si la pestaña estuvo oculta 2 min, si se desconecta o al
   cerrar la página. Eddie **describe** lo que ve (cantidad de personas, qué hacen, ropa), pero **no reconoce quién es**
   una persona ni deduce nombre, edad, etnia ni emociones.
+- **Velocidad**: el detector del equipo carga y se «calienta» en cuanto pulsas encender (mientras la cámara pide permiso), y mira
+  de nuevo en cuanto puede (≈ 2,5 veces lo que tarda un análisis, mínimo 1 s) en vez de esperar el intervalo, que pasa a ser el
+  tope; en el panel Cámara se ve cuánto tarda cada análisis y si usa los gráficos o el procesador. Las respuestas de Gemini piden
+  el mínimo de «pensamiento» (`GEMINI_THINKING=default` lo devuelve al comportamiento del modelo).
 - **Cuota**: el detector local no gasta cuota. La descripción por IA (Gemini/Groq) se pide como mucho cada 20 s y solo si la
   escena cambió, así que un uso normal queda muy por debajo de los planes gratis (Groq: 30 por minuto).
 
@@ -409,6 +413,14 @@ Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la
 - **Cómo llega la orden** (sin sondeo constante, para cuidar la cuota de Neon): la orden se guarda en `device_commands` y se toca un
   timbre sin datos en un tema secreto de ntfy; el equipo lo oye, pide la orden con su cookie de sesión y responde (`done`,
   `consent` o `error`); si no hay timbre, la recoge en su siguiente latido. Las órdenes caducan a los 2 min.
+- **Ver lo que ve el otro equipo**: junto a cada dispositivo, **«Ver cámara»** abre una ventana flotante con la imagen de su cámara
+  (una foto por segundo, ~480 px, con una caja sobre cada cosa que detecta y lo que dice el análisis). También por chat o voz:
+  «Eddie, enséñame lo que ve el Chromebook» (pide confirmación, abre la ventana y te cuenta qué se ve, también desde Telegram en texto).
+  Funciona sin abrir puertos: el equipo observado sube la imagen a tu cuenta (tabla `device_frames`, migración `0010`, **una sola fila
+  que se sobrescribe**, nunca se sirve una imagen de más de 30 s y se borra al cerrar la ventana) **solo mientras alguien la mira**:
+  si dejas de mirar, se corta a los pocos segundos, y se corta sola a los 10 min. Si fue la ventana quien encendió la cámara, al cerrarla
+  la cámara se apaga. En el equipo observado se ve siempre el chip rojo **«● TRANSMITIENDO»** (y en su panel Cámara). Limitaciones:
+  la pestaña observada debe estar visible (una pestaña oculta no envía), y mientras se mira, Neon trabaja ~2 consultas por segundo.
 - **Privacidad de la cámara**: encender la cámara en otro equipo no se salta nada: la primera vez ese equipo pide permiso
   (la orden queda en «necesita tu permiso») y el chip rojo «VIGILANCIA · ON» se ve siempre. Una pestaña oculta pausa la vigilancia.
 - **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
@@ -800,6 +812,7 @@ db/
   migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya se borraron de Neon)
   migrations/0008_devices.sql        Dispositivos de la cuenta y sus órdenes
   migrations/0009_push.sql           Notificaciones push (llaves, suscripciones)
+  migrations/0010_device_frames.sql  Última imagen compartida para la vista remota
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/
