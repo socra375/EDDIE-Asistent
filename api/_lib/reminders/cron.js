@@ -18,9 +18,7 @@ export async function handleCronRequest({ method, headers = {} }) {
     return { status: 503, json: { error: 'Falta CRON_SECRET en Vercel (mínimo 16 caracteres).' } };
   }
   if (!secretMatches(headers)) return { status: 401, json: { error: 'No autorizado.' } };
-  if (!process.env.DATABASE_URL || !process.env.TELEGRAM_BOT_TOKEN) {
-    return { status: 503, json: { error: 'Faltan DATABASE_URL o TELEGRAM_BOT_TOKEN.' } };
-  }
+  if (!process.env.DATABASE_URL) return { status: 503, json: { error: 'Falta DATABASE_URL.' } };
   try {
     const result = await runScheduledJobs();
     return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { ok: true, ...result } };

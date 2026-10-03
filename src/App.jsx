@@ -208,6 +208,18 @@ function AppShell() {
     return () => window.removeEventListener(HUD_EVENT, goHome);
   }, []);
 
+  // A notification was tapped while Eddie is open (public/sw.js): go where it points.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (e) => {
+      if (e.data?.type !== 'eddie:open') return;
+      const { module } = readLaunch(typeof e.data.search === 'string' ? e.data.search : '');
+      if (module) setActiveModule(module);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
+
   // "Toma notas…" / "abre mis notas": the sheet is in Notas.
   useEffect(() => {
     const goNotes = (e) => {
