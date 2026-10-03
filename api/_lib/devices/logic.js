@@ -68,7 +68,7 @@ export function describeAck(device, action, status, message) {
     const done = { vigilance_on: 'Modo Vigilancia activado', vigilance_off: 'Modo Vigilancia apagado', view_start: 'compartiendo su cámara', view_stop: 'dejó de compartir su cámara' };
     return `${device.name}: ${done[action] || 'listo'}.`;
   }
-  if (status === 'consent') return `${device.name} necesita que aceptes el permiso de la cámara en ese equipo; ya le aparece la pregunta.`;
+  if (status === 'consent') return `${device.name} todavía no tiene el permiso de la cámara: hay que darlo una sola vez, estando delante de ese equipo (Configuración → Dispositivos → «Dar permiso de cámara»). Después se activa desde cualquier lugar sin preguntar.`;
   if (status === 'error') return `${device.name}: ${message || 'no se pudo'}.`;
   return `${device.name} no respondió a tiempo. Puede que Eddie esté cerrado o en segundo plano allí.`;
 }
@@ -94,7 +94,7 @@ export function cleanMeta(meta) {
     if (Array.isArray(o?.box) && o.box.length === 4 && o.box.every((v) => Number.isFinite(Number(v)))) out.box = o.box.map((v) => int(v, 0, 1000));
     return out;
   });
-  return { summary: plain(m.summary, 300), objects: objects.filter((o) => o.label), width: int(m.width, 0, 4000), height: int(m.height, 0, 4000) };
+  return { summary: plain(m.summary, 300), objects: objects.filter((o) => o.label), width: int(m.width, 0, 4000), height: int(m.height, 0, 4000), seq: int(m.seq, 0, 1_000_000_000) };
 }
 
 // "Veo 2 personas y 1 laptop." for the model (and the viewer's caption) from what a device shared.
@@ -104,4 +104,43 @@ export function describeMeta(meta) {
   if (!m.objects.length) return 'No veo nada destacable.';
   const parts = m.objects.slice(0, 6).map((o) => (o.count > 1 ? `${o.count} ${o.label}` : `1 ${o.label}`));
   return `Veo ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts.at(-1)}` : parts[0]}.`;
+}
+
+// ---- Live video (WebRTC): the messages the two browsers exchange ----
+export const SIGNAL_ROLES = ['target', 'viewer'];
+export const SIGNAL_KINDS = ['offer', 'answer', 'ice', 'bye'];
+export const SIGNAL_MAX_CHARS = 12_000; // an SDP for one video track is about 1–3 KB
+export const SIGNAL_TTL_S = 60;
+export const SIGNAL_MAX_PENDING = 80;
+
+// → { kind, payload } cleaned, or null when it is not an acceptable message.
+export function cleanSignal(kind, payload) {
+  if (!SIGNAL_KINDS.includes(kind)) return null;
+  const text = typeof payload === 'string' ? payload : payload == null ? '' : JSON.stringify(payload);
+  if (kind === 'bye') return { kind, payload: '' };
+  if (!text || text.length > SIGNAL_MAX_CHARS) return null;
+  // Offers and answers are JSON { type, sdp }; candidates are JSON { candidate, sdpMid, sdpMLineIndex }.
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  if ((kind === 'offer' || kind === 'answer') && (parsed.type !== kind || typeof parsed.sdp !== 'string')) return null;
+  if (kind === 'ice' && parsed.candidate !== undefined && parsed.candidate !== null && typeof parsed.candidate !== 'string') return null;
+  return { kind, payload: text };
+}
+
+// The servers the two browsers use to find each other: public STUN, plus a TURN relay
+// when one is configured (TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL in Vercel) for the
+// networks where a direct path is impossible. Only sent to a signed-in user.
+export function iceServers(env = process.env) {
+  const servers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+  const urls = String(env.TURN_URLS || '')
+    .split(/[,\s]+/)
+    .filter((u) => /^turns?:[A-Za-z0-9._:\-?=&]+$/.test(u))
+    .slice(0, 6);
+  if (urls.length && env.TURN_USERNAME && env.TURN_CREDENTIAL) servers.push({ urls, username: String(env.TURN_USERNAME), credential: String(env.TURN_CREDENTIAL) });
+  return servers;
 }

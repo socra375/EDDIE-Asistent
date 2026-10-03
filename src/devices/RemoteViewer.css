@@ -133,3 +133,65 @@
     width: calc(100vw - 1rem);
   }
 }
+
+.remote-view__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.remote-view__every {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.remote-view__every .select {
+  width: auto;
+  padding: 0.15rem 0.3rem;
+}
+
+.remote-view__log-title {
+  margin: 0.2rem 0 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  color: var(--accent-2);
+}
+
+.remote-view__log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.remote-view__log-item time {
+  margin-right: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.remote-view__log-item--change {
+  color: var(--accent-2);
+}
+
+.remote-view__log-item--lost {
+  color: var(--danger);
+}
+
+.remote-view__log-item--idle {
+  color: var(--text-dim);
+}
+
+.remote-view__note--quiet {
+  color: var(--text-faint);
+}

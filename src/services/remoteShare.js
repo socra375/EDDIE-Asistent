@@ -19,4 +19,4 @@ export function subscribeShare(listener) {
 }
 
 // The viewer's side: "show me this device's camera" (opens the floating viewer).
-export const REMOTE_VIEW_EVENT = 'eddie:remote-view'; // detail: { deviceId, name, attach? }
+export const REMOTE_VIEW_EVENT = 'eddie:remote-view'; // detail: { deviceId, name, attach? } to open it, { deviceId, close: true } to close it

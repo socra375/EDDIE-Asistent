@@ -17,4 +17,7 @@ export const visionBridge = {
   status: () => ({ phase: 'off', error: '' }),
   // A small picture of what the camera sees now plus what was found in it (for the remote view): { data (base64 JPEG), meta } or null.
   snapshot: () => null,
+  // What was found right now, without a picture ({ summary, objects, seq }), and the camera's MediaStream (live video).
+  scene: () => null,
+  stream: () => null,
 };

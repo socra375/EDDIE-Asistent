@@ -9,6 +9,7 @@ import { describeScene, sceneFromPredictions } from '../services/localScene';
 import { cameraSupported, captureFrame, captureGray, createFeedVideo, describeCameraError, openCamera, readConsent, stopStream, writeConsent } from '../services/camera';
 import { createAnnouncer, createEventTracker, describeEvent, motionScore, shouldAnalyze } from '../services/vigilance';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
+import { shareState } from '../services/remoteShare';
 
 const MAX_LOG = 20;
 const MAX_ERRORS = 3;
@@ -19,6 +20,8 @@ const FIRST_LOOK_MS = 500;
 // as it can (about 2.5 times what one look takes, at least this often) instead
 // of waiting the full interval; the interval is the ceiling, and the pace of
 // the cloud AI.
+// A camera watched from another device keeps going past the usual time limit, up to this long.
+const REMOTE_HARD_CAP_MS = 8 * 60 * 60 * 1000;
 const LOCAL_MIN_MS = 1000;
 // The picture shared with the device that is watching: small, a few tens of KB.
 const SHARE_SIDE = 480;
@@ -101,6 +104,7 @@ export function VisionProvider({ children }) {
 
   const commitScene = useCallback((next) => {
     run.current.scene = next;
+    run.current.sceneSeq = (run.current.sceneSeq || 0) + 1; // each look is a new sample for whoever is watching
     setScene(next);
   }, []);
 
@@ -203,7 +207,10 @@ export function VisionProvider({ children }) {
       // While the local detector does the watching it looks again quickly (see LOCAL_MIN_MS).
       let next = r.localMs ? Math.min(live.current.intervalMs, Math.max(LOCAL_MIN_MS, r.localMs * LOCAL_LOAD)) : live.current.intervalMs;
       try {
-        if (document.hidden) {
+        // Another device is watching this camera (say, a phone used as the screen of a PC left at
+        // home): the camera keeps running with the tab in the background. A browser doesn't freeze a
+        // page that is capturing the camera.
+        if (document.hidden && !shareState().sharing) {
           setNote('En pausa: la pestaña está oculta');
           return;
         }
@@ -369,7 +376,17 @@ export function VisionProvider({ children }) {
     r.tick = window.setTimeout(() => tickRef.current(id), FIRST_LOOK_MS);
     window.clearTimeout(r.limit);
     const minutes = live.current.maxMinutes;
-    r.limit = window.setTimeout(() => stopRef.current({ note: `Vigilancia apagada: pasaron ${minutes} ${minutes === 1 ? "minuto" : "minutos"}.` }), minutes * 60 * 1000);
+    const began = Date.now();
+    // The time limit ends the camera — unless another device is watching it right now (a phone used as the
+    // screen of a PC left at home): then it goes on, checking again every few minutes, up to REMOTE_HARD_CAP.
+    const onLimit = () => {
+      if (shareState().sharing && Date.now() - began < REMOTE_HARD_CAP_MS) {
+        r.limit = window.setTimeout(onLimit, 5 * 60 * 1000);
+        return;
+      }
+      stopRef.current({ note: `Vigilancia apagada: pasaron ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}.` });
+    };
+    r.limit = window.setTimeout(onLimit, minutes * 60 * 1000);
     return true;
   }, []);
 
@@ -411,8 +428,16 @@ export function VisionProvider({ children }) {
         const frame = r.video ? captureFrame(r.video, { side: SHARE_SIDE, quality: SHARE_QUALITY }) : null;
         if (!frame) return null;
         const { summary, objects, extras } = r.scene;
-        return { data: frame.data, meta: { summary, objects: [...objects, ...(extras || [])], width: r.video.videoWidth, height: r.video.videoHeight } };
+        return { data: frame.data, meta: { summary, objects: [...objects, ...(extras || [])], width: r.video.videoWidth, height: r.video.videoHeight, seq: r.sceneSeq || 0 } };
       },
+      // What was found, without a picture (sent next to the live video), and the camera's own stream.
+      scene: () => {
+        const r = run.current;
+        if (!r.stream) return null;
+        const { summary, objects, extras } = r.scene;
+        return { summary, objects: [...objects, ...(extras || [])], seq: r.sceneSeq || 0 };
+      },
+      stream: () => run.current.stream || null,
     });
     return () =>
       Object.assign(visionBridge, {
@@ -424,6 +449,8 @@ export function VisionProvider({ children }) {
         describe: () => '',
         status: () => ({ phase: 'off', error: '' }),
         snapshot: () => null,
+        scene: () => null,
+        stream: () => null,
       });
   }, []);
 
@@ -433,7 +460,7 @@ export function VisionProvider({ children }) {
     const onVisibility = () => {
       const r = run.current;
       window.clearTimeout(r.hidden);
-      if (document.hidden && r.stream) r.hidden = window.setTimeout(() => stopRef.current({ note: 'Vigilancia apagada: la pestaña estuvo oculta.' }), HIDDEN_STOP_MS);
+      if (document.hidden && r.stream && !shareState().sharing) r.hidden = window.setTimeout(() => stopRef.current({ note: 'Vigilancia apagada: la pestaña estuvo oculta.' }), HIDDEN_STOP_MS);
     };
     window.addEventListener('pagehide', onHide);
     document.addEventListener('visibilitychange', onVisibility);

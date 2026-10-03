@@ -448,7 +448,7 @@ export default function SettingsPanel({ onOpenConversation }) {
             </select>
           </label>
           <label>
-            <span className="field-label">Se apaga sola a los</span>
+            <span className="field-label">Se apaga sola a los (si nadie la ve desde otro equipo)</span>
             <select className="select" value={settings.vision?.maxMinutes ?? 10} onChange={(e) => updateVisionSettings({ maxMinutes: Number(e.target.value) })}>
               {[5, 10, 30].map((n) => (
                 <option key={n} value={n}>

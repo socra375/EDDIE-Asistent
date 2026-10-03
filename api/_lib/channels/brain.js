@@ -41,7 +41,7 @@ export async function askEddie({ link, text, images = [], note }) {
     model,
     system,
     messages,
-    context: { timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
+    context: { channel: 'telegram', timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
     disabledConnectors,
     onChunk: (piece) => {
       answer += piece;
@@ -70,7 +70,7 @@ export async function runConfirmed({ link, pending }) {
     name: pending.tool,
     args: pending.args,
     disabled: ctx.memoryOn ? off : [...new Set([...off, 'memory'])],
-    context: { timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
+    context: { channel: 'telegram', timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
   });
   if (out.error) return { error: out.error };
   const changes = await applyActionsForUser(link.userId, out.actions, { memoryEnabled: ctx.memoryOn });
