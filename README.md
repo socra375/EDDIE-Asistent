@@ -413,6 +413,29 @@ Vigilancia de otro**, eligiéndolo en la lista, o por chat/Telegram («activa la
   (la orden queda en «necesita tu permiso») y el chip rojo «VIGILANCIA · ON» se ve siempre. Una pestaña oculta pausa la vigilancia.
 - **Cuentas**: cada dispositivo solo ve los de su cuenta; quitar uno (Quitar) cierra su sesión. Migración `0008_devices.sql`.
 
+## Notificaciones en segundo plano (Eddie con la app cerrada)
+
+**Configuración → Dispositivos → Notificaciones en segundo plano → «Activar notificaciones aquí»** en cada equipo (Chromebook,
+Android, PC, Mac; en iPhone/iPad solo con Eddie añadido a la pantalla de inicio, iOS 16.4 o más). Después, los recordatorios
+(«avísame en 20 minutos…») y el resumen de la mañana llegan a ese equipo **aunque Eddie esté cerrado**, sin necesitar Telegram.
+Tocar la notificación abre (o enfoca) Eddie en el sitio correcto (el resumen abre Hoy).
+
+- **Cómo funciona**: Web Push estándar. El navegador se suscribe con la llave pública del servidor y guarda su dirección en
+  `push_subscriptions` (migración `0009_push.sql`); el trabajo programado (`/api/connectors/cron`, cada 5 min con GitHub Actions)
+  envía el aviso cifrado al servicio de notificaciones del navegador (Google, Mozilla, Apple, Microsoft) y el *service worker*
+  (`public/sw.js`) lo muestra. Si el aviso se entrega por Telegram **o** por notificación, cuenta como enviado.
+- **Sin configurar nada**: la llave VAPID se crea sola la primera vez y se guarda en Neon con la parte privada cifrada con
+  `CONNECTOR_SECRET` (el mismo de Gmail/Spotify; no se muestra ni se pega en ningún sitio). Opcional: `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en Vercel para usar las tuyas.
+- **Probar**: «Enviar prueba» en la misma tarjeta. Desactivar: «Desactivar aquí» (o quita el permiso en el candado del navegador);
+  un navegador que ya no existe se borra solo cuando el servicio de notificaciones lo informa.
+- **Qué no puede un navegador** (y por qué no lo hace Eddie): escuchar el micrófono o la palabra clave con la app cerrada o el
+  teléfono bloqueado, ni abrir la cámara: eso exige una app nativa. Para hablarle desde cualquier lugar, Telegram (texto y notas de
+  voz) ya funciona en segundo plano. Con la app abierta pero minimizada, la palabra clave sigue mientras el navegador no pause la
+  pestaña, y la vigilancia se apaga sola tras 2 min oculta.
+- **Límites**: hasta 10 dispositivos por cuenta; los avisos pueden tardar unos minutos (el trabajo programado corre cada 5 min);
+  solo se acepta enviar a los servicios reales de notificaciones (lista cerrada), nunca a una dirección arbitraria.
+
 ## Notion (buscar, leer y escribir tus páginas)
 
 Eddie puede buscar y leer tus páginas de Notion, ver las filas de tus bases de datos (tareas, proyectos,
@@ -492,9 +515,9 @@ OpenRouter pero no puede crear vectores), la base de datos de Neon y la migraci�
 Neon, pega y ejecuta el archivo). Opcional: `GEMINI_EMBEDDING_MODEL` si Google cambia el nombre del modelo
 (por defecto `gemini-embedding-001`).
 
-## Recordatorios y resumen de la mañana (por Telegram)
+## Recordatorios y resumen de la mañana (Telegram y notificaciones)
 
-Eddie te avisa solo, por Telegram, aunque tengas la app cerrada:
+Eddie te avisa solo, por Telegram o con una notificación en tus dispositivos (ver «Notificaciones en segundo plano»), aunque tengas la app cerrada. Basta con uno de los dos:
 
 - **Recordatorios**: "recuérdame llamar a mamá a las 5", "avísame en 20 minutos que saque la comida",
   "mañana a las 8 recuérdame la cita". Eddie lo guarda y a esa hora te escribe `⏰ Recordatorio: …`.
@@ -776,6 +799,7 @@ db/
   migrations/0004_episodes.sql       Memoria de conversaciones (pgvector)
   migrations/0005_whatsapp.sql       (retirada: WhatsApp se quitó; sus tablas ya se borraron de Neon)
   migrations/0008_devices.sql        Dispositivos de la cuenta y sus órdenes
+  migrations/0009_push.sql           Notificaciones push (llaves, suscripciones)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

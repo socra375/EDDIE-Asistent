@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { ackCommand, heartbeat, takeCommands } from '../services/devices';
 import { DEVICE_CHANGED_EVENT, readIdentity } from '../services/deviceIdentity';
+import { resyncPush } from '../services/push';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 
 const BEAT_MS = 2 * 60 * 1000;
@@ -112,6 +113,8 @@ export default function DeviceBridge() {
     }
 
     beat();
+    // A browser that already accepted notifications belongs to whoever is signed in now.
+    resyncPush({ clientId, platform });
     const timer = window.setInterval(beat, BEAT_MS);
     const onVisible = () => !document.hidden && beat();
     document.addEventListener('visibilitychange', onVisible);

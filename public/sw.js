@@ -1,5 +1,6 @@
-// Eddie's service worker: lets the installed app open without a network and
-// keeps repeat visits fast. It caches ONLY the app itself (the page, its
+// Eddie's service worker: shows Eddie's notifications when the app is closed
+// (reminders, the morning summary — see the push handlers at the end), lets the
+// installed app open without a network and keeps repeat visits fast. It caches ONLY the app itself (the page, its
 // scripts, styles and icons, and the camera detector's model once downloaded). Everything under /api — the login cookie, the
 // AI, the camera frames, the voice — always goes straight to the network and
 // is never stored, and so does everything that isn't a GET to this origin.
@@ -92,4 +93,50 @@ self.addEventListener('fetch', (event) => {
   } else if (SHELL_FILES.includes(url.pathname)) {
     event.respondWith(shellFile(request));
   }
+});
+
+// ---- Notifications (Web Push) ----
+// The server (api/_lib/push/) sends { title, body, url, tag } as JSON. Only text
+// is shown and only an address on this site is opened.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const title = String(data.title || 'Eddie').slice(0, 80);
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: String(data.body || '').slice(0, 240),
+      icon: '/eddie-icon-192.png',
+      badge: '/favicon.svg',
+      tag: typeof data.tag === 'string' ? data.tag.slice(0, 40) : undefined,
+      data: { url: typeof data.url === 'string' ? data.url : '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  let target;
+  try {
+    target = new URL(event.notification.data?.url || '/', self.location.origin);
+    if (target.origin !== self.location.origin) target = new URL('/', self.location.origin);
+  } catch {
+    target = new URL('/', self.location.origin);
+  }
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) {
+        await open.focus();
+        // The open app switches screen by itself (see App.jsx); nothing reloads.
+        open.postMessage({ type: 'eddie:open', search: target.search });
+        return;
+      }
+      await self.clients.openWindow(target.href);
+    })(),
+  );
 });

@@ -14,6 +14,7 @@ import { countItems } from '../../services/memory';
 import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../../services/wakeWord';
 import { BOOT_REPLAY_EVENT } from '../../services/boot';
 import DevicesCard from './DevicesCard';
+import NotificationsCard from './NotificationsCard';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -586,6 +587,12 @@ export default function SettingsPanel({ onOpenConversation }) {
         <h2>Dispositivos de tu cuenta</h2>
         <p className="settings-card__sub">Dónde está abierto Eddie y a cuál le activas el Modo Vigilancia.</p>
         <DevicesCard />
+      </div>
+
+      <div className="glass-panel settings-card settings-card--wide" data-section="devices">
+        <h2>Notificaciones en segundo plano</h2>
+        <p className="settings-card__sub">Avisos que llegan a este dispositivo aunque Eddie esté cerrado.</p>
+        <NotificationsCard />
       </div>
 
       <div className="glass-panel settings-card" data-section="privacy">
