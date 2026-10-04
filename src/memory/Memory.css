@@ -781,3 +781,45 @@
   height: 0.55rem;
   border-radius: 50%;
 }
+
+/* Medidor del detector de aplausos */
+.clap-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.clap-meter__bar {
+  position: relative;
+  height: 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--panel-border-strong);
+  background: rgba(63, 232, 255, 0.06);
+}
+
+.clap-meter__bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.12s linear;
+}
+
+.clap-meter__bar b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--warning);
+}
+
+.clap-meter__facts,
+.clap-meter__reason {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+.clap-meter__reason {
+  color: var(--warning);
+}

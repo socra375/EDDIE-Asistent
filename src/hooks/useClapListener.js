@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { createClapDetector, highBandShare } from '../services/clap';
+import { SPECTRUM_FROM, createClapDetector, highBandShare } from '../services/clap';
 
 export const clapSupported = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia) && typeof window !== 'undefined' && Boolean(window.AudioContext || window.webkitAudioContext);
 
 const FRAME_MS = 20;
-// Only a loud-enough frame is worth the spectrum.
-const SPECTRUM_FROM = 0.08;
 
 // A short, soft two-note chime so the user knows Eddie heard them.
 export function playWakeChime() {
@@ -41,6 +39,8 @@ export function useClapListener({ enabled, paused, sensitivity, onDouble }) {
   const [retryKey, setRetryKey] = useState(0);
   const onDoubleRef = useRef(onDouble);
   const sensitivityRef = useRef(sensitivity);
+  // What the card's level meter reads (a ref: updating it never re-renders the app).
+  const meterRef = useRef({ listening: false, level: 0, floor: 0, threshold: 0, claps: 0, doubles: 0, reason: '', silentMs: 0, sampleRate: 0 });
   useEffect(() => {
     onDoubleRef.current = onDouble;
     sensitivityRef.current = sensitivity;
@@ -66,7 +66,13 @@ export function useClapListener({ enabled, paused, sensitivity, onDouble }) {
     (async () => {
       try {
         // Echo cancellation and noise suppression would smooth a clap away.
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        } catch (err) {
+          // A device that cannot turn those off still hears claps, just less well.
+          if (err?.name !== 'OverconstrainedError' && err?.name !== 'ConstraintNotSatisfiedError') throw err;
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
         if (stopped) return cleanup();
         const Ctx = window.AudioContext || window.webkitAudioContext;
         ctx = new Ctx();
@@ -80,6 +86,7 @@ export function useClapListener({ enabled, paused, sensitivity, onDouble }) {
         const spectrum = new Float32Array(analyser.frequencyBinCount);
         const detector = createClapDetector({ sensitivity: sensitivityRef.current });
         const origin = performance.now();
+        let lastSound = origin;
         timer = window.setInterval(() => {
           detector.setSensitivity(sensitivityRef.current);
           analyser.getFloatTimeDomainData(samples);
@@ -93,7 +100,11 @@ export function useClapListener({ enabled, paused, sensitivity, onDouble }) {
             analyser.getFloatFrequencyData(spectrum);
             high = highBandShare(spectrum, ctx.sampleRate);
           }
-          if (detector.push({ t: performance.now() - origin, peak, highShare: high }) === 'double') {
+          const now = performance.now();
+          if (peak > 0.0005) lastSound = now;
+          const result = detector.push({ t: now - origin, peak, highShare: high });
+          meterRef.current = { ...detector.snapshot(), listening: true, silentMs: now - lastSound, sampleRate: ctx.sampleRate };
+          if (result === 'double') {
             detector.reset();
             onDoubleRef.current?.();
           }
@@ -119,10 +130,18 @@ export function useClapListener({ enabled, paused, sensitivity, onDouble }) {
     return () => {
       stopped = true;
       cleanup();
+      meterRef.current = { ...meterRef.current, listening: false };
     };
   }, [active, retryKey]);
 
   let status = 'off';
   if (enabled) status = !clapSupported ? 'unsupported' : paused ? 'paused' : state.status === 'off' ? 'starting' : state.status;
-  return { status, retry: () => { setState({ status: 'starting', attempt: 0 }); setRetryKey((k) => k + 1); } };
+  return {
+    status,
+    getMeter: () => meterRef.current,
+    retry: () => {
+      setState({ status: 'starting', attempt: 0 });
+      setRetryKey((k) => k + 1);
+    },
+  };
 }

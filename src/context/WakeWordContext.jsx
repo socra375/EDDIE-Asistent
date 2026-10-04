@@ -195,6 +195,7 @@ export function WakeWordProvider({ children }) {
       clapSensitivity,
       clapStatus: clap.status,
       clapRetry: clap.retry,
+      clapMeter: clap.getMeter,
       status: listener.status,
       reason: listener.reason,
       heard: listener.heard,
@@ -203,7 +204,7 @@ export function WakeWordProvider({ children }) {
       // follow-up window as one that started with the word.
       noteVoiceSend: beginAwait,
     }),
-    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry, beginAwait, clapEnabled, clapSensitivity, clap.status, clap.retry],
+    [enabled, word, followUp, waiting, secondsLeft, listener.status, listener.reason, listener.heard, listener.retry, beginAwait, clapEnabled, clapSensitivity, clap.status, clap.retry, clap.getMeter],
   );
 
   return <WakeWordContext.Provider value={value}>{children}</WakeWordContext.Provider>;

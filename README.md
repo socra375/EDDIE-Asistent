@@ -358,9 +358,14 @@ activas «Despertar a Eddie con dos aplausos». Aplaudes dos veces seguidas (ent
 un timbre corto; Eddie abre el micrófono y te escucha, igual que al decir la palabra clave sola (y la ventana de espera
 tras su respuesta funciona igual). «Eddie, suspéndete» también lo apaga.
 
-- **Cómo distingue un aplauso** (`src/services/clap.js`, puro y con pruebas): una ráfaga corta (< 220 ms), repentina
-  (≥ 3× más fuerte que los últimos 60 ms y ≥ 4× el ruido del cuarto) y con mucha energía sobre 2 kHz; una voz, música o
-  un ventilador sostenidos no cuentan. Después de despertar ignora los aplausos 2,5 s.
+- **Cómo distingue un aplauso** (`src/services/clap.js`, puro y con pruebas): un golpe repentino (≥ 3× más fuerte que los últimos 60 ms y ≥ 4×
+  el ruido del cuarto, que se aprende solo) con algo de energía sobre 2 kHz; el eco de un aplauso (hasta ~0,7 s) no lo anula y un segundo
+  aplauso sobre la cola del primero cuenta. Una voz, música o un ventilador sostenidos no forman pareja. Los dos aplausos deben ir con
+  0,13–0,9 s de separación; después de despertar ignora los aplausos 2,5 s. Calibrado para micrófonos de portátil/Chromebook (silenciosos y
+  con pocos agudos): umbral medio ≈ 7 % del nivel máximo.
+- **Medidor en vivo** (Memoria → «Activar con dos aplausos»): barra con el nivel del micrófono y la marca que un aplauso debe cruzar,
+  ruido del cuarto, aplausos y dobles oídos, y el motivo cuando un sonido fuerte no contó («muy suave», «poco agudo», «no fue repentino»,
+  «sonido largo»); si no llega audio avisa de que el micrófono puede estar silenciado.
 - **Sensibilidad** Baja / Media / Alta en la misma tarjeta (si se activa solo, bájala; si no te oye, súbela).
 - Se escucha con el micrófono sin cancelación de eco ni supresión de ruido (se comerían el aplauso) y **se suelta mientras
   Eddie te escucha, piensa o habla**, así no se despierta con su propia voz. El audio se analiza en tu equipo: no se envía
