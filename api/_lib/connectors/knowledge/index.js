@@ -20,6 +20,7 @@ async function learn(args, context) {
       learned: true,
       topic: out.topic,
       kind: out.kind,
+      category: out.category,
       summary: out.summary,
       notes: out.noteCount,
       updated: out.updated,
@@ -51,7 +52,7 @@ async function listKnowledge(_args, context) {
   if (!user) return { error: SIGN_IN };
   const topics = await listTopics(user.id);
   if (!topics.length) return { count: 0, note: 'Todavía no aprendí nada. El usuario puede pedirte "investiga y aprende …".' };
-  return { count: topics.length, topics: topics.map((t) => ({ topic: t.title, kind: t.kind, notes: t.noteCount, learned: t.updatedAt.slice(0, 10) })) };
+  return { count: topics.length, topics: topics.map((t) => ({ topic: t.title, kind: t.kind, category: t.category, notes: t.noteCount, learned: t.updatedAt.slice(0, 10) })) };
 }
 
 // The topic the user meant: exact title first, then a title that contains it (or the other way round).
@@ -119,7 +120,7 @@ export default {
         parameters: {
           type: 'OBJECT',
           properties: {
-            topic: { type: 'STRING', description: 'El tema o la habilidad, tal como lo dijo el usuario, p. ej. "tocar guitarra eléctrica" o "la fotosíntesis".' },
+            topic: { type: 'STRING', description: 'El tema o la habilidad, tal como lo dijo el usuario (puede ser una frase larga, hasta 300 caracteres), p. ej. "tocar guitarra eléctrica" o "cómo llevar la contabilidad de un negocio pequeño sin ser contador".' },
             focus: { type: 'STRING', description: 'Opcional: un enfoque concreto que pidió el usuario (p. ej. "para principiantes").' },
           },
           required: ['topic'],

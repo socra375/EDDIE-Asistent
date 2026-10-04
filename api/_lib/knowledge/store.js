@@ -1,6 +1,7 @@
 // Database side of the second brain (see db/migrations/0013_knowledge.sql).
 import { getDb } from '../db.js';
 import { toVector } from '../episodes/embed.js';
+import { cleanCategory } from '../../../src/services/knowledgeCategories.js';
 
 // Past these, Eddie must forget something first: this is a notebook, not an archive.
 export const MAX_TOPICS = 60;
@@ -12,6 +13,7 @@ const topicShape = (row) => ({
   title: row.title,
   summary: row.summary,
   kind: row.kind === 'habilidad' ? 'habilidad' : 'tema',
+  category: cleanCategory(row.category),
   sourceCount: Number(row.source_count || 0),
   noteCount: Number(row.note_count ?? 0),
   createdAt: new Date(row.created_at).toISOString(),
@@ -49,23 +51,30 @@ export async function countNotes(userId) {
 export async function findTopic(userId, title) {
   const sql = getDb();
   const rows = await sql`
-    select id, title, summary, kind, source_count, created_at, updated_at, 0 as note_count
+    select id, title, summary, kind, category, source_count, created_at, updated_at, 0 as note_count
     from knowledge_topics where user_id = ${userId} and lower(title) = lower(${title}) limit 1
   `;
   return rows[0] ? topicShape(rows[0]) : null;
 }
 
 // Creates the topic, or refreshes it (new summary, same id) when the user asks again.
-export async function upsertTopic(userId, { title, summary, kind, sourceCount }) {
+export async function upsertTopic(userId, { title, summary, kind, category, sourceCount }) {
   const sql = getDb();
   const rows = await sql`
-    insert into knowledge_topics (user_id, title, summary, kind, source_count)
-    values (${userId}, ${title}, ${summary}, ${kind}, ${sourceCount})
+    insert into knowledge_topics (user_id, title, summary, kind, category, source_count)
+    values (${userId}, ${title}, ${summary}, ${kind}, ${cleanCategory(category)}, ${sourceCount})
     on conflict (user_id, lower(title)) do update
       set summary = excluded.summary, kind = excluded.kind, source_count = excluded.source_count, updated_at = now()
-    returning id, title, summary, kind, source_count, created_at, updated_at, 0 as note_count
+    returning id, title, summary, kind, category, source_count, created_at, updated_at, 0 as note_count
   `;
   return topicShape(rows[0]);
+}
+
+// Re-learning keeps the category (the user may have changed it); this changes it on purpose.
+export async function setCategory(userId, id, category) {
+  const sql = getDb();
+  const rows = await sql`update knowledge_topics set category = ${cleanCategory(category)} where id = ${id} and user_id = ${userId} returning id`;
+  return rows.length > 0;
 }
 
 // Learning again replaces what was known about the topic.
@@ -84,7 +93,7 @@ export async function replaceNotes(userId, topicId, notes) {
 export async function listTopics(userId) {
   const sql = getDb();
   const rows = await sql`
-    select t.id, t.title, t.summary, t.kind, t.source_count, t.created_at, t.updated_at,
+    select t.id, t.title, t.summary, t.kind, t.category, t.source_count, t.created_at, t.updated_at,
       (select count(*) from knowledge_notes n where n.topic_id = t.id) as note_count
     from knowledge_topics t where t.user_id = ${userId} order by t.updated_at desc
   `;
@@ -94,7 +103,7 @@ export async function listTopics(userId) {
 export async function getTopic(userId, id) {
   const sql = getDb();
   const topics = await sql`
-    select id, title, summary, kind, source_count, created_at, updated_at, 0 as note_count
+    select id, title, summary, kind, category, source_count, created_at, updated_at, 0 as note_count
     from knowledge_topics where id = ${id} and user_id = ${userId}
   `;
   if (!topics[0]) return null;

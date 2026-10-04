@@ -135,7 +135,7 @@ export async function handleChatRequest(body, onChunk, onStep, { cookies = {} } 
   }
   // "Investiga y aprende X": the model must run the research tool, not answer from memory.
   const toLearn = wantKnowledge ? parseLearnCommand(request.messages.at(-1)?.role === 'user' ? request.messages.at(-1).content : '') : null;
-  if (toLearn) system = `${system}\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 120)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria ni pidas confirmación. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.`;
+  if (toLearn) system = `${system}\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 300)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria ni pidas confirmación. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.`;
   return callProvider({ ...request, system, context: { ...request.context, getUser }, onChunk, onStep });
 }
 

@@ -37,7 +37,7 @@ export async function askEddie({ link, text, images = [], note }) {
     query: text,
     tasks: ctx.tasks,
     disabledConnectors: off,
-  })}${recalled ? `\n\n${recalled}` : ''}${learned ? `\n\n${learned}` : ''}${toLearn ? `\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 120)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.` : ''}\n\n${note}`;
+  })}${recalled ? `\n\n${recalled}` : ''}${learned ? `\n\n${learned}` : ''}${toLearn ? `\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 300)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.` : ''}\n\n${note}`;
   const messages = [...history, { role: 'user', content: text, ...(images.length ? { images } : {}) }];
 
   // The answer arrives as pieces through onChunk (the result only carries

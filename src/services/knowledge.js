@@ -29,3 +29,4 @@ export const learnTopic = (topic) => call('/learn', { method: 'POST', body: { to
 export const deleteTopic = (id) => call('/delete', { method: 'POST', body: { id } });
 export const deleteAllTopics = () => call('/delete', { method: 'POST', body: { all: true } });
 export const deleteNote = (id) => call('/note', { method: 'POST', body: { id } });
+export const setTopicCategory = (id, category) => call('/category', { method: 'POST', body: { id, category } });
