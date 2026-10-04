@@ -184,6 +184,35 @@ const CLAP_STATUS = {
   error: 'No se pudo usar el micrófono (¿lo usa otra app?).',
 };
 
+// A live level meter for the clap detector: what the microphone hears, the level a clap must reach,
+// what was counted and, when a loud sound did not count, why. Reads a ref a few times a second.
+function ClapMeter({ getMeter }) {
+  const [m, setM] = useState(() => getMeter());
+  useEffect(() => {
+    const timer = window.setInterval(() => setM({ ...getMeter() }), 150);
+    return () => window.clearInterval(timer);
+  }, [getMeter]);
+  if (!m?.listening) return null;
+  const scale = (v) => Math.min(100, Math.sqrt(Math.max(0, v)) * 100);
+  const silent = m.silentMs > 2500;
+  return (
+    <div className="clap-meter" aria-label="Nivel del micrófono">
+      <div className="clap-meter__bar" role="img" aria-label={`Nivel ${Math.round(m.level * 100)} %, umbral ${Math.round(m.threshold * 100)} %`}>
+        <i style={{ width: `${scale(m.level)}%` }} />
+        <b style={{ left: `${scale(m.threshold)}%` }} title="Un aplauso debe pasar esta marca" />
+      </div>
+      <p className="clap-meter__facts">
+        Nivel {(m.level * 100).toFixed(1)} % · marca {(m.threshold * 100).toFixed(1)} % · ruido del cuarto {(m.floor * 100).toFixed(1)} % · aplausos oídos {m.claps} · dobles {m.doubles}
+      </p>
+      {silent ? (
+        <p className="memory__warn">No me llega nada de audio (nivel 0): revisa que el micrófono no esté silenciado ni bloqueado en el equipo o en el navegador.</p>
+      ) : (
+        m.reason && <p className="clap-meter__reason">Último sonido fuerte que no conté: {m.reason}.</p>
+      )}
+      <p className="memory__wake-note">Aplaude dos veces seguidas mirando la barra: tiene que cruzar la marca. Si la cruza y no cuenta, mira el motivo; si no la cruza, sube la sensibilidad.</p>
+    </div>
+  );
+}
 // Two claps wake Eddie, like saying the word alone: a chime and the microphone opens.
 function ClapCard() {
   const { settings, updateWakeSettings } = useSettings();
@@ -229,6 +258,7 @@ function ClapCard() {
           )}
         </p>
       )}
+      {wake.clapEnabled && wake.clapStatus === 'listening' && <ClapMeter getMeter={wake.clapMeter} />}
       <p className="memory__wake-note">
         Funciona con Eddie abierto en una pestaña del navegador (si la pestaña queda en segundo plano el navegador puede dormirla y no oír los
         aplausos). Mientras esté activo el navegador muestra que el micrófono está en uso; el audio se analiza en tu equipo y no se envía ni se
