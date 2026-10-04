@@ -16,7 +16,7 @@ export function VoiceProvider({ children }) {
   const sttLang = STT_LANG_MAP[language] || 'es-ES';
 
   const browser = useSpeechRecognition({ lang: sttLang });
-  const whisper = useWhisperRecognition({ language });
+  const whisper = useWhisperRecognition({ language, silenceMs: Math.round((Number(settings.voice.silence) || 1.5) * 1000) });
   const synthesis = useSpeechSynthesis();
 
   // Whisper (Groq) is the default whenever the server has GROQ_API_KEY and

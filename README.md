@@ -112,6 +112,11 @@ exclusivamente desde variables de entorno del backend:
   (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
   (opcional) lo cambia, p. ej. a `whisper-large-v3`. Sin la clave, o si
   eliges "El del navegador" en Configuración → Voz, se usa la Web Speech API.
+  **¿Cuándo decide que terminaste de hablar?** Después de una pausa de silencio que ajustas en
+  Configuración → Voz → **«Pausa para terminar de hablar»** (0,8–3 s, por defecto 1,5 s; antes eran 0,9 s y
+  cortaba las frases con pausas normales). `src/services/endpoint.js` (puro, con pruebas) mide el ruido del
+  cuarto con el momento más callado del primer instante (no se confunde si ya estás hablando o suena un
+  aplauso), sigue contando como voz el final suave de una frase y no deja el micrófono abierto por ruido de fondo.
 - `YOUTUBE_API_KEY` — (opcional) la clave de la API de YouTube Data v3 para que Eddie elija con fiabilidad el
   video que reproduce (ver la sección YouTube). Sin ella usa la página de resultados.
 - `TAVILY_API_KEY` — (opcional) la **búsqueda web** funciona sin clave con
