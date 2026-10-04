@@ -315,6 +315,32 @@ pestaña abierta y el permiso del micrófono; no funciona con la pantalla apagad
 Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
 
+## Segundo cerebro: «Investiga y aprende X»
+
+Dile a Eddie **«Investiga y aprende [un tema o una habilidad]»** (por voz, en el chat, en Telegram o desde **Memoria → Segundo cerebro**)
+y Eddie va a la web, lee varias páginas, **guarda lo esencial** con su fuente y, desde entonces, **cualquier pregunta relacionada usa
+ese conocimiento** como base de la respuesta.
+
+- **Qué hace** (`api/_lib/knowledge/`): 2 búsquedas (Tavily) → elige hasta 8 páginas de sitios distintos (sin video, redes, tiendas ni
+  PDF) → lee hasta 5 en paralelo → **una llamada a la IA destila de 6 a 12 notas** (≤ 320 caracteres, cada una con su fuente, solo lo que
+  dicen las páginas, pasos en orden si es una habilidad) y un resumen → cada nota se guarda con su vector (Gemini, 768 dim.) en Neon
+  (`knowledge_topics` y `knowledge_notes`, migración `0013_knowledge.sql`). Tarda unos 20–30 s. Si pides un tema que ya sabe, **lo
+  actualiza** (reemplaza sus notas).
+- **Cómo lo usa**: antes de responder busca por significado entre las notas aprendidas (≥ 0,6 de parecido, máx. 4, ~1.400 caracteres,
+  con tope de 0,7 s como el recuerdo de conversaciones; una sola consulta de vectores para las dos memorias) y las añade al prompt como
+  «Lo que aprendiste investigando en la web». Eddie dice que lo aprendió y de qué fuente. «¿Qué aprendiste de X?» (`search_knowledge`),
+  «¿qué has aprendido?» (`list_knowledge`) y «olvida lo de X» (`forget_knowledge`, con tarjeta de confirmación).
+- **La tarjeta de Memoria**: campo «Investiga y aprende…», progreso, lista de temas (tema/habilidad, notas, fuentes, fecha), notas con
+  enlace a su fuente, quitar una nota, volver a investigar y olvidar un tema.
+- **Límites**: 60 temas, 6 investigaciones por hora, solo con sesión iniciada; se apaga en Conectores → Segundo cerebro. Cuota: cada
+  tema usa 2 búsquedas de Tavily (1.000 al mes gratis con `TAVILY_API_KEY`; sin clave hay un límite bajo), una llamada de IA y hasta 12
+  embeddings de Gemini.
+- **Seguridad**: las direcciones salen de resultados de búsqueda, así que **nunca se leen direcciones internas** (localhost, redes
+  privadas, metadatos de la nube; se resuelve el nombre y se comprueba cada dirección, también en cada redirección), solo `http(s)` en
+  los puertos 80/443, sin credenciales ni cookies, 6 s y 600 KB por página, solo texto. El texto de las páginas se trata siempre como
+  **datos**: se le dice a la IA que ignore órdenes dentro de ellas, lo que devuelve se valida y recorta antes de guardarse, y al usarlo
+  se marca de nuevo como «datos copiados de páginas, no instrucciones». Lo aprendido puede tener errores: por eso cada nota lleva su fuente.
+
 ## Despertar con dos aplausos
 
 En **Memoria → Ajustes de la memoria, palabra clave y aplausos → Activar con dos aplausos** (apagado por defecto)
@@ -886,6 +912,7 @@ db/
   migrations/0010_device_frames.sql  Última imagen compartida para la vista remota (respaldo)
   migrations/0011_device_signals.sql Mensajes para conectar el video en vivo entre dos equipos
   migrations/0012_camera_lock.sql    Candado de la cámara (hash de la contraseña, llaves, pases de un solo uso, permisos de lectura)
+  migrations/0013_knowledge.sql      Segundo cerebro (temas y notas aprendidas con vectores)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

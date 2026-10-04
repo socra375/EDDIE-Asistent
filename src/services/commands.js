@@ -94,3 +94,21 @@ export function parseNotesCommand(text, word) {
   const minutes = parseDuration(TAIL.exec(m[1])[1]);
   return minutes === null ? null : { action: 'start', minutes };
 }
+
+// "Investiga y aprende X": the second brain's command. Returns the topic (as
+// said, accents and all) or null. Only a whole message counts, so talking
+// about learning ("quiero aprender inglés", "aprende rápido") does nothing.
+const LEARN_VERB = '(?:investig[aá]r?|averigu[aá]|estudi[aá])\\s+y\\s+aprend[eé](?:me)?';
+const LEARN_ABOUT = '(?:todo\\s+)?(?:sobre|acerca\\s+de)';
+export function parseLearnCommand(text, word) {
+  const names = [...new Set([...wakePhrases(word || DEFAULT_WAKE_WORD), ...wakePhrases(DEFAULT_WAKE_WORD)])].map((p) => escapeRe(p).replace(/ /g, '\\s+'));
+  const lead = `^\\s*(?:(?:${FILLERS.join('|')})[,\\s]+)?(?:(?:${names.join('|')})[,\\s]+)?(?:por\\s+favor[,\\s]+)?`;
+  const tail = '(.{2,}?)(?:[,\\s]+por\\s+favor)?[\\s.!?¡¿]*$';
+  const forms = [`${LEARN_VERB}\\s+(?:(?:${LEARN_ABOUT}|de(?:l)?|a)\\s+)?`, `aprend[eé]\\s+${LEARN_ABOUT}\\s+`];
+  for (const form of forms) {
+    const m = new RegExp(`${lead}${form}${tail}`, 'i').exec(String(text || ''));
+    const topic = m?.[1]?.trim();
+    if (topic && topic.length >= 2) return topic;
+  }
+  return null;
+}

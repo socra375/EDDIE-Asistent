@@ -44,3 +44,22 @@ export async function embedText(text, { taskType = 'RETRIEVAL_DOCUMENT', apiKey 
 
 // What pgvector reads: '[0.1,0.2,…]'.
 export const toVector = (values) => `[${values.map((v) => Number(v.toFixed(7))).join(',')}]`;
+
+// The embedding of what the user just said is wanted by two memories at once
+// (past conversations and the second brain): the second caller shares the
+// first one's request instead of paying for another, and a repeat within a
+// minute is free.
+const QUERY_TTL_MS = 60_000;
+const QUERY_CACHE_MAX = 16;
+const queryCache = new Map();
+
+export function embedQuery(text) {
+  const key = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MAX_INPUT_CHARS);
+  const hit = queryCache.get(key);
+  if (hit && Date.now() - hit.at < QUERY_TTL_MS) return hit.promise;
+  const promise = embedText(key, { taskType: 'RETRIEVAL_QUERY' });
+  queryCache.set(key, { at: Date.now(), promise });
+  promise.catch(() => queryCache.delete(key));
+  while (queryCache.size > QUERY_CACHE_MAX) queryCache.delete(queryCache.keys().next().value);
+  return promise;
+}

@@ -1,11 +1,13 @@
 import { lazySessionUser } from './session.js';
 import { callProvider } from './providers.js';
 import { queryFrom, recallBlock } from './episodes/recall.js';
+import { knowledgeBlock } from './knowledge/recall.js';
+import { parseLearnCommand } from '../../src/services/commands.js';
 import { limitImages, sanitizeImages } from './images.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 10000;
+const MAX_SYSTEM_LENGTH = 12000;
 const MEMORY_CATEGORIES = new Set(['profile', 'preferences', 'projects', 'decisions', 'knowledge', 'context']);
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
 
@@ -112,16 +114,28 @@ export function sanitizeContext(context) {
 export async function handleChatRequest(body, onChunk, onStep, { cookies = {} } = {}) {
   const request = sanitizeRequest(body);
   const getUser = lazySessionUser(cookies);
-  // Notes from past conversations that fit what was just said (conversation
-  // memory); skipped when the user switched that connector off, and never
-  // allowed to make the answer fail or wait long.
+  // Background for the answer, never allowed to make it fail or wait long:
+  // notes from past conversations and what Eddie learned by researching (the
+  // second brain) that fit what was just said. Each is skipped when the user
+  // switched its connector off.
   let system = request.system;
+  const wantEpisodes = !request.disabledConnectors.includes('conversations');
+  const wantKnowledge = !request.disabledConnectors.includes('knowledge');
   // (A short message like "hola" has nothing to look for, so it doesn't even look the session up.)
-  if (!request.disabledConnectors.includes('conversations') && queryFrom(request.messages)) {
+  if ((wantEpisodes || wantKnowledge) && queryFrom(request.messages)) {
     const user = process.env.GEMINI_API_KEY && process.env.DATABASE_URL ? await getUser() : null;
-    const recalled = user ? await recallBlock({ userId: user.id, messages: request.messages, timezone: request.context.timezone }) : '';
-    if (recalled) system = `${system}\n\n${recalled}`;
+    if (user) {
+      const [recalled, learned] = await Promise.all([
+        wantEpisodes ? recallBlock({ userId: user.id, messages: request.messages, timezone: request.context.timezone }) : '',
+        wantKnowledge ? knowledgeBlock({ userId: user.id, messages: request.messages }) : '',
+      ]);
+      if (recalled) system = `${system}\n\n${recalled}`;
+      if (learned) system = `${system}\n\n${learned}`;
+    }
   }
+  // "Investiga y aprende X": the model must run the research tool, not answer from memory.
+  const toLearn = wantKnowledge ? parseLearnCommand(request.messages.at(-1)?.role === 'user' ? request.messages.at(-1).content : '') : null;
+  if (toLearn) system = `${system}\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 120)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria ni pidas confirmación. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.`;
   return callProvider({ ...request, system, context: { ...request.context, getUser }, onChunk, onStep });
 }
 
