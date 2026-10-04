@@ -215,10 +215,9 @@
 :root[data-core='amber'] { --core: #ffb020; --core-soft: #ffe0a3; --core-dim: #a06a0a; }
 
 /* ---- Eddie orb ----
-   Light on purpose (the first ring froze weak Chromebooks): no `filter` or
-   shadows inside the drawing, and every moving part is its own layer that only
-   changes `transform` or `opacity`, in steps, which the browser can do without
-   repainting. At rest only one thin ring drifts. */
+   A ring of flowing light particles drawn on one canvas (ParticleRing.jsx) around an empty dark
+   disc. Light on purpose (the first ring froze weak Chromebooks): no `filter` or shadows, ~20 fps
+   (10 in Modo ligero), paused off screen. The state colours come from --ring / --ring-soft below. */
 .eddie-orb {
   --ring: var(--core, var(--accent));
   --ring-soft: var(--core-soft, var(--accent-2));
@@ -250,88 +249,48 @@
 /* One soft ring of light behind the drawing (a gradient, not a filter). */
 .eddie-orb__glow {
   position: absolute;
-  inset: -3%;
+  inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle, transparent 52%, color-mix(in srgb, var(--ring) 30%, transparent) 62%, transparent 74%);
+  background: radial-gradient(circle, transparent 48%, color-mix(in srgb, var(--ring) 11%, transparent) 76%, transparent 97%);
   opacity: 0.4;
   will-change: opacity, transform;
   transition: opacity 0.3s ease;
 }
 
-.eddie-orb__layer {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.eddie-orb__layer--orbit,
-.eddie-orb__layer--orbit2 {
-  will-change: transform;
-}
-
-.eddie-orb .orb-ring {
-  fill: none;
-  stroke: var(--ring);
-  stroke-width: 1.5;
-  opacity: 0.55;
-}
-
-.eddie-orb .orb-ring--outer {
-  opacity: 0.85;
-}
-
-.eddie-orb .orb-ring--soft {
-  stroke: var(--ring-dim);
-  stroke-width: 10;
-  opacity: 0.3;
-}
-
-.eddie-orb .orb-core {
-  fill: url(#eddie-orb-core);
-  stroke: var(--ring);
-  stroke-width: 2;
-}
-
-.eddie-orb .orb-arc {
-  fill: none;
-  stroke: var(--ring-soft);
-  stroke-width: 3;
-  stroke-linecap: round;
-  opacity: 0.85;
-}
-
-.eddie-orb .orb-arc--inner {
-  stroke-width: 2;
-  opacity: 0.6;
-}
-
-/* The five bars in the core. */
-.eddie-orb__bars {
+/* The empty disc in the middle: where an image will appear one day. */
+.eddie-orb__slot {
   position: absolute;
   top: 50%;
   left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 5%;
-  width: 22%;
-  height: 16%;
+  width: 46%;
+  aspect-ratio: 1;
   transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--ring) 26%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--ring) 11%, var(--bg)) 0%, color-mix(in srgb, var(--ring) 3%, var(--bg)) 72%, var(--bg) 100%);
+}
+
+.eddie-orb__slot::after {
+  content: '';
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ring) 14%, transparent);
+}
+
+.eddie-orb__ring {
+  position: absolute;
+  inset: 0;
+  display: block;
   pointer-events: none;
 }
 
-.eddie-orb__bars i {
-  flex: 1;
+.eddie-orb__canvas {
+  display: block;
+  width: 100%;
   height: 100%;
-  border-radius: 999px;
-  background: var(--ring-soft);
-  opacity: 0.9;
-  transform: scaleY(calc(0.22 + var(--h) * 0.3));
-  will-change: transform;
 }
 
 .eddie-orb__name {
@@ -387,51 +346,22 @@
   background: var(--text-faint);
 }
 
-/* Idle: one thin ring drifts a small step a second. */
-.eddie-orb[data-state='idle'] .eddie-orb__layer--orbit {
-  animation: orb-spin 120s steps(120) infinite;
-}
-
-/* Listening: the bars dance, the glow is up. Moves in steps (6 a second for
-   the bars, 10 for the turning arcs): to the eye it is still a pulse or a
-   turn, but the screen is redrawn a fraction as often as at 60, which is what
-   a weak computer needs. */
-.eddie-orb[data-state='listening'] .eddie-orb__bars i {
-  animation: orb-bar 0.7s steps(7) infinite;
-  animation-delay: var(--d);
-}
-
+/* The ring itself changes with the state (speed, waviness, brightness and colour: see particleRing.js);
+   these only set the colours it reads and the soft halo behind it. */
 .eddie-orb[data-state='listening'] .eddie-orb__glow {
   opacity: 0.85;
 }
 
-.eddie-orb[data-state='listening'] .eddie-orb__layer--orbit {
-  animation: orb-spin 30s steps(60) infinite;
-}
-
-/* Processing: amber, the arcs race around the core. */
+/* Processing: amber. */
 .eddie-orb[data-state='processing'] {
   --ring-soft: var(--warning);
-}
-
-.eddie-orb[data-state='processing'] .eddie-orb__layer--orbit {
-  animation: orb-spin 3s steps(30) infinite;
-}
-
-.eddie-orb[data-state='processing'] .eddie-orb__layer--orbit2 {
-  animation: orb-spin 1.6s steps(16) infinite reverse;
 }
 
 .eddie-orb[data-state='processing'] .eddie-orb__glow {
   opacity: 0.65;
 }
 
-/* Speaking: the bars follow the voice and the glow beats. */
-.eddie-orb[data-state='speaking'] .eddie-orb__bars i {
-  animation: orb-bar 0.5s steps(5) infinite;
-  animation-delay: var(--d);
-}
-
+/* Speaking: the ring beats with the voice and the halo beats with it. */
 .eddie-orb[data-state='speaking'] .eddie-orb__glow {
   opacity: 0.9;
   animation: orb-glow 0.8s steps(8) infinite;
@@ -458,28 +388,8 @@
   --ring-soft: #ffb3b3;
 }
 
-.eddie-orb[data-state='error'] .eddie-orb__hit {
-  animation: orb-flash 0.35s ease-in-out 3;
-}
-
 .eddie-orb[data-state='error'] .eddie-orb__status {
   letter-spacing: 0.1em;
-}
-
-@keyframes orb-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes orb-bar {
-  0%,
-  100% {
-    transform: scaleY(0.22);
-  }
-  50% {
-    transform: scaleY(1);
-  }
 }
 
 @keyframes orb-glow {
@@ -494,14 +404,8 @@
   }
 }
 
-@keyframes orb-flash {
-  50% {
-    opacity: 0.4;
-  }
-}
-
 /* "Modo ligero" (Configuración → Pantalla), and for people who ask their system
-   for less motion: the orb keeps its colors and state label but nothing moves. */
+   for less motion: the ring holds still (Modo ligero only draws fewer particles, less often). */
 @media (prefers-reduced-motion: reduce) {
   .eddie-orb *,
   .eddie-orb__hit {
@@ -509,8 +413,7 @@
   }
 }
 
-:root[data-perf='lite'] .eddie-orb *,
-:root[data-perf='lite'] .eddie-orb__hit {
+:root[data-perf='lite'] .eddie-orb * {
   animation: none !important;
   will-change: auto !important;
 }
