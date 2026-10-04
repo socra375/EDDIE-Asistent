@@ -509,6 +509,16 @@ export default function SettingsPanel({ onOpenConversation }) {
           format={(v) => `${v.toFixed(2).replace(/0$/, '')}x`}
           onChange={(rate) => updateVoiceSettings({ rate })}
         />
+        <Slider
+          label="Pausa para terminar de hablar"
+          value={settings.voice.silence ?? 1.5}
+          min={0.8}
+          max={3}
+          step={0.1}
+          format={(v) => `${v.toFixed(1)} s`}
+          onChange={(silence) => updateVoiceSettings({ silence })}
+        />
+        <p className="settings-card__sub">Cuánto silencio espera Eddie después de que dejas de hablar antes de enviar lo que dijiste. Si te corta cuando haces una pausa, súbela; si tarda en contestar, bájala.</p>
 
         <div className="settings-row">
           <label>

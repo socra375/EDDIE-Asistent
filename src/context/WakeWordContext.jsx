@@ -5,6 +5,7 @@ import { useChat } from './ChatContext';
 import { useWakeWordListener, wakeWordSupported } from '../hooks/useWakeWordListener';
 import { clapSupported, playWakeChime, useClapListener } from '../hooks/useClapListener';
 import { cleanSensitivity } from '../services/clap';
+import { cleanSilenceMs } from '../services/endpoint';
 import { DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, cleanFollowUpSeconds } from '../services/wakeWord';
 import { useNotes } from './notesState';
 import { WakeWordContext } from './wakeWordState';
@@ -13,8 +14,7 @@ const STT_LANG_MAP = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', de: 'de-DE', it: '
 // The aborted wake recognizer needs a moment to let go of the microphone.
 const HANDOFF_MS = 250;
 // With the browser's recognizer a listen doesn't end by itself when the user
-// stops talking, so after speech this much quiet ends it.
-const END_OF_SPEECH_MS = 1300;
+// stops talking, so after speech a quiet pause ends it (the "pausa para terminar" setting).
 // Safety net: the voice counts as "speaking" from the moment it is asked for,
 // so normally the window just waits for it. If the answer arrived and the
 // voice never showed up for this long, assume it is not going to speak.
@@ -49,6 +49,7 @@ export function WakeWordProvider({ children }) {
   const word = settings.wake?.word || DEFAULT_WAKE_WORD;
   const followUp = cleanFollowUpSeconds(settings.wake?.followUpSeconds, DEFAULT_FOLLOW_UP_SECONDS);
   const lang = STT_LANG_MAP[settings.language] || 'es-ES';
+  const silenceMs = cleanSilenceMs((Number(settings.voice?.silence) || 1.5) * 1000);
   const autoRead = settings.voice.autoRead;
   // Dictating notes keeps the microphone: the word listener waits.
   const busy = listening || transcribing || speaking || dictating || status === 'processing' || status === 'responding';
@@ -114,9 +115,9 @@ export function WakeWordProvider({ children }) {
   // listen after a short quiet. (Whisper has its own end-of-speech detection.)
   useEffect(() => {
     if (!listening || !wakeListenRef.current || sttEngine !== 'browser' || !(transcript || interimTranscript)) return undefined;
-    const timer = window.setTimeout(() => stop(), END_OF_SPEECH_MS);
+    const timer = window.setTimeout(() => stop(), silenceMs);
     return () => window.clearTimeout(timer);
-  }, [listening, transcript, interimTranscript, sttEngine, stop]);
+  }, [listening, transcript, interimTranscript, sttEngine, stop, silenceMs]);
 
   // While the wake word is on: once the pending answer has arrived, been
   // spoken and gone quiet, open the window. Switching the wake word off (or

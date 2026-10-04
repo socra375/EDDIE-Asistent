@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS = {
     autoRead: false,
     volume: 1, // 0.2–1
     rate: 1, // 0.8–1.2
+    silence: 1.5, // seconds of quiet after you stop talking before Eddie sends it (0.8–3)
   },
   // "Modo ligero": auto | lite | full (see services/performance.js).
   display: {

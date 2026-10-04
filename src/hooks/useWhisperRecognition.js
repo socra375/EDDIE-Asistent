@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { markVoice } from '../services/voiceTiming';
+import { createEndpointer } from '../services/endpoint';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-// Stop on its own after this much quiet once the user has spoken, give up
-// if nobody speaks at all, and never record longer than the server accepts.
-const SILENCE_MS = 900;
+// Stop on its own after a quiet pause once the user has spoken (how long: the
+// "pausa para terminar" setting, see services/endpoint.js), give up if nobody
+// speaks at all, and never record longer than the server accepts.
 const NO_SPEECH_MS = 8000;
 const MAX_RECORD_MS = 60000;
 const CALIBRATION_MS = 300;
@@ -33,7 +34,7 @@ function micErrorMessage(err) {
 // no live (interim) text — Whisper transcribes the whole clip at once — and
 // a `transcribing` phase between recording and the final transcript.
 // Recording stops by itself after a pause (simple volume-based detection).
-export function useWhisperRecognition({ language = 'es' } = {}) {
+export function useWhisperRecognition({ language = 'es', silenceMs } = {}) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -41,6 +42,10 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
   const [heard, setHeard] = useState(false);
   const [error, setError] = useState('');
   const sessionRef = useRef(null);
+  const silenceRef = useRef(silenceMs);
+  useEffect(() => {
+    silenceRef.current = silenceMs;
+  });
 
   const cleanup = useCallback((session) => {
     if (!session) return;
@@ -118,35 +123,21 @@ export function useWhisperRecognition({ language = 'es' } = {}) {
     const session = { stream, recorder, audioCtx, timer: null, heardSpeech: false };
     sessionRef.current = session;
 
-    // Volume-based end of speech: measure the room for a moment, then treat
-    // anything clearly louder as speech, and a long enough quiet after it
-    // as the end of the sentence.
+    // Volume-based end of speech (services/endpoint.js): it measures the room, tells voice from noise and
+    // waits out a normal pause before it decides the sentence is over.
     const samples = new Float32Array(analyser.fftSize);
-    const startedAt = performance.now();
-    let noiseFloor = 0;
-    let calibrationFrames = 0;
-    let lastVoiceAt = startedAt;
+    const endpointer = createEndpointer({ silenceMs: silenceRef.current, noSpeechMs: NO_SPEECH_MS, maxMs: MAX_RECORD_MS, calibrationMs: CALIBRATION_MS });
     session.timer = setInterval(() => {
       analyser.getFloatTimeDomainData(samples);
       let sum = 0;
       for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
-      const rms = Math.sqrt(sum / samples.length);
-      const now = performance.now();
-      if (now - startedAt < CALIBRATION_MS) {
-        noiseFloor = (noiseFloor * calibrationFrames + rms) / (calibrationFrames + 1);
-        calibrationFrames += 1;
-        return;
-      }
-      if (rms > Math.max(0.012, noiseFloor * 3)) {
-        if (!session.heardSpeech) setHeard(true);
+      const result = endpointer.push({ t: performance.now(), rms: Math.sqrt(sum / samples.length) });
+      if (result.heard && !session.heardSpeech) {
         session.heardSpeech = true;
-        lastVoiceAt = now;
+        setHeard(true);
       }
-      const quietFor = now - lastVoiceAt;
-      if ((session.heardSpeech && quietFor > SILENCE_MS) || (!session.heardSpeech && quietFor > NO_SPEECH_MS) || now - startedAt > MAX_RECORD_MS) {
-        stop();
-      }
-    }, 100);
+      if (result.stop) stop();
+    }, 50);
 
     recorder.ondataavailable = (e) => {
       if (e.data?.size) chunks.push(e.data);
