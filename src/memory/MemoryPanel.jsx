@@ -8,6 +8,7 @@ import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_
 import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import MemoryOrb from './MemoryOrb';
+import KnowledgeCard from './KnowledgeCard';
 import './Memory.css';
 
 const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', repo: '', lastChange: '', nextGoal: '' };
@@ -456,6 +457,8 @@ export default function MemoryPanel() {
           {notice && <span className="memory__notice" role="status">{notice}</span>}
         </div>
       </form>
+
+      <KnowledgeCard />
 
       <details className="glass-panel memory__settings">
         <summary>Ajustes de la memoria, palabra clave y aplausos</summary>

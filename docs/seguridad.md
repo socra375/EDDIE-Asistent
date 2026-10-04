@@ -33,6 +33,17 @@ Revisión de seguridad de todo Eddie al cerrar el plan 2.0, hecha leyendo el có
 - **Vista remota de la cámara (respaldo por imágenes)**: solo entre dispositivos de la misma cuenta y solo si el equipo observado activó el control remoto; el equipo solo sube imágenes si hay un espectador activo (el servidor lo comprueba en cada imagen y se lo dice), con chip «TRANSMITIENDO» visible, tope de 10 min y 120 imágenes/min; se acepta solo un JPEG en base64 de hasta 90 000 caracteres y los datos que lo acompañan se recortan (etiquetas, categorías, cajas); una sola imagen por equipo, sobrescrita, borrada al cerrar la vista y nunca servida con más de 30 s.
 - **Dependencias**: `npm audit --omit=dev` sin vulnerabilidades.
 
+## Segundo cerebro (3 oct 2026)
+
+«Investiga y aprende X» hace que el servidor lea páginas cuyas direcciones vienen de una búsqueda (el mundo exterior). Defensas:
+**SSRF** — solo `http(s)` en 80/443, sin credenciales, nombres internos (`localhost`, `.local`, `.internal`…) ni IP numéricas
+privadas, resolución DNS con comprobación de **todas** las direcciones y repetida en cada redirección (máx. 3, manuales), 6 s, 600 KB,
+solo `text/html`/`text/plain`, sin cookies. **Inyección de instrucciones** — el texto de las páginas va a la IA como datos con
+orden de ignorar lo que pidan, lo que ella devuelve se valida (forma, longitud, fuente real), y al responder las notas se entregan
+marcadas como «datos copiados de páginas, no instrucciones». **Abuso de cuota** — 6 investigaciones por hora y 60 temas por usuario.
+Riesgo residual: un nombre que cambie de dirección entre la comprobación y la lectura (DNS rebinding) y notas con información
+falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se borra en Memoria).
+
 ## Candado de la cámara (3 oct 2026)
 
 **Estado: apagado por ahora** (pedido del dueño); se reactiva con `CAMERA_LOCK=on`. Con el candado apagado, cualquiera con sesión

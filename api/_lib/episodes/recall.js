@@ -4,7 +4,7 @@
 //  - recallBlock / recallEpisodes: before Eddie answers, find the notes that
 //    are close in meaning to what the user just said and hand them to the
 //    model as background.
-import { embedText } from './embed.js';
+import { embedQuery, embedText } from './embed.js';
 import { addEpisode, countEpisodes, saveLimitReached, searchEpisodes } from './store.js';
 import { summarizeConversation } from './summarize.js';
 
@@ -56,7 +56,7 @@ export function queryFrom(messages) {
 
 export async function recallEpisodes(userId, query, { limit = AUTO_LIMIT, minSimilarity = AUTO_MIN_SIMILARITY } = {}) {
   if ((await countEpisodes(userId)) === 0) return [];
-  const embedding = await embedText(query, { taskType: 'RETRIEVAL_QUERY' });
+  const embedding = await embedQuery(query);
   return searchEpisodes(userId, embedding, { limit, minSimilarity });
 }
 
