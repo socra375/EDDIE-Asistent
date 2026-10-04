@@ -330,8 +330,18 @@ ese conocimiento** como base de la respuesta.
   con tope de 0,7 s como el recuerdo de conversaciones; una sola consulta de vectores para las dos memorias) y las añade al prompt como
   «Lo que aprendiste investigando en la web». Eddie dice que lo aprendió y de qué fuente. «¿Qué aprendiste de X?» (`search_knowledge`),
   «¿qué has aprendido?» (`list_knowledge`) y «olvida lo de X» (`forget_knowledge`, con tarjeta de confirmación).
-- **La tarjeta de Memoria**: campo «Investiga y aprende…», progreso, lista de temas (tema/habilidad, notas, fuentes, fecha), notas con
-  enlace a su fuente, quitar una nota, volver a investigar y olvidar un tema.
+- **El mapa** (`src/memory/KnowledgeMap.jsx`, `knowledgeMap.js`): arriba de la tarjeta, un mapa de órbitas como una carta estelar. Cada
+  tema es un nodo con anillos que **recorre su propia elipse** (una vuelta cada 100–300 s), con **un punto pequeño por nota** detrás; los
+  temas del mismo tipo se agrupan en la misma región y se unen con curvas finas. El **color es el tipo de conocimiento**: Empresarial
+  (ámbar), Técnica (cian), Cotidiana (verde), Personal (rosa), Salud (coral), Académica (azul), Creativa (violeta) y Única (blanco, lo que
+  no encaja en nada). La IA elige el tipo al aprender y lo puedes cambiar (en el detalle del mapa o en la lista). Animación: nodos que
+  derivan, pulsos lentos, cometas por los arcos largos, paralaje suave con el puntero, **órbita que se dibuja al nacer un tema** y, mientras
+  Eddie investiga, **una señal que pulsa desde el centro**. Pasa el mouse por un anillo (el mapa se detiene y sale su ficha), haz clic para
+  fijarlo («Ver las notas» lo abre en la lista) y usa la leyenda para aislar un tipo. Va a ~20 fps (10 en Modo ligero), se pausa fuera de
+  pantalla o con la pestaña oculta y queda quieto con «reducir movimiento»; la entrada empieza cuando el mapa se ve por primera vez.
+- **La tarjeta de Memoria**: campo «Investiga y aprende…» (hasta **300 caracteres**: puedes explicar qué te interesa; el tema se guarda con
+  un título corto de hasta 80), progreso, lista de temas (tema/habilidad, tipo, notas, fuentes, fecha), notas con enlace a su fuente,
+  quitar una nota, cambiar el tipo, volver a investigar y olvidar un tema.
 - **Límites**: 60 temas, 6 investigaciones por hora, solo con sesión iniciada; se apaga en Conectores → Segundo cerebro. Cuota: cada
   tema usa 2 búsquedas de Tavily (1.000 al mes gratis con `TAVILY_API_KEY`; sin clave hay un límite bajo), una llamada de IA y hasta 12
   embeddings de Gemini.
@@ -913,6 +923,7 @@ db/
   migrations/0011_device_signals.sql Mensajes para conectar el video en vivo entre dos equipos
   migrations/0012_camera_lock.sql    Candado de la cámara (hash de la contraseña, llaves, pases de un solo uso, permisos de lectura)
   migrations/0013_knowledge.sql      Segundo cerebro (temas y notas aprendidas con vectores)
+  migrations/0014_knowledge_category.sql  Tipo de conocimiento de cada tema (color del mapa)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

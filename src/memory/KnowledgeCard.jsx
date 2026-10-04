@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../layout/Icon';
-import { deleteNote, deleteTopic, getTopic, learnTopic, listTopics } from '../services/knowledge';
+import { deleteNote, deleteTopic, getTopic, learnTopic, listTopics, setTopicCategory } from '../services/knowledge';
+import { categoryLabel } from '../services/knowledgeCategories';
+import KnowledgeMap, { CategorySelect } from './KnowledgeMap';
+import { colorOf } from './knowledgeMap';
 
 const fmtDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short' });
 // The research takes a while; these are the real stages in the order they happen.
@@ -24,7 +27,9 @@ export default function KnowledgeCard() {
   const [notice, setNotice] = useState('');
   const [open, setOpen] = useState(null); // { id, topic } with notes
   const [confirm, setConfirm] = useState('');
+  const [selectedId, setSelectedId] = useState(null); // pinned on the map
   const alive = useRef(true);
+  const listRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -82,11 +87,30 @@ export default function KnowledgeCard() {
     }
   };
 
+  const changeCategory = async (topic, category) => {
+    // The colour changes at once; if the server refuses, the list is reloaded.
+    setState((s) => ({ ...s, topics: s.topics.map((t) => (t.id === topic.id ? { ...t, category } : t)) }));
+    setOpen((o) => (o?.topic && o.id === topic.id ? { ...o, topic: { ...o.topic, category } } : o));
+    try {
+      await setTopicCategory(topic.id, category);
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }));
+      refresh();
+    }
+  };
+
+  // "Ver las notas" on the map: opens the topic in the list below and brings it into view.
+  const openFromMap = async (topic) => {
+    if (open?.id !== topic.id) await toggle(topic);
+    window.setTimeout(() => listRef.current?.querySelector(`[data-topic="${topic.id}"]`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }), 60);
+  };
+
   const forget = async (topic) => {
     setConfirm('');
     try {
       await deleteTopic(topic.id);
       if (open?.id === topic.id) setOpen(null);
+      if (selectedId === topic.id) setSelectedId(null);
       await refresh();
     } catch (err) {
       setState((s) => ({ ...s, error: err.message }));
@@ -103,7 +127,20 @@ export default function KnowledgeCard() {
     }
   };
 
+  const signedIn = Boolean(user) && state.configured;
+
   return (
+    <>
+      {signedIn && (
+        <KnowledgeMap
+          topics={state.topics}
+          learning={working?.topic || null}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onOpen={openFromMap}
+          onCategory={changeCategory}
+        />
+      )}
     <section className="glass-panel knowledge" aria-label="Segundo cerebro">
       <h3>Segundo cerebro</h3>
       <p className="knowledge__desc">
@@ -127,8 +164,8 @@ export default function KnowledgeCard() {
               className="input"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Investiga y aprende… (p. ej. tocar guitarra, la fotosíntesis)"
-              maxLength={80}
+              placeholder="Investiga y aprende… (un tema o habilidad; puedes explicar qué te interesa)"
+              maxLength={300}
               aria-label="Tema que Eddie debe investigar y aprender"
               disabled={Boolean(working)}
             />
@@ -144,14 +181,18 @@ export default function KnowledgeCard() {
           {notice && !working && <p className="knowledge__notice" role="status">{notice}</p>}
           {state.error && <p className="knowledge__note knowledge__note--bad" role="alert">{state.error}</p>}
           {state.status === 'ready' && !state.topics.length && !working && <p className="knowledge__note">Todavía no aprendió nada. Pídele un tema y aparecerá aquí.</p>}
-          <ul className="knowledge__list">
+          <ul className="knowledge__list" ref={listRef}>
             {state.topics.map((topic) => {
               const expanded = open?.id === topic.id;
               return (
-                <li key={topic.id} className="knowledge__item">
+                <li key={topic.id} className="knowledge__item" data-topic={topic.id}>
                   <button type="button" className="knowledge__head" onClick={() => toggle(topic)} aria-expanded={expanded}>
                     <span className="knowledge__title">{topic.title}</span>
                     <span className="chip">{topic.kind === 'habilidad' ? 'HABILIDAD' : 'TEMA'}</span>
+                    <span className="knowledge__cat" style={{ color: colorOf(topic.category) }}>
+                      <i style={{ background: colorOf(topic.category) }} aria-hidden="true" />
+                      {categoryLabel(topic.category)}
+                    </span>
                     <span className="knowledge__meta">
                       {topic.noteCount} nota{topic.noteCount === 1 ? '' : 's'} · {topic.sourceCount} fuente{topic.sourceCount === 1 ? '' : 's'} · {fmtDate(topic.updatedAt)}
                     </span>
@@ -159,6 +200,7 @@ export default function KnowledgeCard() {
                   {expanded && (
                     <div className="knowledge__body">
                       <p className="knowledge__summary">{topic.summary}</p>
+                      <CategorySelect value={topic.category} onChange={(category) => changeCategory(topic, category)} />
                       {open.topic ? (
                         <ul className="knowledge__notes">
                           {open.topic.notes.map((note) => (
@@ -211,5 +253,6 @@ export default function KnowledgeCard() {
         </>
       )}
     </section>
+    </>
   );
 }

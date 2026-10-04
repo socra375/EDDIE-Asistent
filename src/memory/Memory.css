@@ -645,3 +645,139 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* Mapa del segundo cerebro: órbitas por tipo de conocimiento */
+.knowledge-map {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+}
+
+.knowledge-map .memory-card__head {
+  align-self: stretch;
+}
+
+.knowledge-map__stage {
+  position: relative;
+  width: 100%;
+  max-width: 980px;
+  aspect-ratio: 1.7;
+  border-radius: 6px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(63, 232, 255, 0.1) 0%, rgba(70, 90, 255, 0.07) 45%, transparent 75%);
+}
+
+:root[data-theme='light'] .knowledge-map__stage {
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 127, 153, 0.07) 0%, rgba(61, 79, 214, 0.04) 45%, transparent 75%);
+}
+
+.knowledge-map__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.knowledge-map__empty,
+.knowledge-map__learning {
+  position: absolute;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.knowledge-map__empty {
+  top: 50%;
+  width: min(70%, 420px);
+  transform: translate(-50%, -50%);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.knowledge-map__learning {
+  bottom: 0.5rem;
+  max-width: 90%;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.knowledge-map__tip {
+  position: absolute;
+  z-index: 2;
+  width: max-content;
+  max-width: 240px;
+  padding: 0.5rem 0.7rem;
+  transform: translate(-50%, calc(-100% - 16px));
+  border: 1px solid var(--panel-border-strong);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  pointer-events: none;
+}
+
+.knowledge-map__tip span {
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.knowledge-map__tip b {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.knowledge-map__tip p {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.knowledge-map__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-map__detail {
+  align-self: stretch;
+}
+
+.knowledge-map__facts {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.knowledge-map__select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.knowledge__cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.knowledge__cat i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}

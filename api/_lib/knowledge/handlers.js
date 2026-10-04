@@ -5,9 +5,11 @@
 //   POST knowledge/learn    { topic, focus? } research and learn (takes ~20–30 s)
 //   POST knowledge/delete   { id } forgets a topic, { all: true } forgets everything
 //   POST knowledge/note     { id } removes one note (a wrong or useless one)
+//   POST knowledge/category { id, category } changes the kind of a topic (its colour on the map)
 import { requireUser } from '../session.js';
 import { LearnError, learnTopic } from './learn.js';
-import { deleteAllTopics, deleteNote, deleteTopic, getTopic, listTopics } from './store.js';
+import { deleteAllTopics, deleteNote, deleteTopic, getTopic, listTopics, setCategory } from './store.js';
+import { cleanCategory } from '../../../src/services/knowledgeCategories.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const missingEnv = () => ['DATABASE_URL', 'GEMINI_API_KEY'].filter((name) => !process.env[name]);
@@ -52,6 +54,12 @@ export async function handleKnowledgeRoute({ method, path = [], cookies = {}, qu
     if (!UUID.test(String(body?.id || ''))) return { status: 400, json: { error: 'Indica la nota.' } };
     const removed = await deleteNote(user.id, body.id);
     return { status: removed ? 200 : 404, json: removed ? { ok: true } : { error: 'Esa nota ya no existe.' } };
+  }
+  if (sub === 'category' && method === 'POST') {
+    if (!UUID.test(String(body?.id || ''))) return { status: 400, json: { error: 'Indica el tema.' } };
+    const category = cleanCategory(body?.category);
+    const done = await setCategory(user.id, body.id, category);
+    return done ? { status: 200, json: { ok: true, category } } : { status: 404, json: { error: 'Ese tema ya no existe.' } };
   }
   return { status: 405, json: { error: 'Método no permitido.' } };
 }
