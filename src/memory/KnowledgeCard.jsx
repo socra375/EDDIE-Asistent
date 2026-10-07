@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import Icon from '../layout/Icon';
 import { deleteNote, deleteTopic, getTopic, learnTopic, listTopics, setTopicCategory } from '../services/knowledge';
 import { categoryLabel } from '../services/knowledgeCategories';
@@ -22,6 +23,9 @@ const domain = (url) => {
 // Memoria → Segundo cerebro: teach Eddie a topic or skill ("Investiga y aprende X") and look after what he learned.
 export default function KnowledgeCard() {
   const { user } = useAuth();
+  const { settings } = useSettings();
+  // The list of topics is hidden unless the user turns it on (Configuración → Interfaz HUD); the brain itself is untouched.
+  const showList = settings.display?.topicList === true;
   const [state, setState] = useState({ status: 'loading', topics: [], configured: true, error: '' });
   const [draft, setDraft] = useState('');
   const [working, setWorking] = useState(null); // { topic, stage }
@@ -138,7 +142,7 @@ export default function KnowledgeCard() {
           learning={working?.topic || null}
           selectedId={selectedId}
           onSelect={setSelectedId}
-          onOpen={openFromMap}
+          onOpen={showList ? openFromMap : undefined}
           onCategory={changeCategory}
         />
       )}
@@ -181,7 +185,8 @@ export default function KnowledgeCard() {
           )}
           {notice && !working && <p className="knowledge__notice" role="status">{notice}</p>}
           {state.error && <p className="knowledge__note knowledge__note--bad" role="alert">{state.error}</p>}
-          {state.status === 'ready' && !state.topics.length && !working && <p className="knowledge__note">Todavía no aprendió nada. Pídele un tema y aparecerá aquí.</p>}
+          {showList && state.status === 'ready' && !state.topics.length && !working && <p className="knowledge__note">Todavía no aprendió nada. Pídele un tema y aparecerá aquí.</p>}
+          {showList && (
           <ul className="knowledge__list" ref={listRef}>
             {state.topics.map((topic) => {
               const expanded = open?.id === topic.id;
@@ -248,6 +253,7 @@ export default function KnowledgeCard() {
               );
             })}
           </ul>
+          )}
           <p className="knowledge__note">
             Lo aprendido viene de páginas web: puede contener errores. Eddie lo usa como apoyo y nombra la fuente; lo ves y lo borras aquí. Se
             puede apagar en Conectores → Segundo cerebro.

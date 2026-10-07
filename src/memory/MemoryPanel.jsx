@@ -491,7 +491,7 @@ export default function MemoryPanel() {
         </div>
       </form>
 
-      {settings.display?.secondBrain === true && <KnowledgeCard />}
+      <KnowledgeCard />
 
       <details className="glass-panel memory__settings">
         <summary>Ajustes de la memoria, palabra clave y aplausos</summary>
