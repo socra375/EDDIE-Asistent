@@ -574,3 +574,36 @@
   align-items: center;
   gap: 0.5rem;
 }
+
+/* Configuración → Uso y Telegram: cupo por tanda */
+.usage__tanda {
+  margin-bottom: 10px;
+  opacity: 0.8;
+}
+
+.usage__tanda--active {
+  opacity: 1;
+}
+
+.usage__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.usage__bar {
+  height: 8px;
+  border: 1px solid var(--panel-border);
+  overflow: hidden;
+}
+
+.usage__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.usage__fill--full {
+  background: var(--warning);
+}

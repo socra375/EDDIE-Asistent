@@ -203,6 +203,7 @@ export function ChatProvider({ children }) {
           args,
           context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, tasks: tasksForContext(), memory: memoryContext(settings) },
           disabledConnectors: disabledFor(settings),
+          mirror: Boolean(user) && settings.telegramMirror !== false,
         });
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
         if (actions.length) applyMemoryActions(actions);
@@ -460,6 +461,8 @@ export function ChatProvider({ children }) {
             memory: memoryContext(settings),
           },
           disabledConnectors: disabledFor(settings),
+          // The same answer also goes to Telegram (when a chat is linked, server side).
+          mirror: Boolean(user) && settings.telegramMirror !== false,
           onStep: (step) => {
             steps = mergeSteps(steps, step);
             if (responseStarted) setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, steps } : m)));

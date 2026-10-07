@@ -13,6 +13,7 @@ import { safeYoutubeUrl } from '../connectors/youtube/index.js';
 import { buildBriefing } from '../reminders/briefing.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
+import { restoreTanda, takeRequest, usageFor, usageLine } from '../usage/store.js';
 
 const NOT_LINKED =
   'Hola, soy Eddie. Este chat todavía no está vinculado a tu cuenta.\n\nAbre la app de Eddie → Conectores → Telegram → "Vincular Telegram" y pulsa el enlace que te dará.';
@@ -31,6 +32,8 @@ const HELP = [
   '/voz on|off — que conteste siempre con voz, aunque me escribas',
   '/resumen — el resumen de tu día ahora mismo',
   '/recordatorios — tus avisos pendientes',
+  '/uso — cuántas peticiones llevas en esta tanda (mañana / tarde)',
+  '/restaurar — devolverle a la tanda actual todo su cupo',
   '/nuevo — empezar una conversación nueva',
   '/desvincular — desconectar este chat de tu cuenta',
 ].join('\n');
@@ -57,15 +60,16 @@ export async function handleWebhook({ headers = {}, body }) {
   if (!secretMatches(headers)) return { status: 401, json: { error: 'No autorizado.' } };
   const update = body && typeof body === 'object' ? body : null;
   if (!update || !Number.isSafeInteger(update.update_id)) return { status: 200, json: { ok: true } };
+  const startedAt = Date.now();
   try {
-    if (await markUpdateSeen(update.update_id)) await processUpdate(update);
+    if (await markUpdateSeen(update.update_id)) await processUpdate(update, startedAt);
   } catch (err) {
     console.error('[telegram] update failed:', err);
   }
   return { status: 200, json: { ok: true } };
 }
 
-async function processUpdate(update) {
+async function processUpdate(update, startedAt = Date.now()) {
   if (update.callback_query) return handleCallback(update.callback_query);
   const msg = update.message;
   // Private chats only: Eddie answers nobody in a group.
@@ -105,7 +109,7 @@ async function processUpdate(update) {
     const decision = decisionFromText(userText);
     if (decision) return resolvePending(link, pendingId, decision, null);
   }
-  return runAssistant(link, userText, viaVoice, images);
+  return runAssistant(link, userText, viaVoice, images, startedAt);
 }
 
 // A photo (Telegram sends several sizes, smallest first) or an image sent as
@@ -185,6 +189,10 @@ async function handleCommand(link, name, arg) {
     if (!pending.length) return sendMessage(chatId, 'No tienes recordatorios pendientes. Pídeme uno, por ejemplo: "recuérdame llamar a mamá a las 5".');
     return sendMessage(chatId, ['Tus recordatorios pendientes:', ...pending.slice(0, 20).map((r) => `• ${whenLabel(r.dueAt, link.timezone)} — ${r.text}`)].join('\n'));
   }
+  if (name === 'uso' || name === 'restaurar') {
+    const usage = name === 'restaurar' ? await restoreTanda(link.userId, { timezone: link.timezone }) : await usageFor(link.userId, { timezone: link.timezone });
+    return sendMessage(chatId, `${name === 'restaurar' ? 'Listo, restauré la tanda actual.\n' : ''}${usageLine(usage)}`);
+  }
   if (name === 'desvincular') {
     await deleteLink(link.userId);
     return sendMessage(chatId, 'Chat desvinculado. Ya no respondo aquí hasta que lo vincules de nuevo desde la app.');
@@ -218,15 +226,40 @@ async function transcribeVoice(chatId, voice) {
   }
 }
 
-async function runAssistant(link, text, viaVoice, images = []) {
+// Vercel stops the function at 60 s without a word: the user gets an answer (or
+// an honest "it took too long") before that, never silence.
+const ANSWER_BUDGET_MS = Number.parseInt(process.env.TELEGRAM_ANSWER_BUDGET_MS, 10) || 54000;
+
+function withDeadline(promise, ms) {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), ms);
+  });
+  promise.catch(() => {});
+  return Promise.race([promise.then((value) => ({ value })), late]).finally(() => clearTimeout(timer));
+}
+
+async function runAssistant(link, text, viaVoice, images = [], startedAt = Date.now()) {
   const { chatId, userId } = link;
+  // The day's allowance, split in tandas: past it Eddie says so instead of answering.
+  const slot = await takeRequest(userId, { timezone: link.timezone });
+  if (!slot.allowed) return sendMessage(chatId, slot.message);
+  let replied = false;
   const wantsVoice = viaVoice || link.voiceReplies;
   await sendAction(chatId, wantsVoice ? 'record_voice' : 'typing');
   const typing = setInterval(() => sendAction(chatId, wantsVoice ? 'record_voice' : 'typing'), 4000);
   // The previous conversation, if it went cold, is kept while this answer is prepared.
   const closing = closeConversation(link);
   try {
-    const { reply, receipt, confirmations, actions, language, voiceId } = await askEddie({ link, text, images, note: TELEGRAM_NOTE });
+    const outcome = await withDeadline(askEddie({ link, text, images, note: TELEGRAM_NOTE }), Math.max(8000, ANSWER_BUDGET_MS - (Date.now() - startedAt)));
+    if (outcome.timedOut) {
+      await closing;
+      await slot.release();
+      replied = true;
+      return await sendMessage(chatId, '⏱ Esta vez tardé demasiado en pensar y no alcancé a responderte. No te descontó la petición: inténtalo de nuevo (si es algo largo, divídelo en partes).');
+    }
+    const { reply, receipt, confirmations, actions, language, voiceId } = outcome.value;
+    replied = true;
     await sendMessage(chatId, reply + receipt);
 
     for (const c of confirmations) {
@@ -252,6 +285,7 @@ async function runAssistant(link, text, viaVoice, images = []) {
     await saveHistory(userId, [...link.history, { role: 'user', content: images.length ? `📷 ${text}` : text }, { role: 'assistant', content: reply + receipt }]);
   } catch (err) {
     await closing;
+    if (!replied) await slot.release();
     console.error('[telegram] assistant failed:', err);
     await sendMessage(chatId, `No pude completar eso: ${err.message || 'error inesperado'}.`);
   } finally {

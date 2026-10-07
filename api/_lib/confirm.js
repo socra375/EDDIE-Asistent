@@ -8,6 +8,7 @@ import { confirmTool } from './connectors/registry.js';
 import { sanitizeConnectorIds, sanitizeContext } from './handler.js';
 import { parseCookies } from './cookies.js';
 import { lazySessionUser } from './session.js';
+import { mirrorToTelegram } from './telegram/mirror.js';
 
 const TOOL_NAME_RE = /^[a-z0-9_]{1,64}$/;
 
@@ -25,15 +26,22 @@ export async function runConfirm(req, res) {
     return;
   }
   try {
+    const getUser = lazySessionUser(parseCookies(req.headers.cookie));
     const outcome = await confirmTool({
       name: tool,
       args,
       disabled: sanitizeConnectorIds(body.disabledConnectors),
-      context: { ...sanitizeContext(body.context), getUser: lazySessionUser(parseCookies(req.headers.cookie)) },
+      context: { ...sanitizeContext(body.context), getUser },
     });
     if (outcome.error) {
       res.status(422).json({ error: outcome.error });
       return;
+    }
+    // The result of the card also goes to the user's Telegram (when the app asked, see telegram/mirror.js).
+    if (body.mirror === true) {
+      const user = await getUser();
+      const summary = typeof outcome.result?.summary === 'string' ? outcome.result.summary : '';
+      if (user && summary) await Promise.race([mirrorToTelegram({ userId: user.id, answer: `✅ ${summary}` }), new Promise((resolve) => setTimeout(resolve, 5000))]);
     }
     res.status(200).json({ ok: true, result: outcome.result, actions: outcome.actions });
   } catch (err) {

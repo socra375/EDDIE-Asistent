@@ -68,8 +68,11 @@ async function fetchWithRetry(url, options, retries = 1) {
 // STREAM_IDLE_TIMEOUT_MS (a genuinely dead connection), or if the attempt
 // runs past STREAM_HARD_TIMEOUT_MS in total regardless of activity (a
 // safety ceiling).
-const STREAM_IDLE_TIMEOUT_MS = 12000;
-const STREAM_HARD_TIMEOUT_MS = 20000;
+// A model that thinks for a while before its first word is not a dead
+// connection, so the silence allowed is generous (and the page is kept alive
+// meanwhile by the heartbeat in chatStream.js).
+const STREAM_IDLE_TIMEOUT_MS = 25000;
+const STREAM_HARD_TIMEOUT_MS = 40000;
 
 // callGemini can now make up to 4 HTTP attempts in the worst case (2 tool
 // rounds + 1 forced text-only round, plus one empty-response retry spent on
@@ -78,13 +81,16 @@ const STREAM_HARD_TIMEOUT_MS = 20000;
 // a wall-clock budget across the whole call: once it's spent, we fail with
 // our own clear message instead of letting Vercel kill the function first
 // with an opaque 504.
-const OVERALL_TIME_BUDGET_MS = 45000;
+const OVERALL_TIME_BUDGET_MS = 50000;
 
-function createStreamAbort() {
+// `startedAt` (when the whole call began) caps the attempt at what is left of
+// the overall budget, so a late round can't run past Vercel's own limit.
+function createStreamAbort(startedAt) {
+  const hardMs = startedAt ? Math.min(STREAM_HARD_TIMEOUT_MS, Math.max(4000, OVERALL_TIME_BUDGET_MS - (Date.now() - startedAt))) : STREAM_HARD_TIMEOUT_MS;
   const controller = new AbortController();
   const abort = () => controller.abort(new DOMException('Tiempo de espera agotado.', 'TimeoutError'));
   let idleTimer = setTimeout(abort, STREAM_IDLE_TIMEOUT_MS);
-  const hardTimer = setTimeout(abort, STREAM_HARD_TIMEOUT_MS);
+  const hardTimer = setTimeout(abort, hardMs);
   return {
     signal: controller.signal,
     touch() {
@@ -217,7 +223,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
       ? { systemInstruction, generationConfig, contents }
       : { systemInstruction, generationConfig, tools: [{ functionDeclarations: toolset.declarations }], contents };
 
-    const streamAbort = createStreamAbort();
+    const streamAbort = createStreamAbort(startedAt);
     let res;
     try {
       res = await fetchWithRetry(url, {
@@ -551,7 +557,7 @@ async function callOpenAICompatible(flavor, { apiKey, model, system, messages, t
     const forceTextOnly = state.toolsOff || round >= flavor.maxToolRounds || Date.now() - startedAt > TOOLS_CUTOFF_MS || tools.length === 0;
     const body = flavor.requestBody(state.model, chat, forceTextOnly ? null : tools);
 
-    const streamAbort = createStreamAbort();
+    const streamAbort = createStreamAbort(startedAt);
     try {
       const res = await fetchWithRetry(flavor.url, {
         method: 'POST',

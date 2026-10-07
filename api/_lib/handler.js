@@ -111,9 +111,10 @@ export function sanitizeContext(context) {
 
 // `cookies` identify the signed-in user for account tools (Gmail); the
 // session is only looked up if such a tool runs.
-export async function handleChatRequest(body, onChunk, onStep, { cookies = {} } = {}) {
+export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, getUser: sharedGetUser } = {}) {
   const request = sanitizeRequest(body);
-  const getUser = lazySessionUser(cookies);
+  // (chatStream.js already looked the user up for the allowance: reuse it.)
+  const getUser = sharedGetUser || lazySessionUser(cookies);
   // Background for the answer, never allowed to make it fail or wait long:
   // notes from past conversations and what Eddie learned by researching (the
   // second brain) that fit what was just said. Each is skipped when the user
