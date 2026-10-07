@@ -4,8 +4,9 @@
 // The text also goes into the chat's own thread, so they can keep going from
 // Telegram ("hazlo más corto") with Eddie knowing what was said. Best effort:
 // never throws and never makes the app's answer wait long.
-import { sendMessage } from './api.js';
+import { sendMessage, sendPhoto } from './api.js';
 import { getLinkByUser, saveHistory } from './store.js';
+import { getMediaFile } from '../media/store.js';
 
 const MAX_RECEIPTS = 5;
 
@@ -38,5 +39,36 @@ export async function mirrorToTelegram({ userId, question = '', answer = '', ste
   } catch (err) {
     console.error('[telegram] mirroring the answer failed:', err.message);
     return false;
+  }
+}
+
+// The pictures a set of actions created (`show_image`), sent to a Telegram chat as photos.
+// `userId` owns them: only their own gallery is ever read. Returns how many went out.
+export async function sendCreatedImages(userId, chatId, actions, { max = 3 } = {}) {
+  let sent = 0;
+  try {
+    const ids = (Array.isArray(actions) ? actions : []).filter((a) => a?.type === 'show_image' && /^[0-9a-f-]{36}$/i.test(String(a.id || ''))).map((a) => a.id);
+    for (const id of [...new Set(ids)].slice(0, max)) {
+      const file = await getMediaFile(userId, id);
+      if (!file) continue;
+      const result = await sendPhoto(chatId, file.buffer, { caption: file.prompt, mime: file.mime });
+      if (result.ok) sent += 1;
+    }
+  } catch (err) {
+    console.error('[telegram] sending the pictures failed:', err.message);
+  }
+  return sent;
+}
+
+// The same, for the app: looks up the user's linked chat.
+export async function mirrorImagesToTelegram({ userId, actions }) {
+  try {
+    if (!userId || !process.env.TELEGRAM_BOT_TOKEN || !process.env.DATABASE_URL) return 0;
+    if (!(Array.isArray(actions) && actions.some((a) => a?.type === 'show_image'))) return 0;
+    const link = await getLinkByUser(userId);
+    return link ? await sendCreatedImages(userId, link.chatId, actions) : 0;
+  } catch (err) {
+    console.error('[telegram] mirroring the pictures failed:', err.message);
+    return 0;
   }
 }

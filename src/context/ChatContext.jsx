@@ -17,6 +17,7 @@ import { useAuth } from './AuthContext';
 import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
+import { applyMediaActions } from '../services/mediaActions';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
 import { MAX_MINUTES, formatMinutes } from '../services/dictation';
@@ -208,6 +209,7 @@ export function ChatProvider({ children }) {
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
         if (actions.length) applyMemoryActions(actions);
         if (actions.length) applyBrowserActions(actions);
+        if (actions.length) applyMediaActions(actions);
         const summary = result.summary || 'Listo, hecho.';
         updateConfirmation(messageId, confirmationId, { state: 'done', result: summary });
         updateStep(messageId, card.stepId, { status: 'done', summary, verified: result.verified ?? null });
@@ -506,6 +508,11 @@ export function ChatProvider({ children }) {
         if (result.actions?.length) {
           const links = applyBrowserActions(result.actions);
           if (links.length) assistantMessage.links = links;
+        }
+        // Pictures Eddie made: shown under the reply and in the middle of Inicio.
+        if (result.actions?.length) {
+          const pictures = applyMediaActions(result.actions);
+          if (pictures.length) assistantMessage.media = pictures;
         }
         // Things Eddie saved to (or removed from) the memory while answering.
         if (result.actions?.length) {

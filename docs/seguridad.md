@@ -58,6 +58,19 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   entra lo que tú sueltas, todo queda a la vista en el orbe y puede borrarse. No subas documentos con claves o contraseñas (se le pide a la IA
   que no las guarde, pero no es una garantía).
 
+## Imágenes (7 oct 2026)
+
+- **Lo que llega del proveedor se comprueba**: antes de guardar nada se miran los primeros bytes (PNG, JPEG o WebP reales) y el tamaño (máx. 6 MB);
+  un «PNG» que en realidad es HTML o SVG se descarta. Nunca se confía en el tipo que declara el servidor.
+- **Quién ve qué**: `GET /api/connectors/media/file` exige sesión y filtra por usuario; se sirve con `X-Content-Type-Options: nosniff` y caché privada.
+  Las imágenes no viajan al modelo (solo el id) y los ids son UUID.
+- **Borrar**: la herramienta `delete_image` siempre pide tarjeta de confirmación (y la Galería pide un segundo clic). Nada se borra solo: con la galería llena
+  se pide al usuario que elimine.
+- **Costes y abuso**: tope por 24 horas (`DAILY_IMAGE_LIMIT`), tope de 60 imágenes / 150 MB por usuario, y cada creación desde la Galería cuenta en el cupo diario.
+- **Privacidad del respaldo**: con `MEDIA_FALLBACK` activo (por defecto), si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
+  (sin clave ni cuenta). Para evitarlo: `MEDIA_FALLBACK=off`.
+- **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
+
 ## Candado de la cámara (3 oct 2026)
 
 **Estado: apagado por ahora** (pedido del dueño); se reactiva con `CAMERA_LOCK=on`. Con el candado apagado, cualquiera con sesión

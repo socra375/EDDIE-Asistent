@@ -758,6 +758,31 @@ chat privado vinculado; en grupos no contesta.
   conector «Segundo cerebro» apagado no se guardan habilidades. Sin costo extra de IA: es la misma llamada del resumen.
 - Por ahora los `.md` se suben desde la app (no por Telegram).
 
+## Imágenes: crear, editar y eliminar (Galería)
+
+- **Desde el chat o por voz**: «dibújame un faro al amanecer», «hazme un logo…», y luego «quítale el fondo», «hazla de noche»,
+  «elimina la última imagen». Eddie usa las herramientas `create_image`, `edit_image`, `list_images` y `delete_image`
+  (conector **Imágenes**, `api/_lib/connectors/media/`). Eliminar pide tu confirmación con una tarjeta. Si adjuntas una imagen al
+  mensaje, la edita a ella; si no, edita la última (o la que nombres de la galería). La edición se guarda como una imagen nueva y la
+  original se conserva. Eddie no ve lo que crea: te dice en una frase qué hizo y ofrece ajustarla.
+- **Dónde aparece**: en el **centro del anillo de Inicio** (el disco libre; «Quitar la imagen del centro» la limpia), debajo de la
+  respuesta en el chat, en la **Galería** (módulo nuevo: crear con una descripción y una forma 1:1, 16:9, 9:16, 4:3 o 3:4, abrir,
+  **editar con una instrucción**, mostrar en el centro, descargar y eliminar) y en tu **Telegram** como foto (con el interruptor de
+  Configuración → «Uso y Telegram»).
+- **Con qué**: el modelo de imágenes de **Gemini** con tu misma `GEMINI_API_KEY` (cupo gratis diario; el cupo real lo fija Google y cambia,
+  mídelo con tu clave). Modelo: `gemini-2.5-flash-image` o `GEMINI_IMAGE_MODEL`; si el modelo desaparece, Eddie elige otro de imágenes que tu clave
+  pueda usar. **Respaldo**: si Gemini se queda sin cupo o falla, una imagen *nueva* (no una edición) puede salir de **Pollinations**
+  (gratis, sin clave; el texto de la descripción sale hacia ese servicio; `MEDIA_FALLBACK=off` lo desactiva) y Eddie lo dice.
+  Nunca se usa el respaldo cuando Gemini rechaza el contenido.
+- **Dónde se guardan**: en tu base de datos de Neon (`media_items`, migración `0016_media.sql`), sin servicio extra: hasta **60 imágenes o 150 MB**
+  (si se llena, Eddie te pide eliminar alguna; nunca borra solo). Cada imagen se sirve solo a su dueño con sesión iniciada.
+- **Límites**: `DAILY_IMAGE_LIMIT` imágenes por 24 horas (20 por defecto, 0 = sin límite); además, hacer una imagen desde la Galería cuenta como
+  una petición del cupo diario (desde el chat ya cuenta la petición del mensaje). Una imagen fallida no gasta cupo.
+- **Seguridad**: lo que devuelve el proveedor se comprueba (debe ser de verdad PNG, JPEG o WebP, de máximo 6 MB; si no, se descarta) y las
+  descripciones se limpian y recortan a 800 caracteres. Gemini aplica su propia política de contenido y la herramienta le pide a la IA no crear
+  imágenes sexuales, de menores ni que suplanten a personas reales.
+- **Video**: todavía no. Para video no hay APIs gratis fiables (Veo y similares son de pago); se verá después con un presupuesto.
+
 ## Sonda local (tu Chromebook)
 
 La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la
@@ -978,6 +1003,7 @@ db/
   migrations/0013_knowledge.sql      Segundo cerebro (temas y notas aprendidas con vectores)
   migrations/0014_knowledge_category.sql  Tipo de conocimiento de cada tema (color del mapa)
   migrations/0015_usage.sql          Peticiones usadas por día y tanda (cupo diario)
+  migrations/0016_media.sql          Galería de imágenes (bytes, descripción, edición de origen)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

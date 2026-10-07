@@ -31,7 +31,7 @@ import { handleChatRequest, errorToResponse } from './handler.js';
 import { parseCookies } from './cookies.js';
 import { lazySessionUser } from './session.js';
 import { takeRequest } from './usage/store.js';
-import { mirrorToTelegram } from './telegram/mirror.js';
+import { mirrorImagesToTelegram, mirrorToTelegram } from './telegram/mirror.js';
 
 // While Eddie thinks (a model that takes a while to say its first word, a
 // slow tool) nothing is written; after this much silence a small "ping" goes
@@ -105,7 +105,10 @@ export async function runChatStream(req, res) {
     // The same answer, to the user's Telegram (when the app asked and a chat is linked).
     if (req.body?.mirror === true && user) {
       await Promise.race([
-        mirrorToTelegram({ userId: user.id, question: lastUserText(req.body), answer, steps: result.steps, confirmations: result.confirmations }),
+        (async () => {
+          await mirrorToTelegram({ userId: user.id, question: lastUserText(req.body), answer, steps: result.steps, confirmations: result.confirmations });
+          await mirrorImagesToTelegram({ userId: user.id, actions: result.actions });
+        })(),
         new Promise((resolve) => setTimeout(resolve, MIRROR_WAIT_MS)),
       ]);
     }

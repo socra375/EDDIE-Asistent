@@ -16,6 +16,7 @@ import SettingsPanel from './components/Settings/SettingsPanel';
 import ConnectorsPanel from './connectors/ConnectorsPanel';
 import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
+import GalleryPanel from './gallery/GalleryPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import { NotesProvider } from './context/NotesContext';
@@ -273,6 +274,7 @@ function AppShell() {
           {activeModule === 'tasks' && <TasksPanel />}
           {activeModule === 'notes' && <NotesPanel />}
           {activeModule === 'memory' && <MemoryPanel />}
+          {activeModule === 'gallery' && <GalleryPanel />}
           {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
