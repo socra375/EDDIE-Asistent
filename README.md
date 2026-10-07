@@ -326,6 +326,14 @@ Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 > está oculta por defecto y se muestra en Configuración → Interfaz HUD → *Mostrar la lista de temas del Segundo cerebro*. Oculta o no, Eddie
 > sigue aprendiendo y usando lo aprendido.
 
+> **El mapa es una neurona.** Un núcleo brillante en el centro (una malla que gira despacio), un brazo de ramas por cada tipo de
+> conocimiento (con su color) y cada tema como un nodo en su rama: los más antiguos cerca del núcleo y cada tema nuevo hace crecer
+> la rama hacia afuera. **La luz fluye por las ramas hacia el núcleo** (lo aprendido que llega); cada pocos segundos un pulso más
+> brillante sale del núcleo hasta un tema (Eddie recordándolo), y mientras aprende algo nuevo el flujo se acelera y salen anillos del
+> núcleo. Al pasar el mouse por un nodo se ilumina toda su rama. Con *reducir movimiento* queda quieto y con *Modo ligero* se quitan el
+> brillo y las ramitas. La tarjeta de abajo tiene un hilo de luz que cruza su borde superior. Código: `src/memory/knowledgeMap.js`
+> (matemática pura) y `src/memory/KnowledgeMap.jsx` (lienzo).
+
 Dile a Eddie **«Investiga y aprende [un tema o una habilidad]»** (por voz, en el chat, en Telegram o desde **Memoria → Segundo cerebro**)
 y Eddie va a la web, lee varias páginas, **guarda lo esencial** con su fuente y, desde entonces, **cualquier pregunta relacionada usa
 ese conocimiento** como base de la respuesta.

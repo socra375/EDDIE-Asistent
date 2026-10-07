@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { growth } from './orbMath.js';
-import { MAP_ASPECT, colorOf, ellipseLength, layoutMap, nodePoint, pickMapNode, trailPoints } from './knowledgeMap.js';
+import { growth, hashString } from './orbMath.js';
+import { CORE_RGB, MAP_ASPECT, bendPoint, bezierPoint, chainOf, colorOf, layoutMap, nodePoint, pickMapNode, somaMesh, turnSoma } from './knowledgeMap.js';
 import { KNOWLEDGE_CATEGORIES, categoryLabel } from '../services/knowledgeCategories.js';
 
-const FRAME_MS = 50; // ~20 fps: it is decoration
+const FRAME_MS = 33; // ~30 fps: the light has to run smoothly
 const LITE_FRAME_MS = 100;
 const BIRTH_MS = 1100;
 const INTRO_STAGGER_MS = 90;
 const INTRO_MAX_MS = 1600;
+const RECALL_EVERY_S = 6; // every so often Eddie "recalls" a topic: a pulse goes out from the core
+const RECALL_TRAVEL_S = 2.4;
 
-// Only "reduce motion" freezes the map; Modo ligero just halves the frames.
+// Only "reduce motion" freezes the map; Modo ligero drops the glow and halves the frames.
 const isCalm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 const isLite = () => document.documentElement.dataset.perf === 'lite';
 const themeName = () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 const NEUTRAL = { dark: '127,180,200', light: '70,85,105' };
 const TWO_PI = Math.PI * 2;
+const SOMA = somaMesh(30);
 
 const hexRgb = (hex) => `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)}`;
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
@@ -35,13 +38,14 @@ export function CategorySelect({ value, onChange, label = 'Tipo' }) {
   );
 }
 
-// What Eddie learned as a star chart of orbits: every topic is a ringed node
-// drifting along its own ellipse with one small point per note trailing behind
-// it, coloured by the kind of knowledge (empresarial, cotidiana, personal,
-// única…). While Eddie is learning something new a signal pulses from the
-// middle until the new orbit is drawn in. Point at a node to read it; click to
-// pin it.
-// topics: [{ id, title, summary, kind, category, noteCount, sourceCount, updatedAt }]
+// What Eddie learned drawn as a neuron: a glowing core (the brain), one arm of
+// branches per kind of knowledge (coloured like the legend), and every topic a
+// node on its arm with one tiny point per note circling it. Light runs along the
+// branches toward the core (what is learned flowing in); every few seconds a
+// brighter pulse goes out from the core to one topic (Eddie recalling it). While
+// Eddie is learning something new the flow quickens and rings spread from the
+// core. Point at a node to read it (its whole branch lights up); click to pin it.
+// topics: [{ id, title, summary, kind, category, noteCount, sourceCount, createdAt, updatedAt }]
 export default function KnowledgeMap({ topics, learning, selectedId, onSelect, onOpen, onCategory }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -59,6 +63,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
     points: [],
     born: new Map(),
     clock: 0,
+    flow: 0,
     last: 0,
     t0: 0,
     par: { x: 0, y: 0, tx: 0, ty: 0 },
@@ -115,85 +120,149 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       s.request();
     }
 
-    const ellipsePath = (e, w, from = 0, to = TWO_PI, px = 0, py = 0) => {
-      ctx.beginPath();
-      ctx.ellipse((e.cx + 1) * (w / 2) + px, s.size.h / 2 + e.cy * (w / 2) + py, e.rx * (w / 2), e.ry * (w / 2), e.rot, from, to);
-    };
     const toScreen = (p, w, px = 0, py = 0) => ({ x: (p.x + 1) * (w / 2) + px, y: s.size.h / 2 + p.y * (w / 2) + py });
+    const curve = (p, c, q, upTo = 1) => {
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      const steps = 18;
+      for (let i = 1; i <= steps; i += 1) {
+        const pt = bezierPoint(p, c, q, (upTo * i) / steps);
+        ctx.lineTo(pt.x, pt.y);
+      }
+    };
+    const dot = (x, y, r, fill) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TWO_PI);
+      ctx.fill();
+    };
 
     function draw(now) {
       const { w, h, dpr } = s.size;
       if (!w) return;
       const th = themeName();
-      const neutral = NEUTRAL[th];
+      const dark = th === 'dark';
+      const lite = isLite();
       const calm = isCalm();
+      const neutral = NEUTRAL[th];
+      const coreRgb = CORE_RGB[th];
       const t = s.clock;
+      const fl = s.flow;
+      const learning = s.learning;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      const { nodes, links, decor } = s.layout;
+      const { nodes, links, filaments, dust } = s.layout;
       const par = s.par;
+      const unit = w / 2;
       const dim = (category) => (s.focus && s.focus !== category ? 0.14 : 1);
+      const scale = Math.min(1.25, Math.max(0.8, w / 640));
+      const P = (p, k) => toScreen(p, w, par.x * k, par.y * k);
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      // 1. The long faint sweeps between (deepest layer: moves most with the pointer).
-      for (const d of decor) {
-        const rgb = d.category ? hexRgb(colorOf(d.category, th)) : neutral;
-        const k = d.category ? dim(d.category) : s.focus ? 0.3 : 1;
+      // 1. Specks of light in the dark (deepest layer: moves most with the pointer).
+      for (const d of dust) {
+        const q = P(d, 7);
+        const a = calm ? 0.26 : 0.1 + 0.3 * (0.5 + 0.5 * Math.sin(t * d.rate + d.tw));
+        ctx.fillStyle = `rgba(${neutral},${a * (s.focus ? 0.5 : 1)})`;
+        ctx.fillRect(q.x - d.size / 2, q.y - d.size / 2, d.size, d.size);
+      }
+
+      // 2. Faint far dendrites with a small light running in along each.
+      const coreP = P({ x: 0, y: 0 }, 3);
+      for (const f of filaments) {
+        const end = P({ x: Math.cos(f.angle) * f.length, y: (Math.sin(f.angle) * f.length) / MAP_ASPECT }, 7);
+        const from = P({ x: 0, y: 0 }, 7);
+        const c = bendPoint(from, end, f.bend);
         ctx.lineWidth = 0.8;
-        ctx.strokeStyle = `rgba(${rgb},${0.17 * k})`;
-        ellipsePath(d.orbit, w, d.start, d.start + d.sweep, par.x * 7, par.y * 7);
+        ctx.strokeStyle = `rgba(${neutral},${s.focus ? 0.06 : 0.16})`;
+        curve(from, c, end);
         ctx.stroke();
-        ctx.fillStyle = `rgba(${rgb},${0.4 * k})`;
-        for (let i = 0; i <= d.ticks; i += 1) {
-          const q = toScreen(pointOn(d.orbit, d.start + (d.sweep * i) / d.ticks), w, par.x * 7, par.y * 7);
-          ctx.fillRect(q.x - 0.9, q.y - 0.9, 1.8, 1.8);
-        }
-        if (d.marker) {
-          const end = toScreen(pointOn(d.orbit, d.start + d.sweep), w, par.x * 7, par.y * 7);
-          ctx.strokeStyle = `rgba(${rgb},${0.45 * k})`;
-          ctx.beginPath();
-          ctx.arc(end.x, end.y, 4.5, 0, TWO_PI);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(end.x, end.y, 1.6, 0, TWO_PI);
-          ctx.fillStyle = `rgba(${rgb},${0.6 * k})`;
-          ctx.fill();
-        }
-        // A small comet runs along the arc.
         if (!calm) {
-          const u = (t * d.comet.speed + d.comet.offset) % 1;
-          for (let tail = 0; tail < 4; tail += 1) {
-            const q = toScreen(pointOn(d.orbit, d.start + d.sweep * Math.max(0, u - tail * 0.012)), w, par.x * 7, par.y * 7);
-            ctx.fillStyle = `rgba(${rgb},${(0.85 - tail * 0.2) * k})`;
-            ctx.beginPath();
-            ctx.arc(q.x, q.y, 1.9 - tail * 0.35, 0, TWO_PI);
-            ctx.fill();
-          }
+          const u = (fl * f.flow.speed + f.flow.offset) % 1;
+          const q = bezierPoint(from, c, end, 1 - u);
+          dot(q.x, q.y, 1.5, `rgba(${neutral},${(s.focus ? 0.25 : 0.55) * Math.sin(u * Math.PI)})`);
         }
       }
 
-      // 2. The orbit of each topic (drawn in when it is born).
-      nodes.forEach((n) => {
+      // 3. Where the nodes are now (they sway a little around their place on the branch).
+      const here = nodes.map((n) => P(nodePoint(n, t), 3.5));
+      s.points = here;
+      const hotIndex = s.hoverIndex >= 0 ? s.hoverIndex : nodes.findIndex((n) => n.id === s.selectedId);
+      const hotSet = hotIndex >= 0 ? new Set(chainOf(nodes, hotIndex).map((c) => c.from)) : null;
+      const chains = nodes.map((_, i) =>
+        chainOf(nodes, i).map(({ from, to, bend }) => {
+          const p = to >= 0 ? here[to] : coreP;
+          const q = here[from];
+          return { p, q, c: bendPoint(p, q, bend), from };
+        }),
+      );
+      const somaR = Math.min(w, h) * 0.085 * (calm ? 1 : 1 + 0.035 * Math.sin(fl * 1.7));
+
+      // 4. The glow of the core.
+      {
+        const reach = somaR * (learning ? 4.6 : 3.6);
+        const g = ctx.createRadialGradient(coreP.x, coreP.y, somaR * 0.4, coreP.x, coreP.y, reach);
+        g.addColorStop(0, `rgba(${coreRgb},${dark ? 0.4 : 0.2})`);
+        g.addColorStop(1, `rgba(${coreRgb},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(coreP.x, coreP.y, reach, 0, TWO_PI);
+        ctx.fill();
+      }
+
+      // 5. The branches (drawn out from the core when a topic is born).
+      nodes.forEach((n, i) => {
         const g = s.grown(n.id, now);
         if (g <= 0) return;
+        const seg = chains[i][0];
         const rgb = hexRgb(colorOf(n.category, th));
-        const hot = s.selectedId === n.id;
-        ctx.lineWidth = hot ? 1.3 : 0.9;
-        ctx.strokeStyle = `rgba(${rgb},${(hot ? 0.7 : 0.26) * dim(n.category)})`;
-        if (g < 1) {
-          const len = ellipseLength(n.orbit) * (w / 2);
-          ctx.setLineDash([len * g, len]);
+        const parentRgb = n.parent >= 0 ? hexRgb(colorOf(nodes[n.parent].category, th)) : coreRgb;
+        const hot = hotSet ? hotSet.has(i) : false;
+        const d = dim(n.category);
+        const taper = Math.max(0.9, 1.7 - n.depth * 0.18);
+        if (!lite) {
+          ctx.lineWidth = taper * 3.2;
+          ctx.strokeStyle = `rgba(${rgb},${(hot ? 0.2 : 0.06) * g * d})`;
+          curve(seg.p, seg.c, seg.q, g);
+          ctx.stroke();
         }
-        ellipsePath(n.orbit, w, 0, TWO_PI, par.x * 3.5, par.y * 3.5);
+        const grad = ctx.createLinearGradient(seg.p.x, seg.p.y, seg.q.x, seg.q.y);
+        const alpha = (hot ? 0.9 : 0.42) * g * d;
+        grad.addColorStop(0, `rgba(${parentRgb},${alpha})`);
+        grad.addColorStop(1, `rgba(${rgb},${alpha})`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = taper + (hot ? 0.7 : 0);
+        curve(seg.p, seg.c, seg.q, g);
         ctx.stroke();
-        ctx.setLineDash([]);
+        // Beads along the branch, like the swellings of a real dendrite.
+        if (g >= 1) {
+          n.beads.forEach((u, k) => {
+            const b = bezierPoint(seg.p, seg.c, seg.q, u);
+            const twinkle = calm ? 0.6 : 0.45 + 0.4 * Math.sin(fl * 1.3 + i + k * 2);
+            dot(b.x, b.y, 1.5, `rgba(${rgb},${(hot ? 0.95 : twinkle) * d})`);
+          });
+        }
+        // Twigs that end in a dot.
+        if (!lite && g >= 1) {
+          for (const tw of n.twigs) {
+            const base = bezierPoint(seg.p, seg.c, seg.q, tw.u);
+            const dir = Math.atan2(seg.q.y - seg.p.y, seg.q.x - seg.p.x) + tw.side * tw.tilt;
+            const reachPx = tw.len * unit;
+            const end = { x: base.x + Math.cos(dir) * reachPx, y: base.y + Math.sin(dir) * reachPx };
+            ctx.lineWidth = 0.7;
+            ctx.strokeStyle = `rgba(${rgb},${(hot ? 0.6 : 0.24) * d})`;
+            ctx.beginPath();
+            ctx.moveTo(base.x, base.y);
+            ctx.quadraticCurveTo((base.x + end.x) / 2 - Math.sin(dir) * reachPx * 0.25, (base.y + end.y) / 2 + Math.cos(dir) * reachPx * 0.25, end.x, end.y);
+            ctx.stroke();
+            dot(end.x, end.y, 1.3, `rgba(${rgb},${(hot ? 0.9 : 0.5) * d})`);
+          }
+        }
       });
 
-      // 3. Where the nodes are now.
-      const here = nodes.map((n) => toScreen(nodePoint(n, t), w, par.x * 3.5, par.y * 3.5));
-      s.points = here;
-
-      // 4. Curved links between neighbours.
+      // 6. Synapses between neighbouring kinds of knowledge.
+      ctx.setLineDash([2, 4]);
       links.forEach(([i, j], k) => {
         const a = nodes[i];
         const b = nodes[j];
@@ -201,39 +270,129 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         if (g <= 0) return;
         const p = here[i];
         const q = here[j];
-        const bend = (((i + j + k) % 2) * 2 - 1) * 0.2;
-        const cx = (p.x + q.x) / 2 - (q.y - p.y) * bend;
-        const cy = (p.y + q.y) / 2 + (q.x - p.x) * bend;
-        const hot = s.hoverIndex === i || s.hoverIndex === j;
-        const grad = ctx.createLinearGradient(p.x, p.y, q.x, q.y);
-        const alpha = (hot ? 0.8 : 0.3) * g * Math.min(dim(a.category), dim(b.category));
-        grad.addColorStop(0, `rgba(${hexRgb(colorOf(a.category, th))},${alpha})`);
-        grad.addColorStop(1, `rgba(${hexRgb(colorOf(b.category, th))},${alpha})`);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = hot ? 1.3 : 0.8;
+        const hot = hotIndex === i || hotIndex === j;
+        const c = bendPoint(p, q, (((i + j + k) % 2) * 2 - 1) * 0.18);
+        ctx.lineWidth = hot ? 1.2 : 0.7;
+        ctx.strokeStyle = `rgba(${hexRgb(colorOf(a.category, th))},${(hot ? 0.7 : 0.16) * g * Math.min(dim(a.category), dim(b.category))})`;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.quadraticCurveTo(cx, cy, q.x, q.y);
+        ctx.quadraticCurveTo(c.x, c.y, q.x, q.y);
         ctx.stroke();
       });
+      ctx.setLineDash([]);
 
-      // 5. The notes: one small point per note strung out behind each node.
-      nodes.forEach((n) => {
-        const g = s.grown(n.id, now);
-        if (g <= 0) return;
-        const rgb = hexRgb(colorOf(n.category, th));
-        const pts = trailPoints(n, t);
-        pts.forEach((pt, k) => {
-          const q = toScreen(pt, w, par.x * 3.5, par.y * 3.5);
-          const fade = 1 - k / (pts.length + 2);
-          ctx.fillStyle = `rgba(${rgb},${(0.35 + fade * 0.55) * g * dim(n.category)})`;
-          ctx.beginPath();
-          ctx.arc(q.x, q.y, 1 + fade * 1.4, 0, TWO_PI);
-          ctx.fill();
+      // 7. The flow: light running along every branch, in toward the core.
+      const onChain = (chain, sigma) => {
+        const k = Math.min(chain.length - 1, Math.floor(sigma));
+        const u = sigma - k;
+        const seg = chain[k];
+        return bezierPoint(seg.p, seg.c, seg.q, 1 - u); // chains start at the node, so u runs from the node toward its parent
+      };
+      if (!calm) {
+        ctx.globalCompositeOperation = dark && !lite ? 'lighter' : 'source-over';
+        nodes.forEach((n, i) => {
+          if (s.grown(n.id, now) < 1) return;
+          const chain = chains[i];
+          const m = chain.length;
+          const rgb = hexRgb(colorOf(n.category, th));
+          const d = dim(n.category);
+          const count = (lite ? 1 : 2) + (learning && !lite ? 1 : 0);
+          const speed = (0.3 + n.flow.speed * 1.4) * (learning ? 2.5 : 1);
+          for (let k = 0; k < count; k += 1) {
+            const sigma = (fl * speed + (n.flow.offset + k / count) * m) % m;
+            for (let tail = 0; tail < 5; tail += 1) {
+              const at = sigma - tail * 0.05;
+              if (at < 0) break;
+              const q = onChain(chain, at);
+              const a = (0.95 - tail * 0.18) * d * (learning ? 1 : 0.8);
+              if (tail === 0) {
+                dot(q.x, q.y, 5.2, `rgba(${rgb},${0.24 * d})`);
+                dot(q.x, q.y, 2.2, `rgba(255,255,255,${0.9 * d})`);
+              } else {
+                dot(q.x, q.y, 1.7 - tail * 0.25, `rgba(${rgb},${a})`);
+              }
+            }
+          }
         });
+        // Eddie recalls a topic: a brighter pulse leaves the core and ends in a ring on the node.
+        if (nodes.length) {
+          const slot = Math.floor(fl / RECALL_EVERY_S);
+          const idx = hashString(`r${slot}`) % nodes.length;
+          const local = (fl % RECALL_EVERY_S) / RECALL_TRAVEL_S;
+          const n = nodes[idx];
+          if (local < 1.4 && s.grown(n.id, now) >= 1 && dim(n.category) === 1) {
+            const chain = chains[idx];
+            const m = chain.length;
+            const rgb = hexRgb(colorOf(n.category, th));
+            if (local < 1) {
+              for (let tail = 0; tail < 9; tail += 1) {
+                const at = (1 - Math.max(0, local - tail * 0.018)) * m;
+                const q = onChain(chain, Math.min(m - 1e-6, at));
+                dot(q.x, q.y, tail === 0 ? 3.4 : 2.6 - tail * 0.22, tail === 0 ? 'rgba(255,255,255,0.95)' : `rgba(${rgb},${0.85 - tail * 0.09})`);
+              }
+            }
+            if (local > 0.95) {
+              const u = Math.min(1, (local - 0.95) / 0.45);
+              ctx.lineWidth = 1.5;
+              ctx.strokeStyle = `rgba(${rgb},${(1 - u) * 0.9})`;
+              ctx.beginPath();
+              ctx.arc(here[idx].x, here[idx].y, n.size * scale + 4 + u * 22, 0, TWO_PI);
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // 8. The core: a mesh ball turning slowly, with rings spreading from it while Eddie learns.
+      {
+        const pts = turnSoma(SOMA.points, calm ? 0.6 : fl * (learning ? 0.8 : 0.28));
+        ctx.fillStyle = `rgba(${coreRgb},0.1)`;
+        ctx.beginPath();
+        ctx.arc(coreP.x, coreP.y, somaR, 0, TWO_PI);
+        ctx.fill();
+        ctx.lineWidth = 0.8;
+        for (const [i, j] of SOMA.edges) {
+          const depth = (pts[i].z + pts[j].z) / 2;
+          ctx.strokeStyle = `rgba(${coreRgb},${0.16 + 0.5 * ((depth + 1) / 2)})`;
+          ctx.beginPath();
+          ctx.moveTo(coreP.x + pts[i].x * somaR, coreP.y + pts[i].y * somaR);
+          ctx.lineTo(coreP.x + pts[j].x * somaR, coreP.y + pts[j].y * somaR);
+          ctx.stroke();
+        }
+        for (const p of pts) dot(coreP.x + p.x * somaR, coreP.y + p.y * somaR, 0.9 + 1.3 * ((p.z + 1) / 2), `rgba(${coreRgb},${0.45 + 0.5 * ((p.z + 1) / 2)})`);
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = `rgba(${coreRgb},0.5)`;
+        ctx.beginPath();
+        ctx.arc(coreP.x, coreP.y, somaR * 1.06, 0, TWO_PI);
+        ctx.stroke();
+        if (learning) {
+          for (let k = 0; k < 3; k += 1) {
+            const u = calm ? 0.4 + k * 0.2 : (fl / 2.4 + k / 3) % 1;
+            ctx.strokeStyle = `rgba(${coreRgb},${(1 - u) * 0.7})`;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(coreP.x, coreP.y, somaR * 1.2 + u * Math.min(w, h) * 0.38, 0, TWO_PI);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // 9. The notes: one small point per note circling its topic.
+      nodes.forEach((n, i) => {
+        const g = s.grown(n.id, now);
+        if (g <= 0 || !n.notes) return;
+        const rgb = hexRgb(colorOf(n.category, th));
+        const r0 = n.size * g * scale;
+        const dir = n.speed > 0 ? 1 : -1;
+        for (let k = 0; k < n.notes; k += 1) {
+          const ang = n.phase * 2 + (k * TWO_PI) / n.notes + (calm ? 0 : fl * 0.45 * dir);
+          const rr = r0 + 7 + (k % 2) * 2.6;
+          dot(here[i].x + Math.cos(ang) * rr, here[i].y + Math.sin(ang) * rr, 1.2, `rgba(${rgb},${(0.45 + 0.4 * ((k % 3) / 2)) * g * dim(n.category)})`);
+        }
       });
 
-      // 6. The nodes: two rings and a core, with a slow pulse going out.
+      // 10. The nodes: two rings and a core, with a slow pulse going out.
       nodes.forEach((n, i) => {
         const g = s.grown(n.id, now);
         if (g <= 0) return;
@@ -241,17 +400,21 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         const rgb = hexRgb(colorOf(n.category, th));
         const d = dim(n.category);
         const hot = s.hoverIndex === i || s.selectedId === n.id;
-        const r = (n.size + (hot ? 2 : 0)) * g * Math.min(1.25, Math.max(0.8, w / 640));
+        const r = (n.size + (hot ? 2 : 0)) * g * scale;
         if (!calm && g >= 1) {
           const u = ((t + n.pulse.offset) % n.pulse.period) / n.pulse.period;
           if (u < 0.55) {
-            ctx.strokeStyle = `rgba(${rgb},${(1 - u / 0.55) * 0.5 * d})`;
+            ctx.strokeStyle = `rgba(${rgb},${(1 - u / 0.55) * 0.45 * d})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(q.x, q.y, r + (u / 0.55) * 26, 0, TWO_PI);
+            ctx.arc(q.x, q.y, r + (u / 0.55) * 20, 0, TWO_PI);
             ctx.stroke();
           }
         }
+        ctx.fillStyle = dark ? `rgba(6,12,20,${0.78 * d})` : `rgba(255,255,255,${0.75 * d})`;
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, r, 0, TWO_PI);
+        ctx.fill();
         ctx.lineWidth = n.kind === 'habilidad' ? 2 : 1.4;
         ctx.strokeStyle = `rgba(${rgb},${0.95 * d})`;
         ctx.beginPath();
@@ -262,16 +425,13 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         ctx.beginPath();
         ctx.arc(q.x, q.y, r * 0.68, 0, TWO_PI);
         ctx.stroke();
-        ctx.fillStyle = `rgba(${rgb},${0.18 * d})`;
+        ctx.fillStyle = `rgba(${rgb},${0.2 * d})`;
         ctx.beginPath();
         ctx.arc(q.x, q.y, r * 0.68, 0, TWO_PI);
         ctx.fill();
-        ctx.fillStyle = `rgba(${rgb},${d})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, Math.max(1.8, r * 0.3), 0, TWO_PI);
-        ctx.fill();
+        dot(q.x, q.y, Math.max(1.8, r * 0.3), `rgba(${rgb},${d})`);
         if (hot) {
-          ctx.strokeStyle = th === 'light' ? 'rgba(20,30,45,0.85)' : 'rgba(255,255,255,0.9)';
+          ctx.strokeStyle = dark ? 'rgba(255,255,255,0.9)' : 'rgba(20,30,45,0.85)';
           ctx.lineWidth = 1.2;
           ctx.beginPath();
           ctx.arc(q.x, q.y, r + 5, 0, TWO_PI);
@@ -286,45 +446,6 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           ctx.stroke();
         }
       });
-
-      // 7. Eddie is learning something: a signal pulses from the middle.
-      if (s.learning) {
-        const c = { x: w / 2 + par.x * 3.5, y: h / 2 + par.y * 3.5 };
-        const rgb = th === 'light' ? '0,127,153' : '63,232,255';
-        const clock = now / 1000;
-        for (let k = 0; k < 3; k += 1) {
-          const u = calm ? 0.4 + k * 0.2 : ((clock / 2.4 + k / 3) % 1);
-          ctx.strokeStyle = `rgba(${rgb},${(1 - u) * 0.75})`;
-          ctx.lineWidth = 1.6;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, 8 + u * Math.min(w, h) * 0.34, 0, TWO_PI);
-          ctx.stroke();
-        }
-        const spin = calm ? 0 : clock * 0.9;
-        ctx.setLineDash([5, 7]);
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = `rgba(${rgb},0.8)`;
-        ctx.beginPath();
-        ctx.ellipse(c.x, c.y, w * 0.13, w * 0.07, 0.45, 0, TWO_PI);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        const comet = { x: c.x + Math.cos(spin) * w * 0.13 * Math.cos(0.45) - Math.sin(spin) * w * 0.07 * Math.sin(0.45), y: c.y + Math.cos(spin) * w * 0.13 * Math.sin(0.45) + Math.sin(spin) * w * 0.07 * Math.cos(0.45) };
-        ctx.fillStyle = `rgb(${rgb})`;
-        ctx.beginPath();
-        ctx.arc(comet.x, comet.y, 3.2, 0, TWO_PI);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, 5, 0, TWO_PI);
-        ctx.fill();
-      }
-    }
-
-    function pointOn(e, theta) {
-      const x = e.rx * Math.cos(theta);
-      const y = e.ry * Math.sin(theta);
-      const c = Math.cos(e.rot);
-      const sn = Math.sin(e.rot);
-      return { x: e.cx + x * c - y * sn, y: e.cy + x * sn + y * c };
     }
 
     function frame(now) {
@@ -336,7 +457,8 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       const animating = moving;
       if (now - s.last >= (isLite() ? LITE_FRAME_MS : FRAME_MS) || !animating) {
         const dt = Math.min((now - (s.last || now)) / 1000, 0.2);
-        // The nodes stand still while one is being read.
+        // The nodes stand still while one is being read; the light keeps running.
+        if (animating) s.flow += dt;
         if (animating && s.hoverIndex < 0) s.clock += dt;
         // The parallax eases toward the pointer and then stops for good (no endless sub-pixel redraws).
         s.par.x = Math.abs(s.par.tx - s.par.x) < 0.002 ? s.par.tx : s.par.x + (s.par.tx - s.par.x) * 0.12;
@@ -449,7 +571,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           ref={canvasRef}
           className="knowledge-map__canvas"
           role="img"
-          aria-label={`Mapa de órbitas con ${topics.length} temas aprendidos. La lista completa está debajo.`}
+          aria-label={`Mapa en forma de neurona con ${topics.length} temas aprendidos, agrupados por tipo de conocimiento.`}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerLeave}
@@ -460,7 +582,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
             Aprendiendo «{clip(learning, 60)}»…
           </p>
         ) : (
-          topics.length === 0 && <p className="knowledge-map__empty">Todavía no aprendí nada. Dime «Investiga y aprende…» y cada tema aparecerá aquí con su propia órbita.</p>
+          topics.length === 0 && <p className="knowledge-map__empty">Todavía no aprendí nada. Dime «Investiga y aprende…» y cada tema crecerá aquí como una rama de la neurona.</p>
         )}
         {hovered && (
           <div className="knowledge-map__tip" style={{ left: hover.x, top: hover.y }} role="status">
@@ -507,7 +629,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           </div>
         </div>
       ) : (
-        <p className="memory-orb__hint">Pasa el mouse sobre un anillo para ver qué aprendí; haz clic para abrirlo. Cada punto pequeño es una nota y el color es el tipo de conocimiento.</p>
+        <p className="memory-orb__hint">Cada rama es un tipo de conocimiento y la luz que corre hacia el núcleo es lo aprendido llegando. Pasa el mouse sobre un nodo para ver qué aprendí (se ilumina su rama) y haz clic para abrirlo. Cada punto pequeño es una nota.</p>
       )}
     </section>
   );
