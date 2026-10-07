@@ -772,6 +772,13 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
+> **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en
+> Memoria queda como datos sueltos en la memoria y se busca por palabras: ahora con raíces («invito» = «invitar», «plan» = «planes»),
+> sin palabras vacías, sin repetidos y con más espacio (hasta 6 conocimientos relacionados). Lo del Segundo cerebro se busca por
+> significado con espera de hasta 1,5 s y, si eso no encuentra nada o falla, por palabras (al menos 2 en común). Si nombras un
+> proyecto guardado, Eddie también tiene a mano las herramientas del Segundo cerebro, y el prompt le dice que busque con `recall` y
+> `search_knowledge` antes de responder «no lo sé».
+
 - **Un .md sobre cualquiera de los dos cerebros**: en Memoria, suelta un archivo `.md` (o usa «Subir documento .md») sobre el orbe de
   **memoria** o sobre el mapa del **segundo cerebro**. Eddie lo lee con una llamada de IA y lo **clasifica por lo que dice**
   (`api/_lib/brain/`, tipos en `src/services/brainKinds.js`):
