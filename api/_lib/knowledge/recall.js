@@ -15,7 +15,9 @@ const AUTO_LIMIT = 4;
 const TOOL_LIMIT = 6;
 const AUTO_BUDGET_CHARS = 1400;
 // Runs before the first word of the answer: if the notes aren't ready, Eddie answers without them.
-const RECALL_TIMEOUT_MS = 700;
+const RECALL_TIMEOUT_MS = 1500;
+// Notes found by plain words (no embedding): only when they share at least this many of the user's words.
+const WORDS_MIN_HITS = 2;
 
 const domain = (url) => {
   try {
@@ -69,11 +71,34 @@ export async function knowledgeBlock({ userId, messages }) {
   if (!process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !userId) return '';
   const query = queryFrom(messages);
   if (!query) return '';
+  let found = [];
   try {
-    const found = await Promise.race([recallKnowledge(userId, query), new Promise((resolve) => setTimeout(() => resolve([]), RECALL_TIMEOUT_MS))]);
-    return formatKnowledge(found);
+    found = await Promise.race([recallKnowledge(userId, query), new Promise((resolve) => setTimeout(() => resolve([]), RECALL_TIMEOUT_MS))]);
   } catch (err) {
     console.error('[knowledge] recall failed:', err.message);
-    return '';
   }
+  // By meaning found nothing (slow or unavailable embeddings, or a question phrased
+  // differently from the notes): a plain-words search is cheap and needs no embedding.
+  if (!found.length) {
+    try {
+      found = await byWords(userId, query);
+    } catch (err) {
+      console.error('[knowledge] words fallback failed:', err.message);
+    }
+  }
+  return formatKnowledge(found);
+}
+
+// Notes that share at least WORDS_MIN_HITS distinct words with the query (one word is too weak: it would drag in noise).
+async function byWords(userId, query) {
+  const ws = wordsOf(query);
+  if (ws.length < WORDS_MIN_HITS) return [];
+  const rows = await searchNotesByWords(userId, ws, { limit: 12 });
+  const hits = (n) => ws.filter((w) => `${n.topic || ''} ${n.content}`.toLowerCase().includes(w)).length;
+  return rows
+    .map((n) => ({ n, h: hits(n) }))
+    .filter(({ h }) => h >= WORDS_MIN_HITS)
+    .sort((a, b) => b.h - a.h)
+    .slice(0, AUTO_LIMIT)
+    .map(({ n }) => n);
 }

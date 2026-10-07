@@ -307,13 +307,23 @@ export function memoryForContext(memory, now = Date.now()) {
 
 // ---- The part of memory that goes into the system prompt ----
 
-const words = (text) => normalizeText(text).split(' ').filter((w) => w.length > 3);
+// Words that say nothing about the topic (they would "match" half of the memory).
+const STOP = new Set([
+  'para', 'como', 'cual', 'cuales', 'cuanto', 'cuanta', 'cuantos', 'cuantas', 'donde', 'cuando', 'quien', 'tiene', 'tienen', 'tengo', 'sobre', 'entre', 'desde', 'hasta',
+  'esta', 'este', 'esto', 'estos', 'estas', 'esos', 'esas', 'ese', 'esa', 'pero', 'porque', 'puedo', 'puede', 'puedes', 'dime', 'dame', 'hazme', 'quiero', 'quieres', 'algo',
+  'todo', 'toda', 'todos', 'todas', 'mucho', 'muchos', 'poco', 'tambien', 'ademas', 'ahora', 'hace', 'hacer', 'haces', 'sabes', 'saber', 'hola', 'gracias', 'favor', 'cosa', 'cosas',
+]);
+
+// Comparing by a short stem makes "invito" / "invitar" / "invitación" and
+// "cafetera" / "cafeteras" meet; plain whole-word matching missed them.
+const stem = (w) => (w.length >= 6 ? w.slice(0, 5) : w.replace(/s$/, ''));
+const words = (text) => normalizeText(text).split(' ').filter((w) => w.length > 3 && !STOP.has(w)).map(stem);
 
 function overlap(queryWords, text) {
   if (!queryWords.size) return 0;
-  let n = 0;
-  for (const w of normalizeText(text).split(' ')) if (queryWords.has(w)) n += 1;
-  return n;
+  const seen = new Set();
+  for (const w of words(text)) if (queryWords.has(w)) seen.add(w);
+  return seen.size;
 }
 
 const fmtDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short' });
@@ -342,17 +352,22 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
     sections.push({ title: 'Proyectos', lines: chosen.map(describeProject) });
   }
 
-  const relevant = (list, limit, fmt) =>
-    list
+  // The same fact kept twice (a document dropped two times) takes room once.
+  const gist = (item) => normalizeText(item.text).slice(0, 48);
+  const relevant = (list, limit, fmt) => {
+    const seenGist = new Set();
+    return list
       .map((item) => ({ item, score: overlap(q, `${item.text} ${item.project || ''}`) }))
       .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score || b.item.date - a.item.date)
+      .filter(({ item }) => !seenGist.has(gist(item)) && seenGist.add(gist(item)))
       .slice(0, limit)
       .map((s) => fmt(s.item));
+  };
   // Decisions carry their date, so Eddie can say "me dijiste el 12 de sep que…" when they weigh on a request.
   const decisions = relevant(live.decisions, 6, (d) => `${d.text}${d.project ? ` (${d.project})` : ''}${d.date ? ` — ${fmtDate(d.date)}` : ''}`);
   if (decisions.length) sections.push({ title: 'Decisiones relacionadas', lines: decisions });
-  const knowledge = relevant(live.knowledge, 4, (k) => k.text);
+  const knowledge = relevant(live.knowledge, 6, (k) => k.text);
   if (knowledge.length) sections.push({ title: 'Conocimientos relacionados', lines: knowledge });
 
   if (live.context.length) {

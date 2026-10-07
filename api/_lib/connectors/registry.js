@@ -65,7 +65,15 @@ export function intentFromMessages(messages = [], memory = []) {
     .filter((m) => m?.c === 'projects' && / · repo: /.test(m.t || ''))
     .map((m) => normalizeIntent(String(m.t).split(' · ')[0]))
     .filter((n) => n.length > 2);
-  return names.some((n) => plain.includes(n)) ? `${intent}\nGitHub` : intent;
+  const mentionsRepoProject = names.some((n) => plain.includes(n));
+  // Any saved project named in the conversation also brings the second brain
+  // (its documents and notes) along, so "¿cuánto cuesta el plan del Gestor?" can be searched.
+  const projectNames = (Array.isArray(memory) ? memory : [])
+    .filter((m) => m?.c === 'projects')
+    .map((m) => normalizeIntent(String(m.t).split(' · ')[0]))
+    .filter((n) => n.length > 2);
+  const mentionsProject = projectNames.some((n) => plain.includes(n));
+  return `${intent}${mentionsRepoProject ? '\nGitHub' : ''}${mentionsProject ? '\nsegundo cerebro' : ''}`;
 }
 
 function normalizeIntent(s) {
