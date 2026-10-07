@@ -140,7 +140,7 @@ export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, g
   // A picture attached to the latest message, for the image tools (edit what the user just sent).
   const lastMessage = request.messages.at(-1);
   const attachedImage = lastMessage?.role === 'user' ? lastMessage.images?.[0] || null : null;
-  return callProvider({ ...request, system, context: { ...request.context, getUser, attachedImage }, onChunk, onStep });
+  return callProvider({ ...request, system, context: { ...request.context, getUser, attachedImage, toTelegram: body?.mirror === true }, onChunk, onStep });
 }
 
 export function errorToResponse(err) {

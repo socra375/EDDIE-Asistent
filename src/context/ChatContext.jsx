@@ -204,7 +204,6 @@ export function ChatProvider({ children }) {
           args,
           context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, tasks: tasksForContext(), memory: memoryContext(settings) },
           disabledConnectors: disabledFor(settings),
-          mirror: Boolean(user) && settings.telegramMirror !== false,
         });
         if (actions.length) await applyTaskActions(actions, { signedIn: Boolean(user) });
         if (actions.length) applyMemoryActions(actions);

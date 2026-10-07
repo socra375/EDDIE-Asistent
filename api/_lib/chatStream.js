@@ -31,20 +31,15 @@ import { handleChatRequest, errorToResponse } from './handler.js';
 import { parseCookies } from './cookies.js';
 import { lazySessionUser } from './session.js';
 import { takeRequest } from './usage/store.js';
-import { mirrorImagesToTelegram, mirrorToTelegram } from './telegram/mirror.js';
+import { mirrorImagesToTelegram } from './telegram/mirror.js';
 
 // While Eddie thinks (a model that takes a while to say its first word, a
 // slow tool) nothing is written; after this much silence a small "ping" goes
 // out every few seconds so the connection is never taken for dead.
 const QUIET_MS = 3000;
 const BEAT_MS = 4000;
-// The copy to Telegram must not hold the app's answer for long.
+// The pictures for Telegram must not hold the app's answer for long.
 const MIRROR_WAIT_MS = 5000;
-
-const lastUserText = (body) => {
-  const last = Array.isArray(body?.messages) ? body.messages.at(-1) : null;
-  return last?.role === 'user' && typeof last.content === 'string' ? last.content : '';
-};
 
 export async function runChatStream(req, res) {
   let streamStarted = false;
@@ -102,15 +97,10 @@ export async function runChatStream(req, res) {
     if (result.steps?.length) done.steps = result.steps;
     write(done);
     clearInterval(beat);
-    // The same answer, to the user's Telegram (when the app asked and a chat is linked).
-    if (req.body?.mirror === true && user) {
-      await Promise.race([
-        (async () => {
-          await mirrorToTelegram({ userId: user.id, question: lastUserText(req.body), answer, steps: result.steps, confirmations: result.confirmations });
-          await mirrorImagesToTelegram({ userId: user.id, actions: result.actions });
-        })(),
-        new Promise((resolve) => setTimeout(resolve, MIRROR_WAIT_MS)),
-      ]);
+    // The pictures Eddie made go to the user's Telegram (when the app asked and a chat is linked).
+    // Text results are sent by Eddie himself with the send_to_telegram tool, not here.
+    if (req.body?.mirror === true && user && result.actions?.some((a) => a?.type === 'show_image')) {
+      await Promise.race([mirrorImagesToTelegram({ userId: user.id, actions: result.actions }), new Promise((resolve) => setTimeout(resolve, MIRROR_WAIT_MS))]);
     }
     res.end();
   } catch (err) {
