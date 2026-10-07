@@ -438,3 +438,9 @@
   outline: 2px dashed var(--accent);
   outline-offset: -6px;
 }
+
+/* Pictures Eddie made, shown larger than an attachment */
+.bubble__images--made img {
+  max-width: min(100%, 320px);
+  max-height: 320px;
+}

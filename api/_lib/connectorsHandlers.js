@@ -10,6 +10,7 @@ import { handleEpisodesRoute } from './episodes/handlers.js';
 import { handleKnowledgeRoute } from './knowledge/handlers.js';
 import { handleUsageRoute } from './usage/handlers.js';
 import { handleBrainRoute } from './brain/handlers.js';
+import { handleMediaRoute } from './media/handlers.js';
 import { handleComputerRoute } from './computer/handlers.js';
 import { handleDevicesRoute } from './devices/handlers.js';
 import { handleSpotifyRoute } from './spotify/auth.js';
@@ -42,6 +43,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path.length === 1 && path[0] === 'cron') return handleCronRequest({ method, headers });
   if (path[0] === 'episodes') return handleEpisodesRoute({ method, path, cookies, body });
   if (path[0] === 'knowledge') return handleKnowledgeRoute({ method, path, cookies, query, body });
+  if (path[0] === 'media') return handleMediaRoute({ method, path, cookies, query, body });
   if (path[0] === 'brain') return handleBrainRoute({ method, path, cookies, body });
   if (path[0] === 'usage') return handleUsageRoute({ method, path, cookies, query, body });
   if (path[0] === 'telegram') return handleTelegramRoute({ method, path, cookies, headers, body });

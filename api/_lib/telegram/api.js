@@ -70,6 +70,22 @@ export async function sendVoice(chatId, audio, caption) {
   }
 }
 
+// A picture Eddie made, as a photo message (JPEG, PNG and WebP are accepted).
+export async function sendPhoto(chatId, image, { caption, mime = 'image/png' } = {}) {
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  if (caption) form.append('caption', caption.slice(0, 1000));
+  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
+  form.append('photo', new Blob([image], { type: mime }), `eddie.${ext}`);
+  try {
+    const res = await fetch(`${base()}/sendPhoto`, { method: 'POST', body: form, signal: AbortSignal.timeout(25000) });
+    const data = await res.json().catch(() => null);
+    return { ok: Boolean(res.ok && data?.ok) };
+  } catch {
+    return { ok: false };
+  }
+}
+
 // A voice note the user sent: file_id -> bytes. Telegram bots can download
 // files up to 20 MB, far above what a spoken message weighs.
 export async function downloadFile(fileId) {

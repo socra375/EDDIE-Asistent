@@ -5,6 +5,7 @@ import { useVoice } from '../../context/VoiceContext';
 import { MODES, DEFAULT_MODE } from '../../services/personality';
 import { SKILLS, getSkill, buildSkillRequest } from '../../services/skills';
 import { MAX_IMAGES, prepareImage } from '../../services/images';
+import { mediaUrl } from '../../services/media';
 import { autoDetectReady, saveProbeConfig, useProbeConfig } from '../../services/probe';
 import EddieCore from '../Core/EddieCore';
 import Icon from '../../layout/Icon';
@@ -341,6 +342,15 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
               <div className="bubble__text">
                 <RichText text={m.display || m.content} />
               </div>
+              {m.media?.length > 0 && (
+                <div className="bubble__images bubble__images--made" aria-label="Imágenes que creó Eddie">
+                  {m.media.map((pic) => (
+                    <a key={pic.id} href={mediaUrl(pic.id)} target="_blank" rel="noopener noreferrer" title="Abrir la imagen completa">
+                      <img src={mediaUrl(pic.id)} alt={pic.prompt || 'Imagen creada por Eddie'} loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              )}
               {m.confirmations?.map((card) => (
                 <ConfirmCard key={card.id} card={card} onResolve={(decision, args) => resolveConfirmation(m.id, card.id, decision, args)} />
               ))}

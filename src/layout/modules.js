@@ -9,6 +9,7 @@ export const MODULES = [
   { id: 'tasks', label: 'Tareas', icon: 'check', color: '#4dffa6' },
   { id: 'notes', label: 'Notas', icon: 'note', color: '#ffe066' },
   { id: 'memory', label: 'Memoria', icon: 'memory', color: '#ff7ad9' },
+  { id: 'gallery', label: 'Galería', icon: 'image', color: '#7ad9ff' },
   { id: 'connectors', label: 'Conectores', icon: 'plug', color: '#ffb020' },
 ];
 

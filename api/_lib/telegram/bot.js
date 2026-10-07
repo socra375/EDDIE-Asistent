@@ -14,6 +14,7 @@ import { buildBriefing } from '../reminders/briefing.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
 import { restoreTanda, takeRequest, usageFor, usageLine } from '../usage/store.js';
+import { sendCreatedImages } from './mirror.js';
 
 const NOT_LINKED =
   'Hola, soy Eddie. Este chat todavía no está vinculado a tu cuenta.\n\nAbre la app de Eddie → Conectores → Telegram → "Vincular Telegram" y pulsa el enlace que te dará.';
@@ -276,6 +277,9 @@ async function runAssistant(link, text, viaVoice, images = [], startedAt = Date.
       const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || 'YouTube';
       if (url) await sendMessage(chatId, `▶ ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : '▶ Abrir', url }]] } });
     }
+
+    // Pictures Eddie made while answering go out as photos.
+    await sendCreatedImages(userId, chatId, actions);
 
     if (wantsVoice) {
       const audio = await voiceFor(reply, language, 'telegram', voiceId);

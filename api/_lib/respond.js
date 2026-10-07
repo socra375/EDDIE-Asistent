@@ -23,6 +23,13 @@ export function applyResult(res, result) {
     res.end(result.text);
     return;
   }
+  // `body` (a Buffer) is for files — the pictures of the gallery.
+  if (Buffer.isBuffer(result.body)) {
+    res.setHeader('Content-Type', result.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(result.body.length));
+    res.end(result.body);
+    return;
+  }
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(result.json ?? {}));
 }
