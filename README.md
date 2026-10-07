@@ -333,6 +333,10 @@ Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 > núcleo. Al pasar el mouse por un nodo se ilumina toda su rama. Con *reducir movimiento* queda quieto y con *Modo ligero* se quitan el
 > brillo y las ramitas. La tarjeta de abajo tiene un hilo de luz que cruza su borde superior. Código: `src/memory/knowledgeMap.js`
 > (matemática pura) y `src/memory/KnowledgeMap.jsx` (lienzo).
+>
+> **El núcleo se puede arrastrar**: toda la neurona (ramas, nodos, notas y filamentos) se mueve con él y los nodos lejanos lo siguen con un
+> poco de retraso, como algo elástico. Se queda donde lo sueltas (dentro de un margen para no perderlo), la malla gira más rápido mientras
+> se mueve y con doble clic —o la tecla Inicio— vuelve al centro. También se mueve con las flechas del teclado y funciona con el dedo.
 
 Dile a Eddie **«Investiga y aprende [un tema o una habilidad]»** (por voz, en el chat, en Telegram o desde **Memoria → Segundo cerebro**)
 y Eddie va a la web, lee varias páginas, **guarda lo esencial** con su fuente y, desde entonces, **cualquier pregunta relacionada usa

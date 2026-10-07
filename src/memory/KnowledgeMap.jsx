@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { growth, hashString } from './orbMath.js';
-import { CORE_RGB, MAP_ASPECT, bendPoint, bezierPoint, chainOf, colorOf, layoutMap, nodePoint, pickMapNode, somaMesh, turnSoma } from './knowledgeMap.js';
+import { CORE_RGB, MAP_ASPECT, bendPoint, bezierPoint, catchUp, chainOf, clampOffset, colorOf, followFactor, layoutMap, nodePoint, pickMapNode, somaMesh, turnSoma } from './knowledgeMap.js';
 import { KNOWLEDGE_CATEGORIES, categoryLabel } from '../services/knowledgeCategories.js';
 
 const FRAME_MS = 33; // ~30 fps: the light has to run smoothly
@@ -49,6 +49,7 @@ export function CategorySelect({ value, onChange, label = 'Tipo' }) {
 export default function KnowledgeMap({ topics, learning, selectedId, onSelect, onOpen, onCategory }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
+  const handleRef = useRef(null);
   const layout = useMemo(() => layoutMap(topics), [topics]);
   const [hover, setHover] = useState(null); // { index, x, y }
   const [focus, setFocus] = useState(null); // category the legend isolates
@@ -64,6 +65,13 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
     born: new Map(),
     clock: 0,
     flow: 0,
+    off: { x: 0, y: 0 }, // where the core is now (map units): dragging it moves the whole neuron
+    offTarget: { x: 0, y: 0 },
+    lag: [], // each node's own catching-up offset
+    dragging: false,
+    grab: { x: 0, y: 0 },
+    spin: 0, // extra turn of the core ball while it is dragged
+    handle: null,
     last: 0,
     t0: 0,
     par: { x: 0, y: 0, tx: 0, ty: 0 },
@@ -99,6 +107,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
     const wrap = wrapRef.current;
     const ctx = canvas.getContext('2d');
     const s = live.current;
+    s.handle = handleRef.current;
     s.t0 = performance.now();
     // How far along a topic's birth is (0 → 1). It starts once the map has been seen.
     s.grown = (id, now) => {
@@ -169,10 +178,11 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       }
 
       // 2. Faint far dendrites with a small light running in along each.
-      const coreP = P({ x: 0, y: 0 }, 3);
+      const off = s.off;
+      const coreP = P(off, 3);
       for (const f of filaments) {
-        const end = P({ x: Math.cos(f.angle) * f.length, y: (Math.sin(f.angle) * f.length) / MAP_ASPECT }, 7);
-        const from = P({ x: 0, y: 0 }, 7);
+        const end = P({ x: off.x + Math.cos(f.angle) * f.length, y: off.y + (Math.sin(f.angle) * f.length) / MAP_ASPECT }, 7);
+        const from = P(off, 7);
         const c = bendPoint(from, end, f.bend);
         ctx.lineWidth = 0.8;
         ctx.strokeStyle = `rgba(${neutral},${s.focus ? 0.06 : 0.16})`;
@@ -186,7 +196,11 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       }
 
       // 3. Where the nodes are now (they sway a little around their place on the branch).
-      const here = nodes.map((n) => P(nodePoint(n, t), 3.5));
+      const here = nodes.map((n, i) => {
+        const p = nodePoint(n, t);
+        const lag = s.lag[i] || { x: 0, y: 0 };
+        return P({ x: p.x + lag.x, y: p.y + lag.y }, 3.5);
+      });
       s.points = here;
       const hotIndex = s.hoverIndex >= 0 ? s.hoverIndex : nodes.findIndex((n) => n.id === s.selectedId);
       const hotSet = hotIndex >= 0 ? new Set(chainOf(nodes, hotIndex).map((c) => c.from)) : null;
@@ -199,9 +213,17 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       );
       const somaR = Math.min(w, h) * 0.085 * (calm ? 1 : 1 + 0.035 * Math.sin(fl * 1.7));
 
+      // The invisible handle that lets the core be grabbed sits right on top of it.
+      if (s.handle) {
+        const size = somaR * 2.4;
+        s.handle.style.width = `${size}px`;
+        s.handle.style.height = `${size}px`;
+        s.handle.style.transform = `translate(${coreP.x - size / 2}px, ${coreP.y - size / 2}px)`;
+      }
+
       // 4. The glow of the core.
       {
-        const reach = somaR * (learning ? 4.6 : 3.6);
+        const reach = somaR * (learning || s.dragging ? 4.6 : 3.6);
         const g = ctx.createRadialGradient(coreP.x, coreP.y, somaR * 0.4, coreP.x, coreP.y, reach);
         g.addColorStop(0, `rgba(${coreRgb},${dark ? 0.4 : 0.2})`);
         g.addColorStop(1, `rgba(${coreRgb},0)`);
@@ -346,7 +368,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
 
       // 8. The core: a mesh ball turning slowly, with rings spreading from it while Eddie learns.
       {
-        const pts = turnSoma(SOMA.points, calm ? 0.6 : fl * (learning ? 0.8 : 0.28));
+        const pts = turnSoma(SOMA.points, calm ? 0.6 + s.spin : fl * (learning ? 0.8 : 0.28) + s.spin);
         ctx.fillStyle = `rgba(${coreRgb},0.1)`;
         ctx.beginPath();
         ctx.arc(coreP.x, coreP.y, somaR, 0, TWO_PI);
@@ -448,13 +470,32 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
       });
     }
 
+    // The core goes where it is dragged; every node follows it, the far ones a little later.
+    function step(dt) {
+      const k = s.dragging ? 0.6 : 0.16;
+      s.off.x = catchUp(s.off.x, s.offTarget.x, k, dt);
+      s.off.y = catchUp(s.off.y, s.offTarget.y, k, dt);
+      s.layout.nodes.forEach((n, i) => {
+        const lag = s.lag[i] || (s.lag[i] = { x: s.off.x, y: s.off.y });
+        lag.x = catchUp(lag.x, s.off.x, followFactor(n.depth), dt);
+        lag.y = catchUp(lag.y, s.off.y, followFactor(n.depth), dt);
+      });
+      s.lag.length = s.layout.nodes.length;
+      s.spin *= 0.94 ** (dt * 60);
+    }
+    const settling = () =>
+      Math.abs(s.offTarget.x - s.off.x) > 0.0008 ||
+      Math.abs(s.offTarget.y - s.off.y) > 0.0008 ||
+      s.layout.nodes.some((_, i) => s.lag[i] && (Math.abs(s.lag[i].x - s.off.x) > 0.0008 || Math.abs(s.lag[i].y - s.off.y) > 0.0008)) ||
+      s.spin > 0.002;
+
     function frame(now) {
       s.running = false;
       const calm = isCalm();
       const moving = !calm && s.visible && !document.hidden;
       const growing = [...s.born.keys()].some((id) => s.grown(id, now) < 1);
       const easing = Math.abs(s.par.tx - s.par.x) > 0.002 || Math.abs(s.par.ty - s.par.y) > 0.002;
-      const animating = moving;
+      const animating = moving || settling();
       if (now - s.last >= (isLite() ? LITE_FRAME_MS : FRAME_MS) || !animating) {
         const dt = Math.min((now - (s.last || now)) / 1000, 0.2);
         // The nodes stand still while one is being read; the light keeps running.
@@ -464,6 +505,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         s.par.x = Math.abs(s.par.tx - s.par.x) < 0.002 ? s.par.tx : s.par.x + (s.par.tx - s.par.x) * 0.12;
         s.par.y = Math.abs(s.par.ty - s.par.y) < 0.002 ? s.par.ty : s.par.y + (s.par.ty - s.par.y) * 0.12;
         s.last = now;
+        step(dt);
         draw(now);
       }
       if ((animating || growing || easing) && s.visible) request();
@@ -539,6 +581,61 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
     s.request();
   }
 
+  // The core can be grabbed and dragged: the whole neuron goes with it (see step() in the loop).
+  const toMap = (event) => {
+    const box = canvasRef.current.getBoundingClientRect();
+    return { x: ((event.clientX - box.left) / box.width) * 2 - 1, y: (event.clientY - box.top - box.height / 2) / (box.width / 2) };
+  };
+
+  function onCoreDown(event) {
+    const s = live.current;
+    const m = toMap(event);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    s.grab = { x: m.x - s.offTarget.x, y: m.y - s.offTarget.y };
+    s.dragging = true;
+    s.hoverIndex = -1;
+    setHover(null);
+    s.request();
+  }
+
+  function onCoreMove(event) {
+    const s = live.current;
+    if (!s.dragging) return;
+    const m = toMap(event);
+    const next = clampOffset(m.x - s.grab.x, m.y - s.grab.y);
+    s.spin += Math.hypot(next.x - s.offTarget.x, next.y - s.offTarget.y) * 9;
+    s.offTarget = next;
+    s.request();
+  }
+
+  function onCoreUp(event) {
+    const s = live.current;
+    s.dragging = false;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    s.request();
+  }
+
+  function recenter() {
+    const s = live.current;
+    s.offTarget = { x: 0, y: 0 };
+    s.request();
+  }
+
+  function onCoreKey(event) {
+    const s = live.current;
+    const step = 0.04;
+    const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
+    if (move) {
+      event.preventDefault();
+      s.offTarget = clampOffset(s.offTarget.x + move[0], s.offTarget.y + move[1]);
+      s.spin += step * 9;
+      s.request();
+    } else if (event.key === 'Home' || event.key === 'Escape') {
+      event.preventDefault();
+      recenter();
+    }
+  }
+
   function onPointerLeave() {
     const s = live.current;
     s.hoverIndex = -1;
@@ -576,6 +673,18 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerLeave}
           onPointerLeave={onPointerLeave}
+        />
+        <button
+          type="button"
+          ref={handleRef}
+          className="knowledge-map__core"
+          aria-label="Núcleo del segundo cerebro: arrástralo para mover toda la neurona, o usa las flechas; doble clic o la tecla Inicio lo vuelve a centrar"
+          onPointerDown={onCoreDown}
+          onPointerMove={onCoreMove}
+          onPointerUp={onCoreUp}
+          onPointerCancel={onCoreUp}
+          onDoubleClick={recenter}
+          onKeyDown={onCoreKey}
         />
         {learning ? (
           <p className="knowledge-map__learning" role="status">
@@ -629,7 +738,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           </div>
         </div>
       ) : (
-        <p className="memory-orb__hint">Cada rama es un tipo de conocimiento y la luz que corre hacia el núcleo es lo aprendido llegando. Pasa el mouse sobre un nodo para ver qué aprendí (se ilumina su rama) y haz clic para abrirlo. Cada punto pequeño es una nota.</p>
+        <p className="memory-orb__hint">Cada rama es un tipo de conocimiento y la luz que corre hacia el núcleo es lo aprendido llegando. Pasa el mouse sobre un nodo para ver qué aprendí (se ilumina su rama) y haz clic para abrirlo. Cada punto pequeño es una nota. Arrastra el núcleo para mover toda la neurona; con doble clic vuelve al centro.</p>
       )}
     </section>
   );
