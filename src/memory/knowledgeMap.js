@@ -1,16 +1,17 @@
 // Pure maths of the second brain's map (no React or canvas, so it can be tested
-// in Node): a tangle of orbits like a star chart. Every topic Eddie learned is a
-// ringed node travelling along its own ellipse, with one small point per note
-// trailing behind it; topics of the same kind gather in the same region and take
-// the same colour; thin curves link neighbours and a few long faint arcs fill the
-// space between. Everything is deterministic from the topic ids, so the map looks
-// the same every time and a new topic only adds its own orbit.
+// in Node): a neuron. The glowing core in the middle is the brain; every kind of
+// knowledge (empresarial, técnica, cotidiana…) is an arm of dendrites growing out
+// of it, and every topic Eddie learned is a node on one of those branches: the
+// oldest sit close to the core and each new topic grows the arm further out.
+// Light travels along the branches toward the core (what is learned flowing in).
+// Everything is deterministic from the topic ids, so the map looks the same every
+// time and a new topic only adds its own branch.
 import { hashString, seeded } from './orbMath.js';
 import { KNOWLEDGE_CATEGORIES, cleanCategory } from '../services/knowledgeCategories.js';
 
 // Width over height of the map. Map units: x in [-1, 1], y in ±1/ASPECT.
 export const MAP_ASPECT = 1.7;
-export const MAX_TRAIL = 12;
+export const MAX_NOTES = 12;
 
 // One colour per kind of knowledge (neon on the dark HUD, deeper on the light theme).
 export const MAP_COLORS = {
@@ -38,18 +39,16 @@ export const MAP_COLORS = {
 
 export const colorOf = (category, theme = 'dark') => (MAP_COLORS[theme] || MAP_COLORS.dark)[cleanCategory(category)];
 
-// Where each kind gathers: eight regions around the middle.
-const ANCHORS = Object.fromEntries(
-  KNOWLEDGE_CATEGORIES.map((c, i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / KNOWLEDGE_CATEGORIES.length + 0.25;
-    return [c.id, { x: Math.cos(a) * 0.6, y: (Math.sin(a) * 0.62) / MAP_ASPECT }];
-  }),
-);
+// The colour of the core (the brain itself).
+export const CORE_RGB = { dark: '63,232,255', light: '0,127,153' };
 
 const TWO_PI = Math.PI * 2;
-const EDGE = 0.95; // how close to the border of the map an orbit may reach (map width = 2)
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const spread = (rand) => (rand() + rand() - 1) / 1; // −1…1, bunched around 0
+const LANES = 3; // branches side by side on one arm
+const ARM_SPAN = TWO_PI / KNOWLEDGE_CATEGORIES.length;
+const ARM_ANGLE = Object.fromEntries(KNOWLEDGE_CATEGORIES.map((c, i) => [c.id, -Math.PI / 2 + i * ARM_SPAN + 0.25]));
+
+// Distance from the core of the ring `depth` (0 = closest): it saturates so a long arm stays inside the map.
+export const ringRadius = (depth) => 0.34 + 0.58 * (depth / (depth + 1.6));
 
 // A point of an ellipse with centre (cx, cy), semi-axes (rx, ry), turned by `rot`, at angle `theta`.
 export function ellipsePoint(e, theta) {
@@ -60,99 +59,160 @@ export function ellipsePoint(e, theta) {
   return { x: e.cx + x * c - y * s, y: e.cy + x * s + y * c };
 }
 
-// Where a node is at time `t` (seconds), and where each of its note points trails behind it.
+// Where a node is at time `t` (seconds): it sways a little around its place on the branch.
 export function nodePoint(node, t) {
   return ellipsePoint(node.orbit, node.phase + node.speed * t);
 }
 
-export function trailPoints(node, t) {
-  return node.trail.map((offset) => ellipsePoint(node.orbit, node.phase + node.speed * t - Math.sign(node.speed || 1) * offset));
+// A point of the quadratic curve p → q bent by the control point c, at u in [0, 1].
+export function bezierPoint(p, c, q, u) {
+  const v = 1 - u;
+  return { x: v * v * p.x + 2 * v * u * c.x + u * u * q.x, y: v * v * p.y + 2 * v * u * c.y + u * u * q.y };
 }
 
-// Rough length of an ellipse (Ramanujan), in map units: for the "drawing in" dash.
-export const ellipseLength = (e) => Math.PI * (3 * (e.rx + e.ry) - Math.sqrt((3 * e.rx + e.ry) * (e.rx + 3 * e.ry)));
+// The control point that bends the branch p → q sideways by `bend` (a fraction of its length).
+export function bendPoint(p, q, bend) {
+  return { x: (p.x + q.x) / 2 - (q.y - p.y) * bend, y: (p.y + q.y) / 2 + (q.x - p.x) * bend };
+}
 
-// topics: [{ id, category, noteCount, kind }] → { nodes, links, decor }
+// topics: [{ id, category, noteCount, kind, createdAt? }] → { nodes, links, filaments, dust }
+// node.parent: index of the node it grows from, or -1 when it grows from the core.
 export function layoutMap(topics) {
-  const nodes = (Array.isArray(topics) ? topics : []).map((topic) => {
+  const list = (Array.isArray(topics) ? topics : []).map((topic) => ({ topic, category: cleanCategory(topic.category) }));
+  // Oldest first within an arm: a new topic always grows at the far end and never moves the others.
+  const age = (t) => Date.parse(t.createdAt) || 0;
+  const ordered = [...list].sort((a, b) => age(a.topic) - age(b.topic) || (a.topic.id < b.topic.id ? -1 : 1));
+  const slots = new Map(); // category → how many it already holds
+  const byPlace = new Map(); // `category:depth:lane` → index in `nodes`
+  const placed = new Map(); // topic id → { category, depth, lane, k }
+  for (const { topic, category } of ordered) {
+    const k = slots.get(category) || 0;
+    slots.set(category, k + 1);
+    placed.set(topic.id, { category, depth: Math.floor(k / LANES), lane: k % LANES, k });
+  }
+
+  const nodes = list.map(({ topic, category }) => {
+    const { depth, lane } = placed.get(topic.id);
     const rand = seeded(hashString(`k:${topic.id}`));
-    const category = cleanCategory(topic.category);
-    const anchor = ANCHORS[category];
-    const rx = 0.13 + rand() * 0.3;
-    const ry = rx * (0.32 + rand() * 0.5);
-    const rot = rand() * Math.PI;
-    // Half the width and height the turned ellipse takes up: it must fit inside the map (the node never gets cut off).
-    const halfW = Math.hypot(rx * Math.cos(rot), ry * Math.sin(rot));
-    const halfH = Math.hypot(rx * Math.sin(rot), ry * Math.cos(rot));
-    const limitX = Math.max(0, EDGE - halfW);
-    const limitY = Math.max(0, EDGE / MAP_ASPECT - halfH);
-    const orbit = {
-      cx: clamp(anchor.x + spread(rand) * 0.36, -limitX, limitX),
-      cy: clamp(anchor.y + (spread(rand) * 0.3) / MAP_ASPECT, -limitY, limitY),
-      rx,
-      ry,
-      rot,
-    };
-    const notes = Math.max(0, Math.min(MAX_TRAIL, Number(topic.noteCount) || 0));
+    const spreadAngle = (lane - 1) * (0.3 + depth * 0.045) + (rand() - 0.5) * 0.1;
+    const angle = ARM_ANGLE[category] + spreadAngle;
+    const radius = ringRadius(depth) + (rand() - 0.5) * 0.06;
+    const base = { x: Math.cos(angle) * radius, y: (Math.sin(angle) * radius) / MAP_ASPECT };
+    const sway = 0.008 + rand() * 0.014;
+    const notes = Math.max(0, Math.min(MAX_NOTES, Number(topic.noteCount) || 0));
     return {
       id: topic.id,
       category,
       kind: topic.kind === 'habilidad' ? 'habilidad' : 'tema',
-      orbit,
+      depth,
+      lane,
+      parent: -1,
+      // A soft curve: some branches bow one way, some the other.
+      bend: (rand() - 0.5) * 0.5,
+      orbit: { cx: base.x, cy: base.y, rx: sway, ry: sway * (0.55 + rand() * 0.4), rot: rand() * Math.PI },
       phase: rand() * TWO_PI,
-      // 100–300 s a lap, either way round: it should drift, not race.
-      speed: (0.02 + rand() * 0.045) * (rand() < 0.5 ? -1 : 1),
-      // One point per note, strung out behind the node along its orbit.
-      trail: Array.from({ length: notes }, (_, k) => 0.09 + k * 0.085),
-      size: 5 + Math.min(notes, MAX_TRAIL) * 0.55,
+      // 10–25 s a sway, either way round: it should breathe, not wander.
+      speed: (0.25 + rand() * 0.35) * (rand() < 0.5 ? -1 : 1),
+      notes,
+      size: 5 + notes * 0.5,
       pulse: { period: 5 + rand() * 5, offset: rand() * 8 },
+      // Each branch's flow: where its light starts, how fast it runs.
+      flow: { offset: rand(), speed: 0.1 + rand() * 0.08 },
+      // Small twigs that end in a dot, like the ends of real dendrites.
+      beads: [0.3 + rand() * 0.08, 0.62 + rand() * 0.1],
+      twigs: Array.from({ length: 2 }, () => ({ u: 0.45 + rand() * 0.35, side: rand() < 0.5 ? -1 : 1, len: 0.045 + rand() * 0.05, tilt: 0.5 + rand() * 0.7 })),
     };
   });
 
-  // Each node is linked to its two nearest orbit centres (same-kind neighbours count as closer).
-  const key = (i, j) => (i < j ? `${i}-${j}` : `${j}-${i}`);
+  nodes.forEach((n, i) => {
+    byPlace.set(`${n.category}:${n.depth}:${n.lane}`, i);
+  });
+  // Each node grows from the one before it on its own lane (or the middle lane, or the core).
+  for (const n of nodes) {
+    if (n.depth === 0) continue;
+    const prev = byPlace.get(`${n.category}:${n.depth - 1}:${n.lane}`) ?? byPlace.get(`${n.category}:${n.depth - 1}:1`) ?? byPlace.get(`${n.category}:${n.depth - 1}:0`);
+    n.parent = prev ?? -1;
+  }
+
+  // Synapses: each node reaches the nearest node of another kind, when it is close.
   const seen = new Set();
   const links = [];
   nodes.forEach((a, i) => {
-    nodes
-      .map((b, j) => ({ j, d: i === j ? Infinity : Math.hypot(a.orbit.cx - b.orbit.cx, (a.orbit.cy - b.orbit.cy) * MAP_ASPECT) * (a.category === b.category ? 0.55 : 1) }))
-      .sort((p, q) => p.d - q.d)
-      .slice(0, 2)
-      .forEach(({ j, d }) => {
-        if (!Number.isFinite(d) || seen.has(key(i, j))) return;
-        seen.add(key(i, j));
-        links.push([i, j]);
-      });
-  });
-
-  // The long faint sweeps between (fixed seeds: a new topic adds some, never moves the others).
-  const arcs = Math.max(6, Math.min(38, 6 + nodes.length * 2));
-  const decor = Array.from({ length: arcs }, (_, k) => {
-    const rand = seeded(hashString(`d:${k}`));
-    const rx = 0.35 + rand() * 0.85;
-    const orbit = { cx: (rand() * 2 - 1) * 0.9, cy: ((rand() * 2 - 1) * 0.9) / MAP_ASPECT, rx, ry: rx * (0.18 + rand() * 0.45), rot: rand() * Math.PI };
-    // A few arcs borrow the colour of the topic whose orbit is nearest.
-    let nearest = null;
-    let best = Infinity;
-    for (const n of nodes) {
-      const d = Math.hypot(n.orbit.cx - orbit.cx, (n.orbit.cy - orbit.cy) * MAP_ASPECT);
-      if (d < best) {
-        best = d;
-        nearest = n;
+    let best = -1;
+    let bestDist = 0.34;
+    nodes.forEach((b, j) => {
+      if (i === j || a.category === b.category) return;
+      const d = Math.hypot(a.orbit.cx - b.orbit.cx, (a.orbit.cy - b.orbit.cy) * MAP_ASPECT);
+      if (d < bestDist) {
+        best = j;
+        bestDist = d;
       }
+    });
+    const key = i < best ? `${i}-${best}` : `${best}-${i}`;
+    if (best >= 0 && !seen.has(key)) {
+      seen.add(key);
+      links.push([i, best]);
     }
-    return {
-      orbit,
-      start: rand() * TWO_PI,
-      sweep: 0.9 + rand() * 1.9,
-      category: nearest && rand() < 0.45 ? nearest.category : null,
-      marker: rand() < 0.4, // a small ring where the arc ends
-      comet: { speed: 0.04 + rand() * 0.06, offset: rand() },
-      ticks: 5 + Math.floor(rand() * 8),
-    };
   });
 
-  return { nodes, links, decor };
+  // Faint far dendrites that fill the dark (fixed seeds: nothing moves when a topic is added).
+  const filaments = Array.from({ length: 12 }, (_, k) => {
+    const rand = seeded(hashString(`f:${k}`));
+    return { angle: (k / 12) * TWO_PI + (rand() - 0.5) * 0.35, length: 0.7 + rand() * 0.26, bend: (rand() - 0.5) * 0.9, flow: { offset: rand(), speed: 0.05 + rand() * 0.05 } };
+  });
+
+  // Specks of light in the dark.
+  const dust = Array.from({ length: 80 }, (_, k) => {
+    const rand = seeded(hashString(`s:${k}`));
+    return { x: (rand() * 2 - 1) * 0.97, y: ((rand() * 2 - 1) * 0.97) / MAP_ASPECT, size: 0.5 + rand() * 1.1, tw: rand() * TWO_PI, rate: 0.5 + rand() * 1.1 };
+  });
+
+  return { nodes, links, filaments, dust };
+}
+
+// The chain of branches from a node to the core: [{ from, to, bend }] with from/to
+// as node indexes (-1 = core), starting at the node and ending at the core.
+export function chainOf(nodes, index) {
+  const chain = [];
+  let at = index;
+  for (let guard = 0; at >= 0 && guard < 64; guard += 1) {
+    chain.push({ from: at, to: nodes[at].parent, bend: nodes[at].bend });
+    at = nodes[at].parent;
+  }
+  return chain;
+}
+
+// The core: a small mesh ball (points of a sphere joined to their near neighbours)
+// that turns slowly. Returns the unrotated points and the edges between them.
+export function somaMesh(count = 30) {
+  const points = Array.from({ length: count }, (_, i) => {
+    const y = 1 - (2 * (i + 0.5)) / count;
+    const r = Math.sqrt(1 - y * y);
+    const theta = i * Math.PI * (3 - Math.sqrt(5));
+    return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
+  });
+  const edges = [];
+  const reach = 1.12 * Math.sqrt((4 * Math.PI) / count) * 1.1; // a little more than the typical gap
+  for (let i = 0; i < count; i += 1) {
+    for (let j = i + 1; j < count; j += 1) {
+      const d = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y, points[i].z - points[j].z);
+      if (d < reach) edges.push([i, j]);
+    }
+  }
+  return { points, edges };
+}
+
+// The mesh turned `angle` around its vertical axis and tipped by `tilt`: x, y in the unit disc, z (depth) in [-1, 1].
+export function turnSoma(points, angle, tilt = 0.35) {
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  const ct = Math.cos(tilt);
+  const st = Math.sin(tilt);
+  return points.map((p) => {
+    const x = p.x * ca + p.z * sa;
+    const z = -p.x * sa + p.z * ca;
+    return { x, y: p.y * ct - z * st, z: p.y * st + z * ct };
+  });
 }
 
 // The node under the pointer (the nearest within `hit` pixels), or -1.
