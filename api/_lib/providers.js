@@ -114,23 +114,39 @@ async function* iterateSSE(res, onActivity) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let sawData = false;
+  // The "data:" payloads of one block (events are separated by a blank line).
+  const payloadsOf = (block) =>
+    block
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter((payload) => payload && payload !== '[DONE]');
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       onActivity?.();
-      buffer += decoder.decode(value, { stream: true });
+      // Servers may end lines with \r\n; one newline style keeps the blank-line split below working.
+      buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n?/g, '\n');
       let sepIndex;
       while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
         const block = buffer.slice(0, sepIndex);
         buffer = buffer.slice(sepIndex + 2);
-        for (const line of block.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const payload = line.slice(5).trim();
-          if (payload && payload !== '[DONE]') yield payload;
+        for (const payload of payloadsOf(block)) {
+          sawData = true;
+          yield payload;
         }
       }
     }
+    // The last event may arrive without its closing blank line: it still counts.
+    buffer += decoder.decode();
+    for (const payload of payloadsOf(buffer)) {
+      sawData = true;
+      yield payload;
+    }
+    // A body that is not an event stream at all (a plain JSON error or answer) is handed over as it is.
+    if (!sawData && /^[{[]/.test(buffer.trim())) yield buffer.trim();
   } finally {
     try {
       reader.releaseLock();
@@ -203,6 +219,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
   // model with nothing to say), then no tools at all. All of them outside of
   // MAX_TOOL_ROUNDS accounting, before giving up.
   let empties = 0;
+  let streamErrorRetried = false;
   let defaultThinking = false;
   let noTools = false;
   const startedAt = Date.now();
@@ -261,26 +278,49 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
       let finishReason = null;
       let blockReason = null;
       let safetyRatings = null;
+      let streamError = null;
+      let lastPayload = '';
       for await (const payload of iterateSSE(res, () => streamAbort.touch())) {
-        let data;
+        let parsed;
         try {
-          data = JSON.parse(payload);
+          parsed = JSON.parse(payload);
         } catch {
           continue;
         }
-        blockReason = data?.promptFeedback?.blockReason || blockReason;
-        const candidate = data?.candidates?.[0];
-        finishReason = candidate?.finishReason || finishReason;
-        safetyRatings = candidate?.safetyRatings || safetyRatings;
-        const parts = candidate?.content?.parts || [];
-        for (const part of parts) {
-          if (part.functionCall) {
-            functionCallParts.push(part);
-          } else if (typeof part.text === 'string') {
-            text += part.text;
-            if (!functionCallParts.length) onChunk?.(part.text);
+        lastPayload = payload;
+        for (const data of Array.isArray(parsed) ? parsed : [parsed]) {
+          // An error can arrive inside a stream that started fine (HTTP 200): "model overloaded", quota…
+          if (data?.error) streamError = data.error;
+          blockReason = data?.promptFeedback?.blockReason || blockReason;
+          const candidate = data?.candidates?.[0];
+          finishReason = candidate?.finishReason || finishReason;
+          safetyRatings = candidate?.safetyRatings || safetyRatings;
+          const parts = candidate?.content?.parts || [];
+          for (const part of parts) {
+            if (part.functionCall) {
+              functionCallParts.push(part);
+            } else if (typeof part.text === 'string') {
+              text += part.text;
+              if (!functionCallParts.length) onChunk?.(part.text);
+            }
           }
         }
+      }
+
+      // The stream carried an error and nothing usable: a busy model is tried once more, anything else is reported as what it is.
+      if (streamError && !text && !functionCallParts.length) {
+        const code = Number(streamError.code) || 0;
+        console.error(`[callGemini] error inside the stream — model=${model} code=${streamError.code} status=${streamError.status} message=${String(streamError.message || '').slice(0, 200)}`);
+        if (!streamErrorRetried && (code >= 500 || /overload|unavailable|try again/i.test(String(streamError.message || '')))) {
+          streamErrorRetried = true;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          round -= 1;
+          continue;
+        }
+        const err = new Error(translateGeminiError(code, streamError, streamError.message || 'Gemini respondió con un error.'));
+        err.code = 'PROVIDER_ERROR';
+        err.status = code || undefined;
+        throw err;
       }
 
       if (!functionCallParts.length || forceTextOnly) {
@@ -290,7 +330,7 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
           // out, everything else here is Gemini's own response metadata.
           empties += 1;
           console.error(
-            `[callGemini] empty response — model=${model} round=${round} finishReason=${finishReason} blockReason=${blockReason} safetyRatings=${JSON.stringify(safetyRatings)} attempt=${empties} thinking=${JSON.stringify(generationConfig.thinkingConfig || 'default')} tools=${!forceTextOnly}`,
+            `[callGemini] empty response — model=${model} round=${round} finishReason=${finishReason} blockReason=${blockReason} safetyRatings=${JSON.stringify(safetyRatings)} attempt=${empties} lastPayload=${JSON.stringify(lastPayload.slice(0, 300))} thinking=${JSON.stringify(generationConfig.thinkingConfig || 'default')} tools=${!forceTextOnly}`,
           );
           const retry = empties === 1 || (empties === 2 && !blockReason) || (empties === 3 && !forceTextOnly && !blockReason);
           if (retry) {
@@ -299,7 +339,8 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
             round -= 1; // cancel this loop's round += 1, so the retry doesn't burn a tool round or force tools off early
             continue;
           }
-          const err = new Error(`${describeEmptyGeminiResponse(blockReason, finishReason)} (Detalle técnico: ${model}, motivo «${finishReason || 'ninguno'}»${blockReason ? `, bloqueo «${blockReason}»` : ''}.)`);
+          const sample = lastPayload ? ` respuesta: ${lastPayload.replace(/\s+/g, ' ').slice(0, 160)}` : ' sin ningún dato en la respuesta';
+          const err = new Error(`${describeEmptyGeminiResponse(blockReason, finishReason)} (Detalle técnico: ${model}, motivo «${finishReason || 'ninguno'}»${blockReason ? `, bloqueo «${blockReason}»` : ''},${sample}.)`);
           err.code = 'PROVIDER_EMPTY';
           throw err;
         }
