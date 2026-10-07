@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS = {
     perf: 'auto',
     core: 'cyan', // colour of the orb: cyan | blue | green | amber
     boot: true, // the start-up animation
+    secondBrain: false, // show the Segundo cerebro card in Memoria (Eddie keeps learning either way)
   },
   // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).
   vision: {
