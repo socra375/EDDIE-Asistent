@@ -343,11 +343,26 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                 <RichText text={m.display || m.content} />
               </div>
               {m.media?.length > 0 && (
-                <div className="bubble__images bubble__images--made" aria-label="Imágenes que creó Eddie">
+                <div className="bubble__images bubble__images--made" aria-label="Imágenes de Eddie">
                   {m.media.map((pic) => (
-                    <a key={pic.id} href={mediaUrl(pic.id)} target="_blank" rel="noopener noreferrer" title="Abrir la imagen completa">
-                      <img src={mediaUrl(pic.id)} alt={pic.prompt || 'Imagen creada por Eddie'} loading="lazy" />
-                    </a>
+                    <figure key={pic.id} className="bubble__picture">
+                      <a href={mediaUrl(pic.id)} target="_blank" rel="noopener noreferrer" title="Abrir la imagen completa">
+                        <img src={mediaUrl(pic.id)} alt={pic.prompt || 'Imagen de Eddie'} loading="lazy" />
+                      </a>
+                      {pic.found && (
+                        <figcaption>
+                          {[pic.credit && `📷 ${pic.credit}`, pic.license].filter(Boolean).join(' · ')}
+                          {pic.sourceUrl && (
+                            <>
+                              {' · '}
+                              <a href={pic.sourceUrl} target="_blank" rel="noopener noreferrer nofollow">
+                                fuente
+                              </a>
+                            </>
+                          )}
+                        </figcaption>
+                      )}
+                    </figure>
                   ))}
                 </div>
               )}

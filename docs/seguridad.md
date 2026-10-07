@@ -69,6 +69,11 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
 - **Costes y abuso**: tope por 24 horas (`DAILY_IMAGE_LIMIT`), tope de 60 imágenes / 150 MB por usuario, y cada creación desde la Galería cuenta en el cupo diario.
 - **Privacidad del respaldo**: con `MEDIA_FALLBACK` activo (por defecto), si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
   (sin clave ni cuenta). Para evitarlo: `MEDIA_FALLBACK=off`.
+- **Imágenes buscadas (7 oct 2026)**: se descargan en el servidor (nunca se enlazan desde fuera) con la misma defensa que el lector de páginas: solo
+  http(s) a direcciones públicas, cada redirección se vuelve a resolver y comprobar, sin credenciales, con tiempo y tamaño máximos; el tipo se decide por
+  los primeros bytes (PNG, JPEG, WebP) y se guarda con autor, licencia y página. Las URL que devuelven las fuentes no se confían: pasan por esa descarga.
+  El texto de la búsqueda sale hacia Pexels, Openverse, Wikimedia o Tavily. Se rechazan las búsquedas de contenido sexual explícito o violento y los
+  resultados con esos títulos. Límite propio: `DAILY_IMAGE_SEARCH_LIMIT`. La licencia de lo encontrado en la web general no está verificada y se avisa.
 - **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
 
 ## Candado de la cámara (3 oct 2026)

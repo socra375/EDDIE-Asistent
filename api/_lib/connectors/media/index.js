@@ -1,11 +1,12 @@
-// Pictures for Eddie: create one from a description, edit one (the one the
-// user just attached, one from the gallery, or the latest), list the gallery
-// and delete from it (with the user's OK on a card). The picture itself never
+// Pictures for Eddie: create one from a description, FIND real ones on the
+// internet (free sources, with their credit), edit one (the one the user just
+// attached, one from the gallery, or the latest), list the gallery and delete
+// from it (with the user's OK on a card). The picture itself never
 // goes to the model: the tools emit a `show_image` action (the app puts it in
 // the middle of Inicio and in the chat; Telegram gets it as a photo) and the
 // model only hears that it worked.
 import { MediaError, ASPECTS } from '../../media/image.js';
-import { createImage, editImage, removeImage } from '../../media/create.js';
+import { createImage, editImage, findImages, removeImage } from '../../media/create.js';
 import { getMedia, listMedia, mediaUsage } from '../../media/store.js';
 import { clip } from '../http.js';
 
@@ -45,6 +46,33 @@ async function create(args, context) {
   try {
     const { item } = await createImage({ userId: user.id, prompt: args.prompt, aspect: args.aspect_ratio });
     return shown(context, item, { created: true, summary: `Creé una imagen: «${clip(item.prompt, 80)}»` });
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+// Real pictures from the internet: downloaded, kept in the gallery with their credit and
+// shown in the chat and on Telegram (they do not replace the picture in the middle of Inicio).
+async function find(args, context) {
+  const user = await getUser(context);
+  if (!user) return { error: SIGN_IN };
+  try {
+    const { items, query, tried } = await findImages({ userId: user.id, query: args.query, count: args.count });
+    for (const item of items) {
+      context.emit?.({ type: 'show_image', id: item.id, prompt: item.prompt, provider: item.provider, found: true, credit: item.credit, license: item.license, sourceUrl: item.sourceUrl });
+    }
+    const unverified = items.some((i) => i.provider === 'web');
+    return {
+      query,
+      found: items.length,
+      sources: [...new Set(items.map((i) => i.provider))],
+      images: items.map((i) => ({ id: i.id, title: clip(i.prompt, 80), credit: i.credit, license: i.license })),
+      searched_in: tried,
+      summary: `Encontré ${items.length} imagen${items.length === 1 ? '' : 'es'} de «${clip(query, 60)}»`,
+      note: `Ya se ven en el chat (con su autor y licencia) y llegan al Telegram del usuario; tú no las ves. Dile en una frase cuántas encontraste y de qué fuente (${[...new Set(items.map((i) => i.provider))].join(', ')})${
+        unverified ? '; algunas vienen de la web general y su licencia no está verificada: avísalo' : ''
+      }. No describas detalles que no puedes ver; si no son lo que busca, ofrécele otra búsqueda con otras palabras o crearla.`,
+    };
   } catch (err) {
     return failure(err);
   }
@@ -128,14 +156,14 @@ async function remove(args, context) {
 export default {
   id: 'media',
   name: 'Imágenes',
-  description: 'Eddie crea imágenes desde una descripción, edita la que le muestres o una de tu galería («quítale el fondo», «hazla de noche») y las elimina cuando se lo pidas. Se ven en el centro de Inicio, en el chat y en la Galería, y llegan a tu Telegram.',
+  description: 'Eddie crea imágenes desde una descripción, o las BUSCA en internet (fuentes libres con su autor y licencia) y te las manda; edita la que le muestres o una de tu galería («quítale el fondo», «hazla de noche») y las elimina cuando se lo pidas. Se ven en el chat y en la Galería (las creadas, también en el centro de Inicio) y llegan a tu Telegram.',
   icon: 'image',
   category: 'multimedia',
   // Offered when the conversation is about pictures.
-  route: /im[aá]gen|imagenes|foto|fotograf|dibuj|ilustr|ret[oó]ca|logo|fondo de pantalla|wallpaper|galer[ií]a|p[ií]ntame|pintura|c[oó]mic|caricatura|avatar|p[oó]ster|poster|quita(le)? el fondo|(crea|genera|haz|hazme|dise[ñn]a)\w*.*(imagen|foto|logo|dibujo|ilustraci)/i,
+  route: /im[aá]gen|imagenes|foto|fotograf|dibuj|ilustr|ret[oó]ca|logo|c[oó]mo (se ve|luce|es un|es una)|(ens[eé][ñn]a|mu[eé]stra)me (un|una|c[oó]mo)|fondo de pantalla|wallpaper|galer[ií]a|p[ií]ntame|pintura|c[oó]mic|caricatura|avatar|p[oó]ster|poster|quita(le)? el fondo|(crea|genera|haz|hazme|dise[ñn]a)\w*.*(imagen|foto|logo|dibujo|ilustraci)/i,
   auth: null,
   requiredEnv: ['DATABASE_URL', 'GEMINI_API_KEY'],
-  note: 'Usa el modelo de imágenes de Gemini con la misma GEMINI_API_KEY (cupo gratis diario). Si Gemini se queda sin cupo, una imagen nueva puede salir de Pollinations (gratis, sin clave; MEDIA_FALLBACK=off lo apaga). Las imágenes se guardan en tu galería (hasta 60 o 150 MB) y se borran con tu confirmación. Tope de DAILY_IMAGE_LIMIT por día (20 por defecto). Solo con sesión iniciada.',
+  note: 'Crear: usa el modelo de imágenes de Gemini con la misma GEMINI_API_KEY (cupo gratis diario). Buscar: Openverse y Wikimedia Commons sin clave, Pexels con PEXELS_API_KEY (gratis, opcional) y, si no hay nada, la web general (Tavily; sin licencia verificada); tope de DAILY_IMAGE_SEARCH_LIMIT por día (40 por defecto). Si Gemini se queda sin cupo, una imagen nueva puede salir de Pollinations (gratis, sin clave; MEDIA_FALLBACK=off lo apaga). Las imágenes se guardan en tu galería (hasta 60 o 150 MB) y se borran con tu confirmación. Tope de DAILY_IMAGE_LIMIT por día (20 por defecto). Solo con sesión iniciada.',
   details: async (user) => {
     const usage = await mediaUsage(user.id);
     return { images: usage.count, last24h: usage.last24h };
@@ -161,6 +189,27 @@ export default {
         },
       },
       run: (args, context) => create(args, context),
+    },
+    {
+      label: 'Buscar imágenes en internet',
+      activity: 'Buscando imágenes…',
+      risk: 'read',
+      sensitive: false,
+      summarize: (result) => result?.summary,
+      declaration: {
+        name: 'search_images',
+        description:
+          'BUSCA fotos o imágenes que YA EXISTEN en internet (fuentes libres con autor y licencia; la web general si no hay nada) y se las muestra y manda al usuario, hasta 4. Úsala cuando pida «busca / mándame / pásame / enséñame una foto o imagen de X» de algo real: un lugar, un animal, una persona pública, un objeto, un logo, una obra, un producto. Si lo que quiere es algo inventado o personalizado (un dibujo, una ilustración, un póster suyo), usa create_image. No pidas confirmación. No busca contenido sexual explícito ni violento.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: { type: 'STRING', description: 'Qué buscar, en pocas palabras (2 a 6). Las fuentes libres responden mejor en inglés para temas internacionales; para lo local usa el nombre local. Sin frases largas.' },
+            count: { type: 'INTEGER', description: 'Cuántas imágenes (1 a 4, por defecto 3). Una sola si pide «una foto».' },
+          },
+          required: ['query'],
+        },
+      },
+      run: (args, context) => find(args, context),
     },
     {
       label: 'Editar una imagen',

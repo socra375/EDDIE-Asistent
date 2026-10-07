@@ -35,6 +35,14 @@ export async function sendDeliverable({ userId, title = '', content = '' }) {
   }
 }
 
+// A picture Eddie FOUND says where it came from (author, licence, page); one he made, just what it was.
+export function captionOf(file) {
+  const base = String(file.prompt || '').trim();
+  if (!file.sourceUrl && !file.credit) return base.slice(0, 1000);
+  const credit = [file.credit, file.license].filter(Boolean).join(' · ');
+  return [base, credit && `📷 ${credit}`, file.sourceUrl].filter(Boolean).join('\n').slice(0, 1000);
+}
+
 // The pictures a set of actions created (`show_image`), sent to a Telegram chat as photos.
 // `userId` owns them: only their own gallery is ever read. Returns how many went out.
 export async function sendCreatedImages(userId, chatId, actions, { max = 3 } = {}) {
@@ -44,7 +52,7 @@ export async function sendCreatedImages(userId, chatId, actions, { max = 3 } = {
     for (const id of [...new Set(ids)].slice(0, max)) {
       const file = await getMediaFile(userId, id);
       if (!file) continue;
-      const result = await sendPhoto(chatId, file.buffer, { caption: file.prompt, mime: file.mime });
+      const result = await sendPhoto(chatId, file.buffer, { caption: captionOf(file), mime: file.mime });
       if (result.ok) sent += 1;
     }
   } catch (err) {

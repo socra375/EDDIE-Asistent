@@ -444,3 +444,21 @@
   max-width: min(100%, 320px);
   max-height: 320px;
 }
+
+.bubble__picture {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  max-width: min(100%, 320px);
+}
+
+.bubble__picture figcaption {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.bubble__picture figcaption a {
+  color: var(--accent);
+}
