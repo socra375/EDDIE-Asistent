@@ -197,9 +197,14 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
 
   // A genuinely empty response (no function call, no text) sometimes clears
   // on a plain retry of the exact same request — seen in practice even
-  // though the request itself is well-formed. Retried once, outside of
+  // though the request itself is well-formed. When it doesn't, each further
+  // attempt changes the one thing most likely to be the cause: first the
+  // model's own default amount of thinking (the minimal setting can leave a
+  // model with nothing to say), then no tools at all. All of them outside of
   // MAX_TOOL_ROUNDS accounting, before giving up.
-  let emptyRetried = false;
+  let empties = 0;
+  let defaultThinking = false;
+  let noTools = false;
   const startedAt = Date.now();
 
   for (let round = 0; ; round += 1) {
@@ -216,9 +221,9 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
     // Omitting `tools` here forces a plain-text answer using whatever the
     // tool results already in `contents` gave it. Same when the user switched
     // every connector off: Gemini rejects an empty functionDeclarations list.
-    const forceTextOnly = round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0 || Date.now() - startedAt > TOOLS_CUTOFF_MS;
+    const forceTextOnly = noTools || round >= MAX_TOOL_ROUNDS || toolset.declarations.length === 0 || Date.now() - startedAt > TOOLS_CUTOFF_MS;
     // As little invisible thinking as the model allows (see geminiThinking.js).
-    const generationConfig = { temperature: 0.7, maxOutputTokens: 8192, ...thinkingFor(model) };
+    const generationConfig = { temperature: 0.7, maxOutputTokens: 8192, ...(defaultThinking ? {} : thinkingFor(model)) };
     const body = forceTextOnly
       ? { systemInstruction, generationConfig, contents }
       : { systemInstruction, generationConfig, tools: [{ functionDeclarations: toolset.declarations }], contents };
@@ -283,15 +288,18 @@ export async function callGemini({ apiKey, model, system, messages, toolset = NO
           // Logged server-side (visible in Vercel's function logs) instead
           // of just failing silently — the URL/apiKey are deliberately left
           // out, everything else here is Gemini's own response metadata.
+          empties += 1;
           console.error(
-            `[callGemini] empty response — model=${model} round=${round} finishReason=${finishReason} blockReason=${blockReason} safetyRatings=${JSON.stringify(safetyRatings)} retried=${emptyRetried}`,
+            `[callGemini] empty response — model=${model} round=${round} finishReason=${finishReason} blockReason=${blockReason} safetyRatings=${JSON.stringify(safetyRatings)} attempt=${empties} thinking=${JSON.stringify(generationConfig.thinkingConfig || 'default')} tools=${!forceTextOnly}`,
           );
-          if (!emptyRetried) {
-            emptyRetried = true;
+          const retry = empties === 1 || (empties === 2 && !blockReason) || (empties === 3 && !forceTextOnly && !blockReason);
+          if (retry) {
+            if (empties === 2) defaultThinking = true;
+            if (empties === 3) noTools = true;
             round -= 1; // cancel this loop's round += 1, so the retry doesn't burn a tool round or force tools off early
             continue;
           }
-          const err = new Error(describeEmptyGeminiResponse(blockReason, finishReason));
+          const err = new Error(`${describeEmptyGeminiResponse(blockReason, finishReason)} (Detalle técnico: ${model}, motivo «${finishReason || 'ninguno'}»${blockReason ? `, bloqueo «${blockReason}»` : ''}.)`);
           err.code = 'PROVIDER_EMPTY';
           throw err;
         }
