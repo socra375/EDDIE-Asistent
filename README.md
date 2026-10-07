@@ -717,11 +717,14 @@ chat privado vinculado; en grupos no contesta.
 
 ## Respuestas en Telegram, cupo por tanda y respuestas largas
 
-- **Todo lo que Eddie contesta en la app también llega a tu Telegram** (redacciones, tareas, agenda, ediciones…): el texto,
-  una línea «✓» por cada cosa que hizo y, si algo espera tu OK, un aviso «⏳ Falta tu confirmación en la app» (la tarjeta
-  se aprueba en la app o con ✅/✖ si lo pediste desde Telegram). También queda en el hilo de Telegram, así puedes seguir
-  desde allí («hazlo más corto») con Eddie sabiendo lo que se dijo. Hace falta tener Telegram vinculado (Conectores) y
-  sesión iniciada; se apaga en Configuración → Dispositivos → *Uso y Telegram*. Código: `api/_lib/telegram/mirror.js`.
+- **A Telegram solo llegan los resultados, no la charla.** Eddie conversa y pregunta todo en el chat de la app; cuando termina
+  un trabajo que produce algo para guardar o consultar (un informe, un resumen largo, una redacción, un borrador, un plan, la
+  agenda de la semana), lo manda con la herramienta `send_to_telegram` (título + contenido completo) y en el chat solo dice
+  en una o dos frases qué envió, para no llenarlo. Los saludos, «de nada», las respuestas cortas y las preguntas se quedan en
+  la app. Las **imágenes** que crea o edita llegan siempre como foto. Si le pides «mándamelo a Telegram» lo hace aunque sea corto;
+  si le pides «aquí en el chat» o «léemelo», no lo envía. Lo enviado queda en el hilo de Telegram, así puedes seguir desde allí
+  («hazlo más corto»). Sin Telegram vinculado (Conectores) o con el envío apagado, lo entrega en el chat. Se apaga en
+  Configuración → Dispositivos → *Uso y Telegram*. Código: `api/_lib/telegram/mirror.js` y `api/_lib/connectors/telegram/`.
 - **Cupo diario repartido en tandas** (`api/_lib/usage/`): `DAILY_REQUEST_LIMIT` (por defecto 50, `0` = sin límite) se parte en
   la mitad para la **mañana** (de las 00:00 a las 14:00) y la mitad para la **tarde** (de las 14:00 a las 24:00, cambia la hora con
   `QUOTA_SPLIT_HOUR`), en la zona horaria de tu navegador o de tu Telegram (`QUOTA_TIMEZONE` si no se sabe). Cada tanda **se

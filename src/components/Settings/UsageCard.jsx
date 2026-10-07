@@ -118,11 +118,11 @@ export default function UsageCard() {
       )}
       <label className="settings-toggle">
         <input type="checkbox" checked={settings.telegramMirror !== false} onChange={(e) => updateSettings({ telegramMirror: e.target.checked })} />
-        <span>Enviar también cada respuesta (redacciones, tareas, agenda, ediciones…) a mi Telegram</span>
+        <span>Que Eddie me mande a Telegram los resultados (informes, redacciones, imágenes…) para no llenar el chat</span>
       </label>
       <p className="settings-placeholder device__note">
         Cada pregunta que Eddie contesta cuenta como una petición (las que fallan sin responder no cuentan). El tope del día se cambia con la variable <code>DAILY_REQUEST_LIMIT</code> en Vercel (0 = sin límite) y la hora en que
-        empieza la tarde con <code>QUOTA_SPLIT_HOUR</code>. Para recibir las respuestas hay que vincular Telegram en Conectores; en Telegram también puedes usar /uso y /restaurar.
+        empieza la tarde con <code>QUOTA_SPLIT_HOUR</code>. Eddie conversa contigo en la app y solo manda a Telegram el resultado final (no saludos ni respuestas cortas); si le dices «mándamelo a Telegram» o «aquí en el chat», te hace caso. Hay que vincular Telegram en Conectores; en Telegram también puedes usar /uso y /restaurar.
       </p>
     </>
   );

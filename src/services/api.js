@@ -13,7 +13,7 @@ export class EddieApiError extends Error {}
 // onStep(step) fires each time a tool call starts or changes state — the
 // "receipt" of what Eddie is doing ({ id, tool, label, activity, status,
 // summary, verified, detail }); the same id arrives again as it finishes.
-// `mirror` asks the server to also send the answer to the user's Telegram.
+// `mirror` lets Eddie send results (reports, drafts, pictures) to the user's Telegram.
 // While Eddie thinks the server sends small {type:"ping"} events (ignored here)
 // so the connection is never taken for dead.
 export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, mirror = false, onChunk, onStep }) {
@@ -108,13 +108,13 @@ export async function sendChatMessage({ provider, model, system, messages, conte
 
 // Runs an action the user confirmed on a card (see api/_lib/confirm.js).
 // Resolves to { result, actions }; throws EddieApiError with the reason.
-export async function confirmAction({ tool, args, context, disabledConnectors, mirror = false }) {
+export async function confirmAction({ tool, args, context, disabledConnectors }) {
   let res;
   try {
     res = await fetch(`${API_BASE}/api/chat?action=confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tool, args, context, disabledConnectors, ...(mirror ? { mirror: true } : {}) }),
+      body: JSON.stringify({ tool, args, context, disabledConnectors }),
     });
   } catch {
     throw new EddieApiError('No se pudo contactar al servidor de Eddie. Verifica tu conexión.');

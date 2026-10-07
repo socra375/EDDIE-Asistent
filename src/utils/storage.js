@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS = {
     clap: false,
     clapSensitivity: 'medium',
   },
-  // Every answer of the app also goes to the linked Telegram chat (see api/_lib/telegram/mirror.js).
+  // Eddie sends results (reports, drafts, pictures) to the linked Telegram chat (see api/_lib/telegram/mirror.js).
   telegramMirror: true,
   // Connectors switched off in the Conectores hub; everything else is on,
   // so a newly added connector works without the user opting in.

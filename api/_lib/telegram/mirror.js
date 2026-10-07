@@ -1,44 +1,37 @@
-// Everything Eddie answers in the app also reaches the user's Telegram (drafts,
-// tasks, agenda, edits…), so it is at hand on the phone: the answer, a line for
-// each thing he did, and a note when a card is waiting for their OK in the app.
-// The text also goes into the chat's own thread, so they can keep going from
-// Telegram ("hazlo más corto") with Eddie knowing what was said. Best effort:
-// never throws and never makes the app's answer wait long.
+// What Eddie sends to the user's Telegram from the app: only RESULTS, not the
+// conversation. He chats and asks as usual in the app and, when a job ends in
+// something worth keeping (a report, a draft, a plan, a week's agenda), he
+// sends it with the `send_to_telegram` tool so the chat stays light; the
+// pictures he creates go along too. Greetings, thanks and short answers stay in
+// the app. The text also goes into the Telegram thread's own history, so the
+// user can keep going from there ("hazlo más corto") with Eddie knowing it.
 import { sendMessage, sendPhoto } from './api.js';
 import { getLinkByUser, saveHistory } from './store.js';
 import { getMediaFile } from '../media/store.js';
 
-const MAX_RECEIPTS = 5;
+const MAX_TITLE = 100;
+const MAX_CONTENT = 12000;
 
-export function mirrorText({ answer = '', steps = [], confirmations = [] }) {
-  const text = String(answer).trim();
-  const receipts = [];
-  for (const step of steps) {
-    const summary = typeof step?.summary === 'string' ? step.summary.trim() : '';
-    if (step?.status === 'done' && summary && !text.includes(summary) && !receipts.includes(summary)) receipts.push(summary);
-  }
-  const lines = [text];
-  if (receipts.length) lines.push(receipts.slice(0, MAX_RECEIPTS).map((r) => `✓ ${r}`).join('\n'));
-  const waiting = confirmations.map((c) => String(c?.label || c?.preview?.title || '').trim()).filter(Boolean);
-  if (waiting.length) lines.push(`⏳ Falta tu confirmación en la app: ${waiting.slice(0, 3).join(' · ')}`);
-  return lines.filter(Boolean).join('\n\n');
-}
-
-export async function mirrorToTelegram({ userId, question = '', answer = '', steps = [], confirmations = [] }) {
+// → { sent: true } | { sent: false, reason: 'unavailable' | 'not-linked' | 'failed' | 'empty' }
+export async function sendDeliverable({ userId, title = '', content = '' }) {
   try {
-    if (!userId || !process.env.TELEGRAM_BOT_TOKEN || !process.env.DATABASE_URL) return false;
-    const text = mirrorText({ answer, steps, confirmations });
-    if (!text) return false;
+    if (!userId || !process.env.TELEGRAM_BOT_TOKEN || !process.env.DATABASE_URL) return { sent: false, reason: 'unavailable' };
+    const body = String(content).trim().slice(0, MAX_CONTENT);
+    if (!body) return { sent: false, reason: 'empty' };
     const link = await getLinkByUser(userId);
-    if (!link) return false;
-    const sent = await sendMessage(link.chatId, text);
-    if (!sent.ok) return false;
-    const asked = String(question).trim();
-    if (asked && answer.trim()) await saveHistory(userId, [...link.history, { role: 'user', content: asked }, { role: 'assistant', content: answer.trim() }]);
-    return true;
+    if (!link) return { sent: false, reason: 'not-linked' };
+    const head = String(title).replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE);
+    const text = head ? `📄 ${head}\n\n${body}` : body;
+    const result = await sendMessage(link.chatId, text);
+    if (!result.ok) return { sent: false, reason: 'failed' };
+    // Keeps the thread coherent: the next message from Telegram knows what arrived.
+    const history = [...link.history];
+    if (!history.length || history[history.length - 1].role === 'assistant') history.push({ role: 'user', content: `Pedí en la app: ${head || 'un resultado'}` });
+    await saveHistory(userId, [...history, { role: 'assistant', content: text }]).catch(() => {});
+    return { sent: true };
   } catch (err) {
-    console.error('[telegram] mirroring the answer failed:', err.message);
-    return false;
+    console.error('[telegram] sending the result failed:', err.message);
+    return { sent: false, reason: 'failed' };
   }
 }
 
