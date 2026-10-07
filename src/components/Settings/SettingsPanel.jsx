@@ -379,6 +379,10 @@ export default function SettingsPanel({ onOpenConversation }) {
           <input type="checkbox" checked={settings.display?.boot !== false} onChange={(e) => updateDisplaySettings({ boot: e.target.checked })} />
           <span>Animación de inicio al abrir Eddie</span>
         </label>
+        <label className="settings-toggle">
+          <input type="checkbox" checked={settings.display?.secondBrain === true} onChange={(e) => updateDisplaySettings({ secondBrain: e.target.checked })} />
+          <span>Mostrar el Segundo cerebro en Memoria (Eddie sigue aprendiendo y usándolo aunque esté oculto)</span>
+        </label>
         <button type="button" className="btn" onClick={() => window.dispatchEvent(new Event(BOOT_REPLAY_EVENT))}>
           Ver la animación de inicio
         </button>
