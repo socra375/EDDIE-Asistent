@@ -334,6 +334,14 @@ Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 > brillo y las ramitas. La tarjeta de abajo tiene un hilo de luz que cruza su borde superior. Código: `src/memory/knowledgeMap.js`
 > (matemática pura) y `src/memory/KnowledgeMap.jsx` (lienzo).
 >
+> **Nodos con carácter propio.** Cada tipo de conocimiento tiene su forma (empresarial: hexágono; técnica: octógono; cotidiana: círculo;
+> personal: rombo; salud: cruz; académica: pentágono; creativa: destello de cuatro puntas; única: anillo), que también aparece en la
+> leyenda. Una **habilidad** lleva un anillo de dientes que gira y un **tema** una cuenta que orbita; cada **nota** es un segmento de arco
+> alrededor del nodo (con una luz que recorre los segmentos), cada **fuente** un pequeño chip arriba, y un tema actualizado en las últimas
+> 36 horas brilla más. Cada nodo es una gema facetada con su forma interior girada y un destello. Al señalarlo aparece una retícula, su
+> nombre en grande y se ilumina toda su rama; los nombres se reparten por prioridad sin pisarse (el señalado, los más cercanos al núcleo y
+> los más ricos en notas).
+>
 > **El núcleo se puede arrastrar**: toda la neurona (ramas, nodos, notas y filamentos) se mueve con él y los nodos lejanos lo siguen con un
 > poco de retraso, como algo elástico. Se queda donde lo sueltas (dentro de un margen para no perderlo), la malla gira más rápido mientras
 > se mueve y con doble clic —o la tecla Inicio— vuelve al centro. También se mueve con las flechas del teclado y funciona con el dedo.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { growth, hashString } from './orbMath.js';
-import { CORE_RGB, MAP_ASPECT, bendPoint, bezierPoint, catchUp, chainOf, clampOffset, colorOf, followFactor, layoutMap, nodePoint, pickMapNode, somaMesh, turnSoma } from './knowledgeMap.js';
+import { CORE_RGB, MAP_ASPECT, MAP_SHAPES, bendPoint, bezierPoint, catchUp, chainOf, clampOffset, colorOf, followFactor, layoutMap, nodePoint, pickMapNode, shapeOf, shapeVertices, somaMesh, turnSoma } from './knowledgeMap.js';
 import { KNOWLEDGE_CATEGORIES, categoryLabel } from '../services/knowledgeCategories.js';
 
 const FRAME_MS = 33; // ~30 fps: the light has to run smoothly
@@ -400,21 +400,26 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         }
       }
 
-      // 9. The notes: one small point per note circling its topic.
-      nodes.forEach((n, i) => {
-        const g = s.grown(n.id, now);
-        if (g <= 0 || !n.notes) return;
-        const rgb = hexRgb(colorOf(n.category, th));
-        const r0 = n.size * g * scale;
-        const dir = n.speed > 0 ? 1 : -1;
-        for (let k = 0; k < n.notes; k += 1) {
-          const ang = n.phase * 2 + (k * TWO_PI) / n.notes + (calm ? 0 : fl * 0.45 * dir);
-          const rr = r0 + 7 + (k % 2) * 2.6;
-          dot(here[i].x + Math.cos(ang) * rr, here[i].y + Math.sin(ang) * rr, 1.2, `rgba(${rgb},${(0.45 + 0.4 * ((k % 3) / 2)) * g * dim(n.category)})`);
+      // 9. The nodes: every kind of knowledge has its own shape; a skill wears a toothed ring, a topic an
+      // orbiting bead; one arc segment per note; a small chip per source; recent ones glow brighter.
+      const nowMs = Date.now();
+      const labels = [];
+      const bracket = (x, y, sx, sy, len) => {
+        ctx.beginPath();
+        ctx.moveTo(x + sx * len, y);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x, y + sy * len);
+        ctx.stroke();
+      };
+      const trace = (shape, x, y, r, rot = 0) => {
+        ctx.beginPath();
+        if (shape === 'circle' || shape === 'ring') {
+          ctx.arc(x, y, r, 0, TWO_PI);
+          return;
         }
-      });
-
-      // 10. The nodes: two rings and a core, with a slow pulse going out.
+        shapeVertices(shape, r, rot).forEach((v, k) => (k ? ctx.lineTo(x + v.x, y + v.y) : ctx.moveTo(x + v.x, y + v.y)));
+        ctx.closePath();
+      };
       nodes.forEach((n, i) => {
         const g = s.grown(n.id, now);
         if (g <= 0) return;
@@ -422,43 +427,157 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         const rgb = hexRgb(colorOf(n.category, th));
         const d = dim(n.category);
         const hot = s.hoverIndex === i || s.selectedId === n.id;
-        const r = (n.size + (hot ? 2 : 0)) * g * scale;
+        const shape = shapeOf(n.category);
+        const fresh = nowMs - n.updated < 36 * 3600 * 1000;
+        const r = (n.size + (hot ? 2 : 0)) * g * (g < 1 ? 1 + 0.25 * Math.sin(g * Math.PI) : 1) * scale * 0.95;
+        const dir = n.speed > 0 ? 1 : -1;
+        const spin = calm ? 0 : fl * 0.5 * dir;
+        ctx.lineJoin = 'round';
+
+        // The aura (a recent topic glows more and breathes).
+        if (dark && !lite) {
+          const breathe = fresh && !calm ? 0.8 + 0.2 * Math.sin(fl * 2.2 + i) : 1;
+          const gr = ctx.createRadialGradient(q.x, q.y, r * 0.4, q.x, q.y, r * (fresh ? 3.4 : 2.6));
+          gr.addColorStop(0, `rgba(${rgb},${(hot ? 0.55 : fresh ? 0.42 : 0.24) * d * breathe})`);
+          gr.addColorStop(1, `rgba(${rgb},0)`);
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, r * (fresh ? 3.4 : 2.6), 0, TWO_PI);
+          ctx.fill();
+        }
+        // A slow pulse going out.
         if (!calm && g >= 1) {
           const u = ((t + n.pulse.offset) % n.pulse.period) / n.pulse.period;
           if (u < 0.55) {
-            ctx.strokeStyle = `rgba(${rgb},${(1 - u / 0.55) * 0.45 * d})`;
+            ctx.strokeStyle = `rgba(${rgb},${(1 - u / 0.55) * 0.4 * d})`;
             ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(q.x, q.y, r + (u / 0.55) * 20, 0, TWO_PI);
+            trace(shape === 'ring' ? 'circle' : shape, q.x, q.y, r * 1.9 + (u / 0.55) * 18, 0);
             ctx.stroke();
           }
         }
-        ctx.fillStyle = dark ? `rgba(6,12,20,${0.78 * d})` : `rgba(255,255,255,${0.75 * d})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, r, 0, TWO_PI);
-        ctx.fill();
-        ctx.lineWidth = n.kind === 'habilidad' ? 2 : 1.4;
-        ctx.strokeStyle = `rgba(${rgb},${0.95 * d})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, r, 0, TWO_PI);
-        ctx.stroke();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = `rgba(${rgb},${0.55 * d})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, r * 0.68, 0, TWO_PI);
-        ctx.stroke();
-        ctx.fillStyle = `rgba(${rgb},${0.2 * d})`;
-        ctx.beginPath();
-        ctx.arc(q.x, q.y, r * 0.68, 0, TWO_PI);
-        ctx.fill();
-        dot(q.x, q.y, Math.max(1.8, r * 0.3), `rgba(${rgb},${d})`);
-        if (hot) {
-          ctx.strokeStyle = dark ? 'rgba(255,255,255,0.9)' : 'rgba(20,30,45,0.85)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(q.x, q.y, r + 5, 0, TWO_PI);
-          ctx.stroke();
+
+        // One arc segment per note; a light runs around them.
+        if (n.notes) {
+          const seg = TWO_PI / n.notes;
+          const gap = Math.min(0.2, seg * 0.32);
+          ctx.lineWidth = 2.2;
+          ctx.lineCap = 'butt';
+          for (let k = 0; k < n.notes; k += 1) {
+            const lit = calm ? 0.6 : 0.5 + 0.5 * Math.cos((k * TWO_PI) / n.notes - fl * 1.8 * dir);
+            ctx.strokeStyle = `rgba(${rgb},${(0.28 + 0.62 * lit) * g * d})`;
+            const a0 = -Math.PI / 2 + k * seg + gap / 2;
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, r * 1.58, a0, a0 + seg - gap);
+            ctx.stroke();
+          }
+          ctx.lineCap = 'round';
         }
+
+        // A skill wears a ring of teeth that turns; a topic has a bead circling its own orbit.
+        if (g >= 1) {
+          if (n.kind === 'habilidad') {
+            ctx.fillStyle = `rgba(${rgb},${0.55 * d})`;
+            for (let k = 0; k < 10; k += 1) {
+              const a = (k * TWO_PI) / 10 + spin * 0.6;
+              const r1 = r * 1.82;
+              const r2 = r * 2.04;
+              ctx.beginPath();
+              ctx.moveTo(q.x + Math.cos(a - 0.085) * r1, q.y + Math.sin(a - 0.085) * r1);
+              ctx.lineTo(q.x + Math.cos(a - 0.05) * r2, q.y + Math.sin(a - 0.05) * r2);
+              ctx.lineTo(q.x + Math.cos(a + 0.05) * r2, q.y + Math.sin(a + 0.05) * r2);
+              ctx.lineTo(q.x + Math.cos(a + 0.085) * r1, q.y + Math.sin(a + 0.085) * r1);
+              ctx.closePath();
+              ctx.fill();
+            }
+          } else {
+            ctx.setLineDash([2, 5]);
+            ctx.lineWidth = 0.8;
+            ctx.strokeStyle = `rgba(${rgb},${0.3 * d})`;
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, r * 1.95, 0, TWO_PI);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            const ba = n.phase + (calm ? 0 : fl * 0.8 * dir);
+            dot(q.x + Math.cos(ba) * r * 1.95, q.y + Math.sin(ba) * r * 1.95, 2.3, `rgba(${rgb},${0.95 * d})`);
+          }
+          // One small chip per source, along the top.
+          for (let k = 0; k < n.sources; k += 1) {
+            const a = -Math.PI / 2 + (k - (n.sources - 1) / 2) * 0.3;
+            const cx = q.x + Math.cos(a) * r * 2.3;
+            const cy = q.y + Math.sin(a) * r * 2.3;
+            ctx.fillStyle = `rgba(${rgb},${0.8 * d})`;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(a + Math.PI / 4);
+            ctx.fillRect(-1.6, -1.6, 3.2, 3.2);
+            ctx.restore();
+          }
+        }
+
+        // The body: faceted, with a highlight, in the shape of its kind.
+        ctx.globalAlpha = d;
+        const bodyRot = shape === 'spark' && !calm ? fl * 0.25 * dir : 0;
+        const bg = ctx.createRadialGradient(q.x - r * 0.35, q.y - r * 0.35, r * 0.08, q.x, q.y, r * 1.1);
+        bg.addColorStop(0, dark ? `rgba(${rgb},0.6)` : 'rgba(255,255,255,0.98)');
+        bg.addColorStop(0.55, dark ? 'rgba(8,16,28,0.94)' : 'rgba(236,246,250,0.92)');
+        bg.addColorStop(1, `rgba(${rgb},0.28)`);
+        ctx.fillStyle = bg;
+        trace(shape, q.x, q.y, r, bodyRot);
+        ctx.fill();
+        ctx.lineWidth = n.kind === 'habilidad' ? 2.2 : 1.6;
+        ctx.strokeStyle = `rgba(${rgb},0.96)`;
+        ctx.stroke();
+        // The inner shape, turned half a step, and facet lines to its corners.
+        const inner = shape === 'spark' ? 'circle' : shape === 'ring' ? 'circle' : shape;
+        const innerR = r * (shape === 'ring' ? 0.7 : 0.6);
+        const sides = shapeVertices(inner, 1).length || 0;
+        const innerRot = (sides ? Math.PI / sides : 0) + bodyRot;
+        trace(inner, q.x, q.y, innerR, innerRot);
+        ctx.fillStyle = `rgba(${rgb},0.16)`;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(${rgb},0.55)`;
+        ctx.stroke();
+        if (!lite) {
+          ctx.lineWidth = 0.7;
+          ctx.strokeStyle = `rgba(${rgb},0.38)`;
+          const corners = sides ? shapeVertices(inner, innerR, innerRot) : Array.from({ length: 3 }, (_, k) => ({ x: Math.cos(spin + (k * TWO_PI) / 3) * innerR, y: Math.sin(spin + (k * TWO_PI) / 3) * innerR }));
+          corners.forEach((v, k) => {
+            if (sides >= 5 && k % 2) return;
+            ctx.beginPath();
+            ctx.moveTo(q.x, q.y);
+            ctx.lineTo(q.x + v.x, q.y + v.y);
+            ctx.stroke();
+          });
+          if (shape === 'ring') {
+            ctx.setLineDash([1.5, 3]);
+            ctx.strokeStyle = `rgba(${rgb},0.7)`;
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, r * 0.84, spin, spin + TWO_PI);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+        // The nucleus with a spark of light.
+        dot(q.x, q.y, Math.max(1.8, r * 0.26), `rgba(${rgb},1)`);
+        if (!lite) dot(q.x - r * 0.1, q.y - r * 0.1, Math.max(0.8, r * 0.09), 'rgba(255,255,255,0.85)');
+        ctx.globalAlpha = 1;
+
+        // Pointed at or pinned: a targeting frame around it.
+        if (hot) {
+          const f = r * 2.5;
+          const len = 6 + r * 0.25;
+          ctx.lineWidth = 1.3;
+          ctx.strokeStyle = dark ? 'rgba(255,255,255,0.92)' : 'rgba(20,30,45,0.88)';
+          bracket(q.x - f * 0.78, q.y - f * 0.78, 1, 1, len);
+          bracket(q.x + f * 0.78, q.y - f * 0.78, -1, 1, len);
+          bracket(q.x - f * 0.78, q.y + f * 0.78, 1, -1, len);
+          bracket(q.x + f * 0.78, q.y + f * 0.78, -1, -1, len);
+        }
+
+        // The name goes in a later pass, so labels can avoid one another.
+        if (g >= 1 && n.title) labels.push({ n, q, r, d, hot, rgb });
+
         if (g < 1) {
           // Birth burst.
           ctx.strokeStyle = `rgba(${rgb},${(1 - g) * 0.9})`;
@@ -468,6 +587,29 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           ctx.stroke();
         }
       });
+
+      // The names: the one pointed at first, then the nearest to the core and the richest in notes. A name that
+      // would land on another one (or on a node) is left out, so the map never turns into a pile of text.
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const taken = nodes.map((_, i) => ({ x: here[i].x - 14, y: here[i].y - 14, w: 28, h: 28 }));
+      labels
+        .sort((a, b) => Number(b.hot) - Number(a.hot) || a.n.depth - b.n.depth || b.n.notes - a.n.notes)
+        .forEach(({ n, q, r, d, hot }) => {
+          ctx.font = `${hot ? 600 : 500} ${Math.round(10 * scale)}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+          const text = clip(n.title, hot ? 42 : 20).toUpperCase();
+          const width = ctx.measureText(text).width;
+          const ty = q.y + r * 2.45 + 4;
+          const box = { x: q.x - width / 2 - 3, y: ty - 2, w: width + 6, h: 14 * scale };
+          const clash = taken.some((o) => box.x < o.x + o.w && box.x + box.w > o.x && box.y < o.y + o.h && box.y + box.h > o.y);
+          if (clash && !hot) return;
+          taken.push(box);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = dark ? `rgba(2,6,14,${0.85 * d})` : `rgba(255,255,255,${0.85 * d})`;
+          ctx.strokeText(text, q.x, ty);
+          ctx.fillStyle = dark ? `rgba(225,240,250,${(hot ? 1 : 0.74) * d})` : `rgba(20,30,45,${(hot ? 1 : 0.74) * d})`;
+          ctx.fillText(text, q.x, ty);
+        });
     }
 
     // The core goes where it is dragged; every node follows it, the far ones a little later.
@@ -708,7 +850,7 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
         {KNOWLEDGE_CATEGORIES.filter((c) => counts[c.id]).map((c) => (
           <li key={c.id}>
             <button type="button" className={`memory-orb__key ${focus === c.id ? 'memory-orb__key--on' : ''}`} aria-pressed={focus === c.id} onClick={() => setFocus(focus === c.id ? null : c.id)}>
-              <i style={{ background: colorOf(c.id, theme) }} aria-hidden="true" />
+              <i style={{ background: colorOf(c.id, theme), color: colorOf(c.id, theme) }} data-shape={MAP_SHAPES[c.id]} aria-hidden="true" />
               {c.label} · {counts[c.id]}
             </button>
           </li>

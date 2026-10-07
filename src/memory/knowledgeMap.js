@@ -39,6 +39,28 @@ export const MAP_COLORS = {
 
 export const colorOf = (category, theme = 'dark') => (MAP_COLORS[theme] || MAP_COLORS.dark)[cleanCategory(category)];
 
+// Each kind of knowledge has its own shape of node, so they can be told apart without the colour.
+export const MAP_SHAPES = { empresarial: 'hex', tecnica: 'octa', cotidiana: 'circle', personal: 'diamond', salud: 'cross', academica: 'penta', creativa: 'spark', unica: 'ring' };
+export const shapeOf = (category) => MAP_SHAPES[cleanCategory(category)];
+
+// The corners of a node's shape, centred on (0, 0) with radius `r`, turned by `rot` (radians).
+// circle and ring have no corners: they are drawn as arcs.
+export function shapeVertices(shape, r, rot = 0) {
+  const turn = (pts) => pts.map(([x, y]) => ({ x: x * Math.cos(rot) - y * Math.sin(rot), y: x * Math.sin(rot) + y * Math.cos(rot) }));
+  const regular = (n, start = -Math.PI / 2) => Array.from({ length: n }, (_, k) => [Math.cos(start + (k * 2 * Math.PI) / n) * r, Math.sin(start + (k * 2 * Math.PI) / n) * r]);
+  if (shape === 'hex') return turn(regular(6));
+  if (shape === 'octa') return turn(regular(8, -Math.PI / 2 + Math.PI / 8));
+  if (shape === 'penta') return turn(regular(5));
+  if (shape === 'diamond') return turn([[0, -r * 1.12], [r * 0.82, 0], [0, r * 1.12], [-r * 0.82, 0]]);
+  if (shape === 'cross') {
+    const a = r * 0.36;
+    const b = r * 0.98;
+    return turn([[-a, -b], [a, -b], [a, -a], [b, -a], [b, a], [a, a], [a, b], [-a, b], [-a, a], [-b, a], [-b, -a], [-a, -a]]);
+  }
+  if (shape === 'spark') return turn(Array.from({ length: 8 }, (_, k) => [Math.cos(-Math.PI / 2 + (k * Math.PI) / 4) * r * (k % 2 ? 0.4 : 1.12), Math.sin(-Math.PI / 2 + (k * Math.PI) / 4) * r * (k % 2 ? 0.4 : 1.12)]));
+  return [];
+}
+
 // The colour of the core (the brain itself).
 export const CORE_RGB = { dark: '63,232,255', light: '0,127,153' };
 
@@ -102,6 +124,9 @@ export function layoutMap(topics) {
     const notes = Math.max(0, Math.min(MAX_NOTES, Number(topic.noteCount) || 0));
     return {
       id: topic.id,
+      title: String(topic.title || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+      sources: Math.max(0, Math.min(6, Number(topic.sourceCount) || 0)),
+      updated: Date.parse(topic.updatedAt) || 0,
       category,
       kind: topic.kind === 'habilidad' ? 'habilidad' : 'tema',
       depth,
