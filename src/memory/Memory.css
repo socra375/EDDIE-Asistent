@@ -365,6 +365,48 @@
   border-radius: 50%;
 }
 
+/* In the second brain's legend each kind of knowledge shows the shape of its nodes. */
+.knowledge-map__legend .memory-orb__key i {
+  width: 11px;
+  height: 11px;
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='hex'] {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='octa'] {
+  border-radius: 0;
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='diamond'] {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='penta'] {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='cross'] {
+  border-radius: 0;
+  clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='spark'] {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+
+.knowledge-map__legend .memory-orb__key i[data-shape='ring'] {
+  background: transparent !important;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+}
+
 .memory-orb__key:hover,
 .memory-orb__key--on {
   border-color: var(--accent);
@@ -788,7 +830,7 @@
   width: max-content;
   max-width: 240px;
   padding: 0.5rem 0.7rem;
-  transform: translate(-50%, calc(-100% - 16px));
+  transform: translate(-50%, calc(-100% - 38px));
   border: 1px solid var(--panel-border-strong);
   background: var(--tooltip-bg);
   color: var(--tooltip-text);
