@@ -349,7 +349,8 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
       .sort((a, b) => b.score - a.score || b.item.date - a.item.date)
       .slice(0, limit)
       .map((s) => fmt(s.item));
-  const decisions = relevant(live.decisions, 4, (d) => (d.project ? `${d.text} (${d.project})` : d.text));
+  // Decisions carry their date, so Eddie can say "me dijiste el 12 de sep que…" when they weigh on a request.
+  const decisions = relevant(live.decisions, 6, (d) => `${d.text}${d.project ? ` (${d.project})` : ''}${d.date ? ` — ${fmtDate(d.date)}` : ''}`);
   if (decisions.length) sections.push({ title: 'Decisiones relacionadas', lines: decisions });
   const knowledge = relevant(live.knowledge, 4, (k) => k.text);
   if (knowledge.length) sections.push({ title: 'Conocimientos relacionados', lines: knowledge });
