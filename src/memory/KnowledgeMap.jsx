@@ -496,9 +496,11 @@ export default function KnowledgeMap({ topics, learning, selectedId, onSelect, o
           </p>
           <div className="memory-orb__detail-actions">
             <CategorySelect value={selected.category} onChange={(category) => onCategory(selected, category)} />
-            <button type="button" className="btn btn-primary" onClick={() => onOpen(selected)}>
-              Ver las notas
-            </button>
+            {onOpen && (
+              <button type="button" className="btn btn-primary" onClick={() => onOpen(selected)}>
+                Ver las notas
+              </button>
+            )}
             <button type="button" className="btn" onClick={() => onSelect(null)}>
               Cerrar
             </button>

@@ -322,8 +322,9 @@ Si el navegador bloquea el micrófono, la tarjeta lo dice y ofrece "Reintentar".
 
 ## Segundo cerebro: «Investiga y aprende X»
 
-> La tarjeta del Segundo cerebro en el módulo Memoria está **oculta por defecto**; se muestra en Configuración → Interfaz HUD →
-> *Mostrar el Segundo cerebro en Memoria*. Oculta o no, Eddie sigue aprendiendo y usando lo aprendido.
+> En el módulo Memoria el Segundo cerebro (buscador «Investiga y aprende…», mapa y arrastrar `.md`) se ve siempre; la **lista de temas**
+> está oculta por defecto y se muestra en Configuración → Interfaz HUD → *Mostrar la lista de temas del Segundo cerebro*. Oculta o no, Eddie
+> sigue aprendiendo y usando lo aprendido.
 
 Dile a Eddie **«Investiga y aprende [un tema o una habilidad]»** (por voz, en el chat, en Telegram o desde **Memoria → Segundo cerebro**)
 y Eddie va a la web, lee varias páginas, **guarda lo esencial** con su fuente y, desde entonces, **cualquier pregunta relacionada usa
