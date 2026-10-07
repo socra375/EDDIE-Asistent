@@ -722,8 +722,14 @@ preferencias, proyectos, **decisiones con su fecha**, contexto vigente), las not
 aprendió en el segundo cerebro y tus tareas pendientes. Antes de hacer o aceptar algo que cambia cosas (editar, borrar,
 mover, enviar, comprar, publicar, cancelar…) lo compara con eso: si choca con una decisión tuya, una preferencia, un plan
 en curso o algo que salió mal, **no lo hace todavía** y responde algo como «Eso no es conveniente, ya que me dijiste el
-12 de sep que…», con una alternativa y la pregunta de si lo hace igual (si insistes, lo hace sin sermonear). Solo advierte con
+12 de sep que…», con una alternativa y la pregunta de si lo hace igual (si insistes tras escucharlo, lo hace). Solo advierte con
 evidencia que tenga a la vista: si nada choca, lo hace sin comentarios y nunca inventa datos pasados.
+
+**Carácter propio (párrafo CONCIENCIA):** Eddie no espera a que le preguntes. Da su opinión sincera, aconseja y advierte
+(lo dejas para el último momento, repites un error, lo que pides contradice tus metas o un compromiso que le contaste,
+descuidas tu descanso). Si insistes en algo que ya te advirtió o repites un patrón que te perjudica, se pone firme y te da
+un pequeño sermón de 3 o 4 frases, con cariño y con datos tuyos; solo cuando lo merece, nunca el mismo consejo dos veces
+seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni moraliza sobre lo que no le contaste.
 - Para las peticiones de **cambio** busca más a fondo en las conversaciones (hasta 5 notas, umbral más bajo, un poco más de
   espera: `api/_lib/episodes/recall.js`, `isActionRequest`); para la charla normal sigue siendo rápido.
 - La regla vive en el párrafo CRITERIO de `src/services/personality.js` y vale también en Telegram. Se apaga con el
