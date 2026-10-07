@@ -844,6 +844,26 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
   imágenes sexuales, de menores ni que suplanten a personas reales.
 - **Video**: todavía no. Para video no hay APIs gratis fiables (Veo y similares son de pago); se verá después con un presupuesto.
 
+## Imágenes: buscar y mandarlas (no solo crearlas)
+
+- **Desde el chat, por voz o desde Telegram**: «mándame una foto del Taj Mahal», «busca imágenes de un okapi», «enséñame el logo de GitHub».
+  Eddie usa `search_images` (hasta 4 imágenes) cuando lo que pides **ya existe**, y `create_image` cuando es algo inventado o tuyo. Las
+  imágenes se ven en el chat con su **autor, licencia y enlace a la fuente**, se guardan en la Galería (insignia «Encontrada») y llegan a tu
+  Telegram como foto con la misma atribución en el pie. Las encontradas no cambian la imagen del centro de Inicio.
+- **De dónde salen**, en este orden, hasta reunir las que pides: **Pexels** (solo si pones `PEXELS_API_KEY`, gratis), **Openverse** (licencias
+  Creative Commons, sin contenido adulto, sin clave), **Wikimedia Commons** (sin clave: lugares, animales, logos, personas públicas, obras) y, si
+  nada de eso tiene resultados, **la web en general** por Tavily (con o sin `TAVILY_API_KEY`); esas últimas **no tienen la licencia verificada** y
+  Eddie lo avisa. No se usa Google Imágenes ni Bing (son de pago).
+- **Nada se enlaza desde fuera**: cada imagen se descarga en el servidor, se comprueba por sus primeros bytes (PNG, JPEG o WebP reales, entre 3 KB y
+  6 MB) y se guarda en tu galería (`media_items`, migración `0017_media_source.sql`: página de origen, autor y licencia). La descarga solo
+  acepta direcciones públicas (cada redirección se vuelve a comprobar, igual que el lector de páginas del segundo cerebro).
+- **Límites**: `DAILY_IMAGE_SEARCH_LIMIT` imágenes encontradas por 24 horas (40 por defecto, 0 = sin límite), aparte del tope de creación; las
+  encontradas cuentan para las 60 imágenes / 150 MB de la galería (puedes pedirle a Eddie que borre las que no quieras).
+- **Seguridad**: no busca contenido sexual explícito ni violento (se rechaza la búsqueda y se descartan los resultados con esos títulos) y Openverse
+  se consulta con el contenido adulto apagado. Las fuentes son servicios de terceros: lo que escribes en la búsqueda sale hacia ellos.
+- **Sin probar contra los servicios reales**: Pexels, Openverse, Wikimedia y Tavily se implementaron según su documentación y se probaron con
+  respuestas simuladas; revísalo con tus claves y fíjate sobre todo en el cupo sin clave de Openverse.
+
 ## Sonda local (tu Chromebook)
 
 La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la

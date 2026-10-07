@@ -12,6 +12,10 @@ const fmtMb = (bytes) => `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)
 // Galería: every picture Eddie made or edited. Create one from a description,
 // open one to edit it with an instruction, show it in the middle of Inicio,
 // download it or delete it. (Eddie does the same from the chat: «dibújame…».)
+const SOURCE_NAMES = { pexels: 'Pexels', openverse: 'Openverse', wikimedia: 'Wikimedia Commons', web: 'la web' };
+// A picture Eddie found (not made) carries where it came from.
+const isFound = (item) => Boolean(item.sourceUrl || item.credit);
+
 export default function GalleryPanel() {
   const { user, login } = useAuth();
   const { settings } = useSettings();
@@ -197,6 +201,7 @@ export default function GalleryPanel() {
                 <img src={mediaUrl(m.id)} alt={m.prompt} loading="lazy" />
                 {centerId === m.id && <span className="gallery__badge">En el centro</span>}
                 {m.parentId && <span className="gallery__badge gallery__badge--edit">Edición</span>}
+                {isFound(m) && <span className="gallery__badge gallery__badge--found">Encontrada</span>}
               </button>
             </li>
           ))}
@@ -213,9 +218,22 @@ export default function GalleryPanel() {
             <p className="gallery__prompt">{open.prompt}</p>
             <p className="gallery__meta">
               {fmtDate(open.createdAt)} · {fmtMb(open.bytes)}
-              {open.provider !== 'gemini' ? ' · servicio de respaldo' : ''}
+              {isFound(open) ? ` · encontrada en ${SOURCE_NAMES[open.provider] || 'internet'}` : open.provider !== 'gemini' ? ' · servicio de respaldo' : ''}
               {open.parentId ? ' · edición de otra imagen' : ''}
             </p>
+            {isFound(open) && (
+              <p className="gallery__credit">
+                {[open.credit && `📷 ${open.credit}`, open.license].filter(Boolean).join(' · ')}
+                {/^https?:\/\//i.test(open.sourceUrl || '') && (
+                  <>
+                    {' · '}
+                    <a href={open.sourceUrl} target="_blank" rel="noopener noreferrer nofollow">
+                      Ver la fuente
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
             <form className="gallery__edit" onSubmit={edit}>
               <input className="input" value={instruction} onChange={(e) => setInstruction(e.target.value)} maxLength={800} placeholder="Qué cambiar: «quítale el fondo», «hazla de noche»…" aria-label="Instrucción para editar" />
               <button type="submit" className="btn btn-primary" disabled={!instruction.trim() || Boolean(busy)}>

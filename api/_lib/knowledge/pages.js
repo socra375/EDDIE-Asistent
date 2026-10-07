@@ -53,7 +53,7 @@ export function safeUrl(value) {
   return url;
 }
 
-async function resolvesPublic(host, lookup) {
+export async function resolvesPublic(host, lookup) {
   const bare = host.replace(/^\[|\]$/g, '');
   if (net.isIP(bare)) return !isPrivateAddress(bare);
   try {

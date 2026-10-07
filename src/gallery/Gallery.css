@@ -196,3 +196,21 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.gallery__badge--found {
+  right: 0.4rem;
+  left: auto;
+  background: rgba(255, 176, 32, 0.85);
+  color: #1a1100;
+}
+
+.gallery__credit {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+.gallery__credit a {
+  color: var(--accent);
+}

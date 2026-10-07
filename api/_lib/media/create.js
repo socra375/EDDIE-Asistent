@@ -1,8 +1,10 @@
 // Making, editing and deleting pictures for a user: the rules (limits, what
 // can be edited) around the providers in image.js and the gallery in store.js.
 //
-//   DAILY_IMAGE_LIMIT   pictures created or edited per rolling 24 hours (default 20, 0 = no limit)
+//   DAILY_IMAGE_LIMIT         pictures created or edited per rolling 24 hours (default 20, 0 = no limit)
+//   DAILY_IMAGE_SEARCH_LIMIT  pictures found on the internet per rolling 24 hours (default 40, 0 = no limit)
 import { MediaError, cleanAspect, cleanPrompt, makeImage, MAX_IMAGE_BYTES, checkImage } from './image.js';
+import { findPictures } from './find.js';
 import { MAX_ITEMS, MAX_TOTAL_BYTES, addMedia, deleteMedia, getLatestMedia, getMedia, getMediaFile, mediaUsage } from './store.js';
 
 export const DEFAULT_DAILY_IMAGES = 20;
@@ -11,6 +13,14 @@ export function dailyImageLimit(env = process.env) {
   const raw = String(env.DAILY_IMAGE_LIMIT ?? '').trim();
   const n = raw === '' ? DEFAULT_DAILY_IMAGES : Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 0 ? Math.min(n, 500) : DEFAULT_DAILY_IMAGES;
+}
+
+export const DEFAULT_DAILY_FINDS = 40;
+
+export function dailyFindLimit(env = process.env) {
+  const raw = String(env.DAILY_IMAGE_SEARCH_LIMIT ?? '').trim();
+  const n = raw === '' ? DEFAULT_DAILY_FINDS : Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, 500) : DEFAULT_DAILY_FINDS;
 }
 
 // Throws a MediaError when the user cannot make another picture now.
@@ -63,4 +73,32 @@ export async function editImage({ userId, instruction: rawInstruction, id = null
 
 export async function removeImage(userId, id) {
   return deleteMedia(userId, id);
+}
+
+// Pictures found on the internet, downloaded and kept in the gallery with their credit.
+// → { items, query, tried } (throws MediaError). Fewer than asked for may come back.
+export async function findImages({ userId, query, count = 3 }, deps = {}) {
+  const { env = process.env, find = findPictures } = deps;
+  const limit = dailyFindLimit(env);
+  const usage = await mediaUsage(userId);
+  if (limit > 0 && usage.found24h >= limit) throw new MediaError(`Ya busqué ${limit} imágenes en las últimas 24 horas (el tope diario). Vuelve a intentarlo más tarde o sube DAILY_IMAGE_SEARCH_LIMIT en Vercel.`, 'RATE_LIMITED');
+  const room = MAX_ITEMS - usage.count;
+  if (room <= 0 || usage.bytes >= MAX_TOTAL_BYTES) throw new MediaError(`La galería está llena (${MAX_ITEMS} imágenes o ${Math.round(MAX_TOTAL_BYTES / 1048576)} MB): elimina alguna para guardar las que encuentre.`, 'FULL');
+  const want = Math.min(Number.parseInt(count, 10) || 3, room, limit > 0 ? limit - usage.found24h : 4);
+  const result = await find({ query, count: want, env });
+  if (!result.pictures.length) throw new MediaError(`No encontré imágenes de «${result.query}» (probé ${result.tried.join(', ')}). Prueba con otras palabras, o puedo crearla.`, 'NOT_FOUND');
+  const items = [];
+  for (const picture of result.pictures) {
+    const item = await addMedia(userId, {
+      prompt: cleanPrompt(picture.title || result.query, 200),
+      mime: picture.mime,
+      buffer: picture.buffer,
+      provider: picture.source,
+      sourceUrl: picture.pageUrl ? String(picture.pageUrl).slice(0, 500) : null,
+      credit: picture.credit,
+      license: picture.license,
+    });
+    items.push(item);
+  }
+  return { items, query: result.query, tried: result.tried };
 }
