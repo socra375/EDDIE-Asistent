@@ -735,6 +735,9 @@ chat privado vinculado; en grupos no contesta.
   caber en los 60 s de Vercel). Si aun así se corta, la app lo dice con claridad (antes la respuesta podía quedar a medias en
   silencio). En Telegram, si Eddie no alcanza a responder en ~54 s, te avisa «tardé demasiado» (y no te descuenta la petición)
   en vez de quedarse mudo.
+- **Respuesta vacía de Gemini** («Gemini no devolvió contenido utilizable»): Eddie ya no se rinde al primer intento. Reintenta tal cual; si sigue vacía, reintenta con el
+  «pensamiento» normal del modelo (el mínimo a veces lo deja sin nada que decir) y por último sin herramientas; solo entonces pasa a Groq/OpenRouter. Si aun así falla,
+  el mensaje trae el detalle técnico (modelo y motivo) y el registro de Vercel guarda `[callGemini] empty response …` con el intento, el pensamiento y si había herramientas.
 
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
