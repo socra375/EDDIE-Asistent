@@ -90,6 +90,26 @@ export async function replaceNotes(userId, topicId, notes) {
   return notes.length;
 }
 
+// Adds notes to what the topic already has (a skill learned bit by bit from
+// several conversations), skipping one that is already there. Returns how many were added.
+export async function appendNotes(userId, topicId, notes) {
+  const sql = getDb();
+  const have = await sql`select content from knowledge_notes where topic_id = ${topicId} and user_id = ${userId}`;
+  const seen = new Set(have.map((r) => String(r.content).slice(0, 60).toLowerCase()));
+  let added = 0;
+  for (const n of notes) {
+    const key = n.content.slice(0, 60).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await sql`
+      insert into knowledge_notes (topic_id, user_id, content, source_url, source_title, embedding)
+      values (${topicId}, ${userId}, ${n.content}, ${n.sourceUrl || null}, ${n.sourceTitle || null}, ${n.embedding ? toVector(n.embedding) : null}::vector)
+    `;
+    added += 1;
+  }
+  return added;
+}
+
 export async function listTopics(userId) {
   const sql = getDb();
   const rows = await sql`

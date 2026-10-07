@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import Icon from '../layout/Icon';
 import { deleteNote, deleteTopic, getTopic, learnTopic, listTopics, setTopicCategory } from '../services/knowledge';
 import { categoryLabel } from '../services/knowledgeCategories';
+import BrainDrop from './BrainDrop';
 import KnowledgeMap, { CategorySelect } from './KnowledgeMap';
 import { colorOf } from './knowledgeMap';
 
@@ -130,7 +131,7 @@ export default function KnowledgeCard() {
   const signedIn = Boolean(user) && state.configured;
 
   return (
-    <>
+    <BrainDrop target="knowledge" onDone={refresh}>
       {signedIn && (
         <KnowledgeMap
           topics={state.topics}
@@ -211,6 +212,7 @@ export default function KnowledgeCard() {
                                   {note.sourceTitle || domain(note.sourceUrl)} ({domain(note.sourceUrl)})
                                 </a>
                               )}
+                              {!note.sourceUrl && note.sourceTitle && <span className="knowledge__source">de «{note.sourceTitle}»</span>}
                               <button type="button" className="knowledge__x" onClick={() => removeNote(note)} aria-label="Quitar esta nota" title="Quitar esta nota">
                                 ✕
                               </button>
@@ -253,6 +255,6 @@ export default function KnowledgeCard() {
         </>
       )}
     </section>
-    </>
+    </BrainDrop>
   );
 }
