@@ -715,6 +715,22 @@ Comandos: `/llamar`, `/resumen`, `/recordatorios`, `/uso`, `/restaurar`, `/voz o
 definido, solo esa cuenta puede vincular Telegram. Eddie solo responde en tu
 chat privado vinculado; en grupos no contesta.
 
+## Criterio: Eddie se apoya en lo que ya sabe
+
+Sin que tengas que decirle «recuerda que…», en cada respuesta Eddie cuenta con lo que sabe de ti: la memoria (perfil,
+preferencias, proyectos, **decisiones con su fecha**, contexto vigente), las notas de conversaciones anteriores, lo que
+aprendió en el segundo cerebro y tus tareas pendientes. Antes de hacer o aceptar algo que cambia cosas (editar, borrar,
+mover, enviar, comprar, publicar, cancelar…) lo compara con eso: si choca con una decisión tuya, una preferencia, un plan
+en curso o algo que salió mal, **no lo hace todavía** y responde algo como «Eso no es conveniente, ya que me dijiste el
+12 de sep que…», con una alternativa y la pregunta de si lo hace igual (si insistes, lo hace sin sermonear). Solo advierte con
+evidencia que tenga a la vista: si nada choca, lo hace sin comentarios y nunca inventa datos pasados.
+- Para las peticiones de **cambio** busca más a fondo en las conversaciones (hasta 5 notas, umbral más bajo, un poco más de
+  espera: `api/_lib/episodes/recall.js`, `isActionRequest`); para la charla normal sigue siendo rápido.
+- La regla vive en el párrafo CRITERIO de `src/services/personality.js` y vale también en Telegram. Se apaga con el
+  conector *Recuerdos de conversaciones* (Conectores) o la memoria desde Configuración.
+- Límite honesto: depende de que Eddie haya guardado antes esa decisión (se guardan solas al cerrar una conversación o
+  cuando lo cuentas) y de que el modelo la tenga delante; con un modelo pequeño puede dejar pasar alguna advertencia.
+
 ## Respuestas en Telegram, cupo por tanda y respuestas largas
 
 - **A Telegram solo llegan los resultados, no la charla.** Eddie conversa y pregunta todo en el chat de la app; cuando termina
