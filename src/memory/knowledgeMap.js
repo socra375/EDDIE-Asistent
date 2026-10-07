@@ -215,6 +215,17 @@ export function turnSoma(points, angle, tilt = 0.35) {
   });
 }
 
+// Dragging the core moves the whole neuron. The core may travel this far from the middle (map units).
+export const CORE_REACH = { x: 0.55, y: 0.32 };
+export const clampOffset = (x, y) => ({ x: Math.max(-CORE_REACH.x, Math.min(CORE_REACH.x, x)), y: Math.max(-CORE_REACH.y, Math.min(CORE_REACH.y, y)) });
+
+// How quickly a node catches up with the core per frame at 60 fps (0–1): the ones close to the core follow
+// tightly and the far ones lag behind, so the branches stretch and swing like something soft.
+export const followFactor = (depth) => 0.42 - 0.07 * Math.min(Math.max(depth, 0), 4);
+
+// One step of "catch up with the target": the same pace at any frame rate (`dt` in seconds).
+export const catchUp = (current, target, k, dt) => current + (target - current) * (1 - (1 - k) ** (Math.max(dt, 0) * 60));
+
 // The node under the pointer (the nearest within `hit` pixels), or -1.
 export function pickMapNode(points, px, py, hit) {
   let best = -1;
