@@ -736,6 +736,28 @@ chat privado vinculado; en grupos no contesta.
   silencio). En Telegram, si Eddie no alcanza a responder en ~54 s, te avisa «tardé demasiado» (y no te descuenta la petición)
   en vez de quedarse mudo.
 
+## Documentos .md y conversaciones clasificadas (los dos cerebros)
+
+- **Un .md sobre cualquiera de los dos cerebros**: en Memoria, suelta un archivo `.md` (o usa «Subir documento .md») sobre el orbe de
+  **memoria** o sobre el mapa del **segundo cerebro**. Eddie lo lee con una llamada de IA y lo **clasifica por lo que dice**
+  (`api/_lib/brain/`, tipos en `src/services/brainKinds.js`):
+  - sobre el **orbe de Memoria** (primer cerebro) cada dato va a su categoría: *dato personal* → Perfil, *preferencia* → Preferencias,
+    *proyecto* → Proyectos, *decisión* → Decisiones, *conocimiento* → Conocimientos, *contexto temporal* → Contexto temporal y
+    *habilidad / posible skill* → Conocimientos como «Habilidad · …». Se aplica a tu memoria como si Eddie lo hubiera recordado
+    en el chat (y se sincroniza con tu cuenta);
+  - sobre el **segundo cerebro** el documento entra como **un tema** (título, resumen, de 4 a 12 notas con vectores), de tipo *habilidad* o
+    *tema* y con su color (empresarial, técnica…); si lo vuelves a soltar, lo actualiza. Si además contiene datos personales,
+    preferencias o proyectos, te avisa para que lo sueltes también en Memoria.
+  Hasta 150 KB y unos 30.000 caracteres analizados (en 3 partes; si es más largo lo dice). Cuenta como **una petición** del cupo del día.
+  El contenido del documento se trata como datos, nunca como instrucciones, y lo que devuelve la IA se valida y recorta antes de guardarse.
+- **Las conversaciones ya no solo se guardan: se analizan.** Al cerrarse una conversación (app o Telegram) la misma llamada que hacía el
+  resumen ahora devuelve también la información **clasificada** (solo lo que *tú* dijiste o confirmaste): los datos, preferencias,
+  proyectos, decisiones y contexto temporal van a la **memoria** (la app los aplica; desde Telegram se escriben en tu cuenta) y las
+  **habilidades** que aparezcan van al **segundo cerebro** como notas de un tema de tipo *habilidad* (las siguientes conversaciones
+  suman notas al mismo tema sin repetirlas). Respeta los interruptores: con la memoria apagada no se escribe en ella y con el
+  conector «Segundo cerebro» apagado no se guardan habilidades. Sin costo extra de IA: es la misma llamada del resumen.
+- Por ahora los `.md` se suben desde la app (no por Telegram).
+
 ## Sonda local (tu Chromebook)
 
 La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la

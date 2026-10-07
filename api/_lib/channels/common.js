@@ -3,9 +3,10 @@
 // text of a confirmation card and closing a cold conversation into memory.
 import { synthesizeSpeech, MAX_SPEECH_CHARS } from '../speech.js';
 import { MAX_IMAGE_CHARS } from '../images.js';
-import { loadUserContext } from '../telegram/serverActions.js';
+import { applyActionsForUser, loadUserContext } from '../telegram/serverActions.js';
 import { saveConversation } from '../episodes/recall.js';
 import { episodesEnabled } from '../episodes/handlers.js';
+import { knowledgeEnabled } from '../knowledge/handlers.js';
 
 export const IMAGE_PROMPT = '¿Qué ves en esta imagen?';
 // The most a picture may weigh to fit a request (see api/_lib/images.js).
@@ -87,7 +88,11 @@ export async function closeConversation(link, { source, markSaved, force = false
     const idleMinutes = link.historyAt ? (Date.now() - new Date(link.historyAt).getTime()) / 60000 : 0;
     if (!force && !(idleMinutes > COLD_MINUTES)) return;
     const ctx = await loadUserContext(link.userId);
-    if (episodesEnabled(ctx.settings)) await saveConversation({ userId: link.userId, messages: link.history, source });
+    if (episodesEnabled(ctx.settings)) {
+      const out = await saveConversation({ userId: link.userId, messages: link.history, source, keepLearning: knowledgeEnabled(ctx.settings) });
+      // What the analysis found for the first brain goes straight to the account's memory (there is no app open here).
+      if (out.saved && out.actions?.length && ctx.memoryOn) await applyActionsForUser(link.userId, out.actions, { memoryEnabled: true });
+    }
     await markSaved(link.userId);
   } catch (err) {
     console.error(`[${source}] keeping the conversation failed:`, err.message);

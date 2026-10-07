@@ -6,7 +6,9 @@
 //    model as background.
 import { embedQuery, embedText } from './embed.js';
 import { addEpisode, countEpisodes, saveLimitReached, searchEpisodes } from './store.js';
-import { summarizeConversation } from './summarize.js';
+import { analyzeConversation } from '../brain/analyze.js';
+import { keepSkills } from '../brain/ingest.js';
+import { itemsToActions } from '../../../src/services/brainKinds.js';
 
 // Gemini embeddings of related Spanish text land around 0.6–0.8 cosine; lower
 // values are mostly noise. An explicit "do you remember…?" is allowed to look further.
@@ -77,10 +79,16 @@ export async function recallBlock({ userId, messages, timezone }) {
   }
 }
 
-// Summarizes `messages` and stores the note. Returns { saved: true, episode }
-// or { saved: false, reason } — "nada" (nothing worth keeping), "corto"
-// (too few messages) — and throws on a real failure (provider down, limit).
-export async function saveConversation({ userId, messages, conversationId = null, source = 'web', summarize = summarizeConversation }) {
+// Analyses `messages`: a short note Eddie keeps (embedded, for recall) AND the
+// information in them, sorted by kind (see brain/analyze.js): personal data,
+// preferences, projects, decisions, knowledge and temporary context come back as
+// memory `actions` for the caller to apply (the app applies them to the
+// user's memory; Telegram writes them to the account), and skills go to the
+// second brain right here (`learned`, unless `keepLearning` is false).
+// Returns { saved: true, episode, actions, learned, counts } or
+// { saved: false, reason } — "nada" (nothing worth keeping), "corto" (too few
+// messages) — and throws on a real failure (provider down, limit).
+export async function saveConversation({ userId, messages, conversationId = null, source = 'web', analyze = analyzeConversation, keepLearning = true, skillsFn = keepSkills }) {
   const kept = (Array.isArray(messages) ? messages : []).filter((m) => m && typeof m.content === 'string' && m.content.trim());
   if (kept.length < MIN_MESSAGES_TO_KEEP || !kept.some((m) => m.role === 'user')) return { saved: false, reason: 'corto' };
   if (await saveLimitReached(userId)) {
@@ -88,9 +96,12 @@ export async function saveConversation({ userId, messages, conversationId = null
     err.code = 'RATE_LIMITED';
     throw err;
   }
-  const summary = await summarize(kept);
-  if (!summary) return { saved: false, reason: 'nada' };
-  const embedding = await embedText(summary, { taskType: 'RETRIEVAL_DOCUMENT' });
-  const episode = await addEpisode(userId, { summary, embedding, conversationId, source, messageCount: kept.length });
-  return { saved: true, episode };
+  const analysis = await analyze(kept);
+  if (!analysis) return { saved: false, reason: 'nada' };
+  const embedding = await embedText(analysis.summary, { taskType: 'RETRIEVAL_DOCUMENT' });
+  const episode = await addEpisode(userId, { summary: analysis.summary, embedding, conversationId, source, messageCount: kept.length });
+  const { actions, skills, counts } = itemsToActions(analysis.items);
+  // The skills never fail the note: they are a bonus of the analysis.
+  const learned = keepLearning && skills.length ? await skillsFn(userId, skills, { sourceTitle: 'Conversación con Eddie' }).catch(() => []) : [];
+  return { saved: true, episode, actions, learned, counts };
 }

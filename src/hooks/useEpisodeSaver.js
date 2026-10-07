@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { saveEpisode } from '../services/episodes';
 import { freshMessages } from '../services/episodeMessages';
+import { applyMemoryActions } from '../services/memoryActions';
 
 // Eddie keeps a short note of each conversation (conversation memory). A
 // conversation is closed — summarized on the server and remembered — when:
 //  - nobody has written for IDLE_MS,
 //  - the user moves to another conversation, or
 //  - the page is closed.
+// The server also analyses it and sorts what it says (see api/_lib/brain/): memory items come back to be applied
+// here, skills are kept in the second brain.
 // Only the messages after the last note are sent, and only when there are
 // enough of them to be worth remembering.
 const IDLE_MS = 5 * 60 * 1000;
@@ -53,7 +56,9 @@ export function useEpisodeSaver({ conversationId, messages, enabled }) {
     if (fresh.length < MIN_FRESH) return;
     inflight.current.add(id);
     try {
-      await saveEpisode({ conversationId: id, messages: fresh.map(({ role, content }) => ({ role, content })), keepalive });
+      const saved = await saveEpisode({ conversationId: id, messages: fresh.map(({ role, content }) => ({ role, content })), keepalive });
+      // What the server found in the conversation (datos, preferencias, proyectos…) goes into the first brain.
+      if (saved?.actions?.length) applyMemoryActions(saved.actions);
       const next = readProgress();
       delete next[id]; // re-insert last, so the oldest entries are the ones dropped
       next[id] = all.length;

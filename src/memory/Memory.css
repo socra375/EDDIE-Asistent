@@ -823,3 +823,62 @@
 .clap-meter__reason {
   color: var(--warning);
 }
+
+/* A brain that accepts a dropped .md document (see BrainDrop.jsx) */
+.brain-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.brain-drop--over > :not(.brain-drop__veil):not(.brain-drop__bar) {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.brain-drop__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(2, 11, 16, 0.78);
+  border: 1px dashed var(--accent);
+  color: var(--accent-2);
+  font-size: 0.85rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.brain-drop__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.brain-drop__hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.brain-drop__msg {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+}
+
+.brain-drop__msg--ok {
+  color: var(--success);
+}
+
+.brain-drop__msg--bad {
+  color: var(--danger);
+}
+
+.brain-drop__msg--wait {
+  color: var(--accent-2);
+}

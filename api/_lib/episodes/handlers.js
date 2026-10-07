@@ -7,6 +7,7 @@ import { requireUser } from '../session.js';
 import { loadSettings } from '../telegram/serverActions.js';
 import { deleteAllEpisodes, deleteEpisode, listEpisodes } from './store.js';
 import { saveConversation } from './recall.js';
+import { knowledgeEnabled } from '../knowledge/handlers.js';
 
 const MAX_MESSAGES = 30;
 const MAX_CONTENT = 2000;
@@ -40,10 +41,14 @@ export async function handleEpisodesRoute({ method, path = [], cookies = {}, bod
     if (missing.length) return { status: 503, json: { error: `Falta configurar en Vercel: ${missing.join(', ')}.` } };
     const messages = cleanMessages(body?.messages);
     if (!messages) return { status: 400, json: { error: 'Faltan los mensajes de la conversación.' } };
-    if (!episodesEnabled(await loadSettings(user.id))) return { status: 200, json: { saved: false, reason: 'apagado' } };
+    const settings = await loadSettings(user.id);
+    if (!episodesEnabled(settings)) return { status: 200, json: { saved: false, reason: 'apagado' } };
     const conversationId = typeof body?.conversationId === 'string' ? body.conversationId.slice(0, 80) : null;
-    const result = await saveConversation({ userId: user.id, messages, conversationId, source: 'web' });
-    return { status: 200, json: result.saved ? { saved: true, episode: result.episode } : result };
+    const result = await saveConversation({ userId: user.id, messages, conversationId, source: 'web', keepLearning: knowledgeEnabled(settings) });
+    if (!result.saved) return { status: 200, json: result };
+    // `actions` are what the analysis found for the first brain (datos, preferencias, proyectos…): the app
+    // applies them to the user's memory; `learned` are the skills already kept in the second brain.
+    return { status: 200, json: { saved: true, episode: result.episode, actions: result.actions, learned: result.learned, counts: result.counts } };
   }
   if (sub === 'delete' && method === 'POST') {
     const user = await requireUser(cookies);

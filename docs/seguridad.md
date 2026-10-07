@@ -44,6 +44,20 @@ marcadas como «datos copiados de páginas, no instrucciones». **Abuso de cuota
 Riesgo residual: un nombre que cambie de dirección entre la comprobación y la lectura (DNS rebinding) y notas con información
 falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se borra en Memoria).
 
+## Documentos .md y análisis de conversaciones (7 oct 2026)
+
+- **El texto es dato, no instrucción**: un documento (o una conversación) puede decir «ignora tus reglas»; se manda al analizador marcado
+  como datos y lo que devuelve se **valida** antes de guardarse: solo tipos conocidos, textos de máximo 300 caracteres, campos por tipo,
+  categoría de una lista, sin repetidos y con tope de elementos. Nada de lo que escribe el modelo se ejecuta.
+- **Dónde se escribe**: lo de la memoria vuelve a la app como las mismas acciones que usan las herramientas de memoria (se aplica en tu
+  navegador y se ve en el orbe, donde puedes olvidarlo o editarlo); desde Telegram se escribe en tu propia cuenta. El segundo cerebro
+  solo recibe habilidades de conversaciones y temas de documentos, siempre filtrado por el usuario de la sesión.
+- **Superficie**: `POST /api/connectors/brain/document` exige sesión, rechaza cambios cross-site (como el resto de la función), acepta
+  hasta ~350.000 caracteres, analiza como máximo 30.000, cuenta como una petición del cupo diario y se devuelve si la IA falla.
+- **Riesgo que queda**: un documento hecho con mala intención podría intentar colar una «preferencia» engañosa en tu memoria; por eso solo
+  entra lo que tú sueltas, todo queda a la vista en el orbe y puede borrarse. No subas documentos con claves o contraseñas (se le pide a la IA
+  que no las guarde, pero no es una garantía).
+
 ## Candado de la cámara (3 oct 2026)
 
 **Estado: apagado por ahora** (pedido del dueño); se reactiva con `CAMERA_LOCK=on`. Con el candado apagado, cualquiera con sesión

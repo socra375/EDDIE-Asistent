@@ -9,6 +9,7 @@ import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import MemoryOrb from './MemoryOrb';
 import KnowledgeCard from './KnowledgeCard';
+import BrainDrop from './BrainDrop';
 import './Memory.css';
 
 const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', repo: '', lastChange: '', nextGoal: '' };
@@ -401,12 +402,14 @@ export default function MemoryPanel() {
 
   return (
     <section className="memory" aria-label="Memoria de Eddie">
-      <MemoryOrb
-        items={orbItems}
-        categories={ORB_CATEGORIES}
-        onForget={(item) => (item.kind === 'episode' ? episodes.remove(item.rawId) : forgetItem(item.id))}
-        onEdit={(item) => edit(item.raw)}
-      />
+      <BrainDrop target="memory">
+        <MemoryOrb
+          items={orbItems}
+          categories={ORB_CATEGORIES}
+          onForget={(item) => (item.kind === 'episode' ? episodes.remove(item.rawId) : forgetItem(item.id))}
+          onEdit={(item) => edit(item.raw)}
+        />
+      </BrainDrop>
 
       <form className="glass-panel memory__form" onSubmit={submit} aria-label="Agregar memoria" ref={formRef}>
         <h3>Agregar memoria</h3>
