@@ -710,10 +710,31 @@ el bot sabe quién eres por el chat que vinculas.
    "Conectado" sola.
 5. Prueba: escríbele "hola", o mándale una nota de voz: "anota comprar pan".
 
-Comandos: `/llamar`, `/resumen`, `/recordatorios`, `/voz on|off` (contestar siempre con voz), `/nuevo`
+Comandos: `/llamar`, `/resumen`, `/recordatorios`, `/uso`, `/restaurar`, `/voz on|off` (contestar siempre con voz), `/nuevo`
 (conversación nueva), `/ayuda`, `/desvincular`. Si `EDDIE_OWNER_EMAIL` está
 definido, solo esa cuenta puede vincular Telegram. Eddie solo responde en tu
 chat privado vinculado; en grupos no contesta.
+
+## Respuestas en Telegram, cupo por tanda y respuestas largas
+
+- **Todo lo que Eddie contesta en la app también llega a tu Telegram** (redacciones, tareas, agenda, ediciones…): el texto,
+  una línea «✓» por cada cosa que hizo y, si algo espera tu OK, un aviso «⏳ Falta tu confirmación en la app» (la tarjeta
+  se aprueba en la app o con ✅/✖ si lo pediste desde Telegram). También queda en el hilo de Telegram, así puedes seguir
+  desde allí («hazlo más corto») con Eddie sabiendo lo que se dijo. Hace falta tener Telegram vinculado (Conectores) y
+  sesión iniciada; se apaga en Configuración → Dispositivos → *Uso y Telegram*. Código: `api/_lib/telegram/mirror.js`.
+- **Cupo diario repartido en tandas** (`api/_lib/usage/`): `DAILY_REQUEST_LIMIT` (por defecto 50, `0` = sin límite) se parte en
+  la mitad para la **mañana** (de las 00:00 a las 14:00) y la mitad para la **tarde** (de las 14:00 a las 24:00, cambia la hora con
+  `QUOTA_SPLIT_HOUR`), en la zona horaria de tu navegador o de tu Telegram (`QUOTA_TIMEZONE` si no se sabe). Cada tanda **se
+  restaura sola** cuando empieza la siguiente y el día a medianoche; lo que no uses por la mañana no se acumula, así nunca
+  gastas todo temprano. Cuenta cada pregunta que Eddie contesta (app y Telegram; no cuentan las voces, transcripciones, la cámara
+  ni las que fallan sin respuesta). Al llegar al tope Eddie dice cuándo se restaura. Puedes devolverle el cupo a la tanda actual con
+  el botón de Configuración → *Uso y Telegram*, o con `/restaurar` (y ver cuánto llevas con `/uso`). Tabla `usage_counters`
+  (migración `0015_usage.sql`). Si la base de datos falla, Eddie sigue contestando (no se bloquea por su propio contador).
+- **Que no se caiga cuando piensa mucho**: mientras Eddie piensa, el servidor manda un latido cada 4 s para que la conexión no se
+  dé por muerta; el silencio permitido a un modelo pasó de 12 a 25 s (y de 20 a 40 s por intento, con tope de 50 s en total para
+  caber en los 60 s de Vercel). Si aun así se corta, la app lo dice con claridad (antes la respuesta podía quedar a medias en
+  silencio). En Telegram, si Eddie no alcanza a responder en ~54 s, te avisa «tardé demasiado» (y no te descuenta la petición)
+  en vez de quedarse mudo.
 
 ## Sonda local (tu Chromebook)
 
@@ -934,6 +955,7 @@ db/
   migrations/0012_camera_lock.sql    Candado de la cámara (hash de la contraseña, llaves, pases de un solo uso, permisos de lectura)
   migrations/0013_knowledge.sql      Segundo cerebro (temas y notas aprendidas con vectores)
   migrations/0014_knowledge_category.sql  Tipo de conocimiento de cada tema (color del mapa)
+  migrations/0015_usage.sql          Peticiones usadas por día y tanda (cupo diario)
 server/
   dev-server.js        Servidor Express que replica todas las rutas de api/ en local
 src/

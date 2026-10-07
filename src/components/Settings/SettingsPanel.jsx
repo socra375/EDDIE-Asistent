@@ -15,6 +15,7 @@ import { cleanWakeWord, DEFAULT_WAKE_WORD } from '../../services/wakeWord';
 import { BOOT_REPLAY_EVENT } from '../../services/boot';
 import DevicesCard from './DevicesCard';
 import NotificationsCard from './NotificationsCard';
+import UsageCard from './UsageCard';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -597,6 +598,12 @@ export default function SettingsPanel({ onOpenConversation }) {
         <h2>Dispositivos de tu cuenta</h2>
         <p className="settings-card__sub">Dónde está abierto Eddie, a cuál le activas el Modo Vigilancia y qué ve su cámara.</p>
         <DevicesCard />
+      </div>
+
+      <div className="glass-panel settings-card" data-section="devices">
+        <h2>Uso y Telegram</h2>
+        <p className="settings-card__sub">Tu cupo de peticiones por tanda y las respuestas en tu Telegram.</p>
+        <UsageCard />
       </div>
 
       <div className="glass-panel settings-card settings-card--wide" data-section="devices">

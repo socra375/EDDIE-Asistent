@@ -114,6 +114,8 @@ export async function webhookStatus() {
 export const COMMANDS = [
   { command: 'llamar', description: 'Llamar a Eddie: abre su pantalla de voz' },
   { command: 'voz', description: 'Que Eddie conteste con su voz (on/off)' },
+  { command: 'uso', description: 'Peticiones usadas en esta tanda (mañana/tarde)' },
+  { command: 'restaurar', description: 'Devolver su cupo a la tanda actual' },
   { command: 'nuevo', description: 'Empezar una conversación nueva' },
   { command: 'ayuda', description: 'Qué puede hacer Eddie por aquí' },
   { command: 'desvincular', description: 'Desconectar este chat de tu cuenta' },
