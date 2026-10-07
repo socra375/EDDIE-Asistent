@@ -737,7 +737,9 @@ chat privado vinculado; en grupos no contesta.
   en vez de quedarse mudo.
 - **Respuesta vacía de Gemini** («Gemini no devolvió contenido utilizable»): Eddie ya no se rinde al primer intento. Reintenta tal cual; si sigue vacía, reintenta con el
   «pensamiento» normal del modelo (el mínimo a veces lo deja sin nada que decir) y por último sin herramientas; solo entonces pasa a Groq/OpenRouter. Si aun así falla,
-  el mensaje trae el detalle técnico (modelo y motivo) y el registro de Vercel guarda `[callGemini] empty response …` con el intento, el pensamiento y si había herramientas.
+  el mensaje trae el detalle técnico (modelo, motivo y lo que llegó) y el registro de Vercel guarda `[callGemini] empty response …` con el intento, el pensamiento, si había herramientas y el último dato recibido.
+  También se leen mejor las respuestas en streaming: saltos de línea `\r\n`, un último evento sin su línea en blanco y cuerpos JSON simples; y un **error dentro de un stream que ya empezó**
+  (p. ej. «el modelo está sobrecargado», que Gemini manda con estado 200) se reintenta una vez y, si persiste, se muestra tal cual (y pasa a Groq/OpenRouter) en vez de contarse como «vacío».
 
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
