@@ -887,7 +887,14 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   una tabla (hasta 10 columnas y 100 filas; encabezado en negrita y fijo al desplazarte). `create_document` hace un
   **documento de Google Docs** con el texto que le pidas y, si hace falta, una **tabla al final** (una por documento). Si pides
   un «Word», hace el documento en Google Docs. Conector **Google Docs y Sheets** (`api/_lib/connectors/docs/`).
-- **Sin tarjeta de confirmación**: crear un archivo se deshace enviándolo a la papelera. Eddie no abre, edita ni borra los que ya tienes.
+- **Sin tarjeta al crear**: crear un archivo se deshace enviándolo a la papelera. **Nunca borra** archivos.
+- **Archivos que ya existen**: con el enlace (o el identificador) de un documento o una hoja, Eddie los **lee** (`read_document`,
+  `read_spreadsheet`) y los **cambia** (`edit_document`: agregar al final o cambiar un texto por otro en todo el documento;
+  `edit_spreadsheet`: agregar filas o escribir desde un rango). **Cada cambio pide tu confirmación** en una tarjeta con lo que se
+  cambia (y, en las celdas, lo que hay ahora), y puedes corregir el texto antes de aceptar. Antes de editar, Eddie lee el archivo;
+  después lo vuelve a leer para comprobarlo. `find_my_files` busca por nombre los archivos que Eddie creó (o que se abrieron con
+  él: el permiso `drive.file` no ve el resto del Drive; para otro archivo, pega su enlace). Lo que Eddie lee en un archivo se trata
+  como datos, nunca como órdenes. Con la extensión vinculada, el archivo se abre en tu navegador y ves el cambio al instante.
 - **Cómo se conecta**: aparte del login, desde **Conectores → Conectar Google Docs y Sheets**; pide `documents` y `spreadsheets`.
   Si ya conectaste otros servicios de Google, pulsa el botón de este para sumar los permisos nuevos.
 - **Google Cloud**: en el mismo proyecto, habilita **Google Docs API** y **Google Sheets API**, y agrega
@@ -897,7 +904,39 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   números para poder sumarlos.
 - **Comprueba**: tras escribir, Eddie vuelve a leer la tabla y verifica su tamaño y su primer encabezado. Si la escritura falla a
   medias, te da el enlace del archivo para que lo revises.
-- **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive) ni varias tablas en un mismo documento.
+- **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive), varias tablas en un mismo documento, ni editar el formato (negritas, estilos) de un documento que ya existe.
+
+## Tu navegador: Eddie trabaja desde Chrome (extensión)
+
+Eddie corre en una pestaña y una página web no puede abrir otras por su cuenta (el navegador lo bloquea). La extensión **«Eddie en tu
+navegador»** (`extension/`) le da esa mano: abre pestañas, y nada más.
+
+- **Qué hace**: abre **tus reuniones del calendario a su hora** (Meet, Zoom, Teams, Webex… con el tiempo de antelación que elijas,
+  aunque la pestaña de Eddie esté cerrada; abre la sala, no entra a la llamada por ti), abre **lo que Eddie crea** (documentos,
+  hojas y presentaciones) y los enlaces de Google, reuniones o YouTube que le pidas (`open_in_browser`), sin pop-ups bloqueados ni
+  botones que pulsar. Cualquier otro sitio web (`open_website`) pide tu confirmación en una tarjeta.
+- **Instalar** (Chrome, Edge, Brave… en el Chromebook o el PC): en **Conectores → Tu navegador** descarga la extensión
+  (`/eddie-extension.zip`, se genera en cada `npm run build`), descomprímela, abre `chrome://extensions`, activa **Modo de
+  desarrollador**, **Cargar descomprimida** y elige la carpeta `eddie-extension`. Recarga Eddie y pulsa **Vincular este navegador**:
+  la página le pasa a la extensión un código de un solo uso. **Probar** abre una página para comprobarlo.
+- **Qué elige el usuario** (en la tarjeta): abrir o no las reuniones y con cuántos minutos de antelación (0 a 10), y abrir o no lo que
+  Eddie crea. **Desvincular** borra el vínculo.
+- **Cómo funciona**: si estás en Eddie, la página le habla a la extensión y la pestaña se abre al instante. Si lo pides desde el
+  teléfono o Telegram, la extensión viene a buscarlo cada 30 s (las páginas que nadie recoge en 2 min se descartan). Las reuniones
+  las lee del Calendario cada 10 min y pone una alarma por cada una. Tablas nuevas: `browser_links`, `browser_pair_codes` y
+  `browser_commands` (`db/migrations/0019_browser.sql`). No añade funciones a Vercel: va por `/api/connectors/browser/*`.
+- **Privacidad y seguridad**: solo pide los permisos `alarms` y `storage`; no lee páginas ni las direcciones de tus pestañas. Guarda su
+  clave solo en la extensión (en la base de datos queda su hash). Solo abre direcciones `https` públicas, sin contraseña ni IP ni
+  nombres internos (la misma regla en el servidor y en la extensión). Eddie abre directo solo Google (documentos, calendario,
+  reuniones), YouTube, servicios de reunión y la propia Eddie; lo demás pide confirmación. Un evento solo abre su reunión si el enlace
+  es de un servicio de reunión conocido: quien te invita no puede mandarte a otra web.
+- **Límites**: el navegador tiene que estar abierto (nada se abre si está cerrado; una reunión que empezó hace menos de 15 min
+  se abre al arrancarlo). No controla páginas ni escribe en ellas: para trabajar en un documento, Eddie lo abre y lo edita por la
+  API de Google. Chrome puede pedir confirmar las extensiones sin empaquetar al arrancar.
+- **Otra dirección de Eddie**: el manifest trae `https://eddie-asistent.vercel.app`; con otra, cambia `host_permissions` y
+  `externally_connectable` en `extension/manifest.json` antes de generar el zip (o vincula con un código desde el ícono de la
+  extensión). Al subir la versión, cambia `version` en el manifest y `EXTENSION_VERSION` en `api/_lib/browser/open.js` (una
+  prueba los compara): la tarjeta avisa de que hay una versión nueva.
 
 ## WhatsApp: mensajes listos para enviar (wa.me)
 
@@ -1138,7 +1177,9 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   tasks.js               GET/POST sin id, PATCH/DELETE con id (un solo archivo + reescritura en vercel.json)
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google
+  _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser
+extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
   migrations/0003_reminders.sql      Recordatorios y resumen de la mañana

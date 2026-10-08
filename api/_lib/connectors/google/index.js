@@ -7,6 +7,7 @@
 import { getGrantedScopes, getValidAccessToken, hasGoogleCredentials } from '../../googleCredentials.js';
 import { addDays, dayLabel, localParts, resolveDate, resolveTime, todayIn, zonedInstant } from '../dates.js';
 import { clip, fetchJson } from '../http.js';
+import { meetingLink } from '../../browser/meetings.js';
 
 const API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
@@ -95,6 +96,9 @@ function describeEvent(e, timezone) {
     if (end.date !== start.date) out.end_date = end.date;
   }
   if (e.location) out.location = clip(e.location, 120);
+  // The video call, so Eddie can open it in the user's browser (open_in_browser).
+  const call = meetingLink(e);
+  if (call) out.meeting_url = call.url;
   return out;
 }
 

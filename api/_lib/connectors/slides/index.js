@@ -6,6 +6,7 @@
 // so it runs at once, without a confirmation card.
 import { randomUUID } from 'node:crypto';
 import { getValidAccessToken, hasSlidesAccess } from '../../googleCredentials.js';
+import { openCreated } from '../../browser/open.js';
 import { fetchJson } from '../http.js';
 
 const API = 'https://slides.googleapis.com/v1/presentations';
@@ -172,7 +173,9 @@ async function createPresentation(args, context) {
       : verified === false
         ? `Creé «${title}» con ${count} en tu Drive, pero no pude comprobar todas: revísala. Enlace: ${url}`
         : `Creé «${title}» con ${count} en tu Drive. Enlace: ${url}`;
-  return { created: true, id, url, title, slides: expected, verified, summary };
+  // Opens in a tab when the user linked their browser (and left that on).
+  const opened = await openCreated(context, { url, label: title }).catch(() => null);
+  return { created: true, id, url, title, slides: expected, verified, opened_in_browser: Boolean(opened), summary: opened ? `${summary} Ya la abrí en tu navegador.` : summary };
 }
 
 export default {

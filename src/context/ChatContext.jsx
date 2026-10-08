@@ -17,6 +17,7 @@ import { useAuth } from './AuthContext';
 import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
+import { initBridge } from '../services/browserBridge';
 import { applyMediaActions } from '../services/mediaActions';
 import { applyWhatsappActions } from '../services/whatsappActions';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
@@ -118,6 +119,12 @@ export function ChatProvider({ children }) {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Finds out once whether this browser has the "Eddie en tu navegador" extension,
+  // so pages Eddie opens go through it instead of a pop-up the browser may block.
+  useEffect(() => {
+    initBridge();
+  }, []);
 
   useEffect(() => {
     setActiveConversationId(conversationId);

@@ -5,67 +5,10 @@
 // ("Conectar Google Docs y Sheets"); they create and edit those files and
 // nothing else. Creating a file is easy to undo (the user can trash it), so
 // it runs at once, without a confirmation card.
-import { getValidAccessToken, hasDocsAccess } from '../../googleCredentials.js';
-import { fetchJson } from '../http.js';
-
-const DOCS_API = 'https://docs.googleapis.com/v1/documents';
-const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
-const MAX_ROWS = 100;
-const MAX_COLUMNS = 10;
-const MAX_TITLE_CHARS = 150;
-const MAX_CELL_CHARS = 300;
-const MAX_TEXT_CHARS = 20000;
-
-class OfficeError extends Error {}
-
-// The user's valid access token, or an OfficeError explaining what's missing.
-async function officeToken(context) {
-  const user = await context.getUser?.();
-  if (!user) throw new OfficeError('Para crear documentos y hojas, inicia sesión con Google y pulsa "Conectar Google Docs y Sheets" en Conectores.');
-  if (!(await hasDocsAccess(user.id))) throw new OfficeError('Google Docs y Sheets no está conectado: pulsa "Conectar Google Docs y Sheets" en el módulo Conectores.');
-  try {
-    return await getValidAccessToken(user.id);
-  } catch (err) {
-    throw new OfficeError(err.message || 'No se pudo acceder a tu cuenta de Google. Vuelve a conectar Google Docs y Sheets.');
-  }
-}
-
-async function google(token, url, options = {}) {
-  const { ok, status, data } = await fetchJson(url, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
-    timeoutMs: 8000,
-  });
-  if (ok) return data;
-  if (status === 401) throw new OfficeError('Google rechazó el acceso. Vuelve a pulsar "Conectar Google Docs y Sheets" en Conectores.');
-  if (status === 403) throw new OfficeError('Google no lo permitió: revisa que la "Google Docs API" y la "Google Sheets API" estén habilitadas en tu proyecto de Google Cloud y que aceptaste los permisos.');
-  if (status === 404) throw new OfficeError('No encuentro ese archivo.');
-  if (status === 429) throw new OfficeError('Google está limitando las solicitudes; inténtalo en un momento.');
-  throw new OfficeError(data?.error?.message || 'Google no respondió en este momento.');
-}
-
-// Wraps a tool body so an OfficeError becomes a readable { error }.
-function guarded(fn) {
-  return async (args, context) => {
-    try {
-      return await fn(args, context);
-    } catch (err) {
-      if (err instanceof OfficeError) return { error: err.message };
-      throw err;
-    }
-  };
-}
-
-// One line of text: model output is data, so it is cleaned and cut.
-const line = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-
-// A spreadsheet cell: plain numbers stay numbers (so they can be summed), the
-// rest is text. Written as RAW, so nothing the model sends is read as a formula.
-function cellOf(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const text = line(value, MAX_CELL_CHARS);
-  return /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : text;
-}
+import { hasDocsAccess } from '../../googleCredentials.js';
+import { openCreated } from '../../browser/open.js';
+import { existingTools } from './existing.js';
+import { DOCS_API, MAX_CELL_CHARS, MAX_COLUMNS, MAX_ROWS, MAX_TEXT_CHARS, MAX_TITLE_CHARS, OfficeError, SHEETS_API, cellOf, google, guarded, line, officeToken } from './shared.js';
 
 // { headers, rows } from what the model sent → every row as wide as the headers.
 // Returns null when there is no table at all; throws when it is unusable.
@@ -138,7 +81,8 @@ async function createSpreadsheet(args, context) {
   const size = `${table.rows.length} fila${table.rows.length === 1 ? '' : 's'} y ${table.headers.length} columna${table.headers.length === 1 ? '' : 's'}`;
   const base = `Creé la hoja «${title}» con ${size} en tu Drive.`;
   const summary = `${base}${verified === true ? ' Comprobado: la tabla está completa.' : verified === false ? ' No pude comprobar la tabla: revísala.' : ''} Enlace: ${url}`;
-  return { created: true, kind: 'spreadsheet', id, url, title, rows: table.rows.length, columns: table.headers.length, verified, summary };
+  const opened = await openCreated(context, { url, label: title }).catch(() => null);
+  return { created: true, kind: 'spreadsheet', id, url, title, rows: table.rows.length, columns: table.headers.length, verified, opened_in_browser: Boolean(opened), summary: opened ? `${summary} Ya la abrí en tu navegador.` : summary };
 }
 
 // ---- Google Docs ----
@@ -216,7 +160,8 @@ async function createDocument(args, context) {
 
   const base = `Creé el documento «${title}»${table ? ` con una tabla de ${table.rows.length} fila${table.rows.length === 1 ? '' : 's'} y ${table.headers.length} columna${table.headers.length === 1 ? '' : 's'}` : ''} en tu Drive.`;
   const summary = `${base}${verified === true ? ' Comprobado: la tabla está completa.' : verified === false ? ' No pude comprobar la tabla: revísala.' : ''} Enlace: ${url}`;
-  return { created: true, kind: 'document', id, url, title, table: Boolean(table), verified, summary };
+  const opened = await openCreated(context, { url, label: title }).catch(() => null);
+  return { created: true, kind: 'document', id, url, title, table: Boolean(table), verified, opened_in_browser: Boolean(opened), summary: opened ? `${summary} Ya la abrí en tu navegador.` : summary };
 }
 
 const TABLE_ROWS = { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'STRING' } } };
@@ -224,18 +169,18 @@ const TABLE_ROWS = { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'STRI
 export default {
   id: 'docs',
   name: 'Google Docs y Sheets',
-  description: 'Eddie crea documentos de Google Docs y hojas de Google Sheets con tablas en tu Drive, y te da el enlace para editarlos.',
+  description: 'Eddie crea documentos de Google Docs y hojas de Google Sheets con tablas, y también lee y edita (con tu confirmación) los que ya tienes con solo darle el enlace.',
   icon: 'doc',
   category: 'productividad',
   // Offered to the model only when the conversation touches the topic.
-  route: /google docs|google sheets|hoja de c[aá]lculo|spreadsheet|\bdocs?\b|\bsheets?\b|\bword\b|excel|tabla|documento/i,
+  route: /google docs|google sheets|hoja de c[aá]lculo|spreadsheet|\bdocs?\b|\bsheets?\b|\bword\b|excel|tabla|documento|archivo|\bdrive\b/i,
   auth: {
     type: 'google-login',
     scope: 'docs',
     isConnected: (user) => hasDocsAccess(user.id),
   },
   requiredEnv: ['DATABASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CONNECTOR_SECRET'],
-  note: 'Eddie crea archivos nuevos en tu Drive; no abre, edita ni borra los que ya tienes.',
+  note: 'Eddie crea archivos nuevos en tu Drive. Los que ya tienes solo los lee o edita si le das el enlace, y cada cambio pide tu confirmación (con lo que se cambia a la vista). Nunca borra archivos.',
   tools: [
     {
       label: 'Crear hoja de cálculo',
@@ -288,6 +233,7 @@ export default {
       },
       run: guarded(createDocument),
     },
+    ...existingTools,
   ],
   webhook: null,
 };

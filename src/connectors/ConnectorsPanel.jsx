@@ -6,6 +6,7 @@ import ProbeControls from './ProbeControls';
 import OAuthLinkControls from './OAuthLinkControls';
 import ConnectorOrbit from './ConnectorOrbit';
 import ComputerControls from './ComputerControls';
+import BrowserControls from './BrowserControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
 import './Connectors.css';
@@ -101,6 +102,7 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onC
       {connector.id === 'telegram' && <TelegramControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'probe' && <ProbeControls />}
       {connector.id === 'computer' && <ComputerControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
+      {connector.id === 'browser' && <BrowserControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
 
       {connector.status === 'needs_setup' && (
         <p className="connector__setup">
