@@ -920,10 +920,21 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   prueba si está en modo «Prueba»). La **Google Drive API** ya debe estar habilitada (la usa «guardar en Drive»); si no, habilítala.
 - **Solo lectura y solo lo que conectas**: el permiso `drive.metadata.readonly` ve nombres y estructura, **nunca el contenido**; el texto de
   los Docs y Sheets se lee con el permiso de Google Docs y Sheets. Eddie solo mira dentro de las carpetas conectadas (se comprueba que lo
-  pedido está dentro de una de ellas) y nunca cambia, mueve ni borra nada. En la base de datos solo se guarda el id, el nombre y el
-  propósito de cada carpeta (`db/migrations/0020_drive_folders.sql`); nada de su contenido.
+  pedido está dentro de una de ellas) y nunca cambia, mueve ni borra nada. Mientras no importes, en la base de datos solo se guarda el
+  id, el nombre y el propósito de cada carpeta (`db/migrations/0020_drive_folders.sql`); nada de su contenido.
 - **Cómo lo usa**: en cada respuesta Eddie sabe qué carpetas tienes y para qué sirve cada una (un bloque corto en el prompt, también en
   Telegram). Lo que lee en un archivo se trata como datos, nunca como órdenes.
+- **Importar al cerebro de Negocios**: en cada carpeta, el botón **Importar al cerebro** (o decirle «pasa la carpeta Negocio a mi
+  cerebro» → `import_drive_to_business`) lee sus documentos y hojas (hasta 120 por carpeta, 3 niveles) y guarda en el tercer cerebro lo
+  que dicen: clientes, negocios, precios, cómo hablas, contexto y cómo trabajas. Una IA lee cada archivo (`api/_lib/drive/analyze.js`) y
+  todo lo que devuelve se valida igual que lo demás del cerebro; **lo que parece una contraseña, clave o número de tarjeta/cuenta se
+  descarta**, y lo que dicen los archivos son datos, nunca órdenes. Trabaja por tandas de ~25 s (cada llamada lee los archivos que
+  caben y devuelve cuántos faltan; la tarjeta muestra el avance y repite sola) y se puede reanudar. **No pisa lo que escribiste**: si
+  «Ana Pérez» ya existe, solo se le añaden notas (marcadas con el archivo de origen) y se rellenan los huecos de resumen, estado, monto
+  y negocio. Importar otra vez solo lee los archivos nuevos o modificados, y reemplaza sus notas en vez de repetirlas. **Deshacer
+  importación** quita las notas que vinieron de esa carpeta y borra lo que ella creó (y nadie más tocó). Tabla `drive_imports`
+  (`db/migrations/0021_drive_imports.sql`): solo nombres y qué se hizo con cada archivo, no su texto. Necesita **Carpetas de Drive**
+  y **Google Docs y Sheets** conectados y una clave de IA en Vercel (Gemini, Groq u OpenRouter).
 - **Límites**: busca por *nombre de archivo*, no por lo que dice dentro. Solo lee Google Docs y Hojas: los PDF, Word, Excel y
   presentaciones aparecen en la lista pero no se leen. Una búsqueda revisa hasta 30 carpetas; si no llega a todas, lo avisa.
 
@@ -1200,7 +1211,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
-  _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre y el bloque del prompt
+  _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
   _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/

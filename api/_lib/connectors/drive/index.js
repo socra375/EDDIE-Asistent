@@ -2,12 +2,16 @@
 // Eddie can see what is in them and search them by name — only inside those
 // folders, never the rest of the Drive — and then reads the Docs and Sheets it
 // finds with read_document / read_spreadsheet (the Google Docs and Sheets
-// connector). Names and structure only (drive.metadata.readonly); nothing is
-// copied into Eddie's database but the folder's id, name and purpose.
+// connector). Names and structure only (drive.metadata.readonly). On request
+// (import_drive_to_business, or the card's button) Eddie also reads their text once and
+// sorts what it says into the third brain, Negocios (api/_lib/drive/importer.js);
+// otherwise only the folder's id, name and purpose are stored.
 // The folders are connected from the hub (api/_lib/drive/handlers.js).
-import { getValidAccessToken, hasDriveAccess } from '../../googleCredentials.js';
+import { getValidAccessToken, hasDocsAccess, hasDriveAccess } from '../../googleCredentials.js';
 import { DriveError, describeFile, getFile, insideConnected, listChildren, parseFolderRef, searchFolders } from '../../drive/folders.js';
 import { listFolders } from '../../drive/store.js';
+import { folderCounts } from '../../drive/importStore.js';
+import { importFolder } from '../../drive/importer.js';
 import { clip } from '../http.js';
 
 const TOP_ITEMS = 30;
@@ -94,6 +98,50 @@ async function searchDrive(args, context) {
   };
 }
 
+const plain = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+// One batch of the import (api/_lib/drive/importer.js). The first call for a folder looks at it again;
+// the following ones carry on with what is pending.
+async function importToBusiness(args, context) {
+  const user = await context.getUser?.();
+  if (!user) throw new DriveError('Para importar tus carpetas, inicia sesión con Google.');
+  if (!(await hasDriveAccess(user.id))) throw new DriveError('Las carpetas de Drive no están conectadas: pulsa "Conectar Carpetas de Drive" en el módulo Conectores.');
+  if (!(await hasDocsAccess(user.id))) throw new DriveError('Para leer los documentos y hojas, conecta también «Google Docs y Sheets» en Conectores.');
+  const folders = await listFolders(user.id);
+  if (!folders.length) throw new DriveError('Todavía no hay ninguna carpeta conectada: pega el enlace de una en Conectores → Carpetas de Drive.');
+  const wanted = plain(args.folder);
+  let folder;
+  if (wanted) {
+    folder = folders.find((f) => plain(f.name) === wanted) || folders.find((f) => plain(f.name).includes(wanted) || wanted.includes(plain(f.name)));
+    if (!folder) throw new DriveError(`No hay una carpeta conectada llamada «${clip(args.folder, 60)}». Las conectadas son: ${folders.map((f) => `«${f.name}»`).join(', ')}.`);
+  } else {
+    // The first one still being imported, else the first.
+    const counts = await Promise.all(folders.map((f) => folderCounts(user.id, f.id)));
+    folder = folders.find((_, i) => counts[i].pending > 0) || folders[0];
+  }
+  const before = await folderCounts(user.id, folder.id);
+  const result = await importFolder(user.id, folder, { start: before.pending === 0 });
+  const total = result.listing;
+  if (result.created + result.updated > 0) context.emit?.({ type: 'business_saved', title: folder.name, imported: result.created + result.updated });
+  return {
+    folder: folder.name,
+    ...(total ? { filesFound: total.found, ignoredFiles: total.ignored, listingIncomplete: total.truncated } : {}),
+    read: result.processed,
+    created: result.created,
+    updated: result.updated,
+    withoutUsefulInfo: result.empty,
+    failed: result.failed,
+    remaining: result.remaining,
+    saved: result.items.map((i) => `${i.title} (${i.area}${i.created ? ', nuevo' : ''})`),
+    ...(result.stopped ? { stopped: result.stopped } : {}),
+    note: result.stopped
+      ? `Se detuvo: ${result.stopped}`
+      : result.remaining
+        ? `Faltan ${result.remaining} archivos: llama de nuevo a import_drive_to_business con la misma carpeta para seguir.`
+        : `Listo. El usuario puede verlo en el módulo Negocios y deshacerlo desde Conectores → Carpetas de Drive.${total?.ignored ? ' Los PDF, Word y demás archivos no se leen.' : ''}`,
+  };
+}
+
 export default {
   id: 'drive',
   name: 'Carpetas de Drive',
@@ -102,15 +150,22 @@ export default {
   icon: 'cloud',
   category: 'productividad',
   // Offered to the model only when the conversation touches the topic.
-  route: /carpeta|drive|archivo|documento|cliente|negocio|propuesta|contrato|cotiza|presupuesto|precio|\bplan(es)?\b|servicio al|qu[eé] (tengo|hay|dice)/i,
+  route: /carpeta|drive|cerebro|import|export|pasa(r|s)? |archivo|documento|cliente|negocio|propuesta|contrato|cotiza|presupuesto|precio|\bplan(es)?\b|servicio al|qu[eé] (tengo|hay|dice)/i,
   auth: {
     type: 'google-login',
     scope: 'drive',
     isConnected: (user) => hasDriveAccess(user.id),
   },
   requiredEnv: ['DATABASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'CONNECTOR_SECRET'],
-  note: 'Eddie solo mira las carpetas que conectes (y lo que hay dentro), en solo lectura: no cambia, mueve ni borra nada de tu Drive. Ve nombres y estructura; el texto de los documentos y hojas lo lee con el permiso de Google Docs y Sheets, así que conéctalo también.',
-  details: async (user) => (user ? { folders: await listFolders(user.id) } : null),
+  note: 'Eddie solo mira las carpetas que conectes (y lo que hay dentro), en solo lectura: no cambia, mueve ni borra nada de tu Drive. Con «Importar al cerebro» lee sus documentos y hojas una vez y guarda en Negocios lo que dicen (clientes, precios, cómo hablas…), sin pisar lo que ya escribiste y con opción de deshacer. Ve nombres y estructura; el texto de los documentos y hojas lo lee con el permiso de Google Docs y Sheets, así que conéctalo también.',
+  details: async (user) => {
+    if (!user) return null;
+    const folders = await listFolders(user.id);
+    // What was imported from each folder into the third brain, for the card's button and summary.
+    // A failure here must not hide the folders themselves.
+    const counts = (f) => folderCounts(user.id, f.id).catch(() => ({ pending: 0, done: 0, empty: 0, failed: 0, lastAt: null, errors: [] }));
+    return { folders: await Promise.all(folders.map(async (f) => ({ ...f, import: await counts(f) }))) };
+  },
   tools: [
     {
       label: 'Ver tus carpetas de Drive',
@@ -149,6 +204,25 @@ export default {
         },
       },
       run: guarded(searchDrive),
+    },
+    {
+      label: 'Importar una carpeta de Drive a tu cerebro de negocios',
+      activity: 'Leyendo tus documentos para el cerebro…',
+      risk: 'write',
+      sensitive: false,
+      summarize: (r) => (r.error ? 'No se pudo' : `${r.created} nuevo${r.created === 1 ? '' : 's'}, ${r.updated} actualizado${r.updated === 1 ? '' : 's'}${r.remaining ? `, faltan ${r.remaining}` : ''}`),
+      declaration: {
+        name: 'import_drive_to_business',
+        description:
+          'Lee los documentos y hojas de una carpeta de Drive conectada y guarda lo que dicen en el tercer cerebro (Negocios y clientes): clientes, negocios, precios, cómo habla el usuario, contexto. Úsala cuando el usuario pida pasar, importar o exportar sus carpetas al cerebro. Trabaja por tandas: cada llamada lee unos cuantos archivos y devuelve cuántos faltan (remaining); si faltan, vuelve a llamarla con la misma carpeta hasta que remaining sea 0. No pisa lo que el usuario ya escribió y se puede deshacer desde Conectores → Carpetas de Drive. Los archivos que no han cambiado no se leen otra vez.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            folder: { type: 'STRING', description: 'Nombre de la carpeta conectada (p. ej. "Negocio"). Sin él, la primera que tenga archivos por importar.' },
+          },
+        },
+      },
+      run: guarded(importToBusiness),
     },
   ],
   webhook: null,
