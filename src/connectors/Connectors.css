@@ -412,6 +412,41 @@
   padding: 0.35rem 0.55rem;
 }
 
+/* ---- "Tu navegador": what the extension opens by itself ---- */
+.browserlink__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.browserlink__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  min-width: 0;
+}
+
+.browserlink__option--sub {
+  margin-left: 1.6rem;
+  color: var(--text-dim);
+}
+
+.browserlink__option select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.browserlink__found {
+  color: var(--accent, var(--text));
+  font-weight: 600;
+}
+
 /* ---- Orbit view: connectors as nodes around a reactor ---- */
 .connectors__bar {
   display: flex;

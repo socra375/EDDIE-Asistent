@@ -4,12 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/build-extension.mjs && vite",
     "server": "node server/dev-server.js",
     "dev:full": "concurrently -k -n API,WEB -c yellow,cyan \"npm:server\" \"npm:dev\"",
-    "build": "vite build",
+    "build": "node scripts/build-extension.mjs && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "extension": "node scripts/build-extension.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

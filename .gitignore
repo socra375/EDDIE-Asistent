@@ -9,3 +9,6 @@ dist-ssr
 .DS_Store
 *.log
 npm-debug.log*
+
+# Built from extension/ by scripts/build-extension.mjs
+public/eddie-extension.zip

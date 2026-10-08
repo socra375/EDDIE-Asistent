@@ -13,6 +13,7 @@ import { handleUsageRoute } from './usage/handlers.js';
 import { handleBrainRoute } from './brain/handlers.js';
 import { handleMediaRoute } from './media/handlers.js';
 import { handleComputerRoute } from './computer/handlers.js';
+import { handleBrowserRoute } from './browser/handlers.js';
 import { handleDevicesRoute } from './devices/handlers.js';
 import { handleSpotifyRoute } from './spotify/auth.js';
 import { handlePushRoute } from './push/handlers.js';
@@ -50,6 +51,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path[0] === 'usage') return handleUsageRoute({ method, path, cookies, query, body });
   if (path[0] === 'telegram') return handleTelegramRoute({ method, path, cookies, headers, body });
   if (path[0] === 'computer') return handleComputerRoute({ method, path, cookies, headers, body });
+  if (path[0] === 'browser') return handleBrowserRoute({ method, path, cookies, headers, body });
   if (path[0] === 'devices') return handleDevicesRoute({ method, path, cookies, query, body, headers });
   if (path[0] === 'push') return handlePushRoute({ method, path, cookies, query, body });
   if (path[0] === 'spotify') return handleSpotifyRoute({ method, path, cookies, query });

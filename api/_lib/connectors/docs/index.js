@@ -6,6 +6,7 @@
 // nothing else. Creating a file is easy to undo (the user can trash it), so
 // it runs at once, without a confirmation card.
 import { getValidAccessToken, hasDocsAccess } from '../../googleCredentials.js';
+import { openCreated } from '../../browser/open.js';
 import { fetchJson } from '../http.js';
 
 const DOCS_API = 'https://docs.googleapis.com/v1/documents';
@@ -138,7 +139,8 @@ async function createSpreadsheet(args, context) {
   const size = `${table.rows.length} fila${table.rows.length === 1 ? '' : 's'} y ${table.headers.length} columna${table.headers.length === 1 ? '' : 's'}`;
   const base = `Creé la hoja «${title}» con ${size} en tu Drive.`;
   const summary = `${base}${verified === true ? ' Comprobado: la tabla está completa.' : verified === false ? ' No pude comprobar la tabla: revísala.' : ''} Enlace: ${url}`;
-  return { created: true, kind: 'spreadsheet', id, url, title, rows: table.rows.length, columns: table.headers.length, verified, summary };
+  const opened = await openCreated(context, { url, label: title }).catch(() => null);
+  return { created: true, kind: 'spreadsheet', id, url, title, rows: table.rows.length, columns: table.headers.length, verified, opened_in_browser: Boolean(opened), summary: opened ? `${summary} Ya la abrí en tu navegador.` : summary };
 }
 
 // ---- Google Docs ----
@@ -216,7 +218,8 @@ async function createDocument(args, context) {
 
   const base = `Creé el documento «${title}»${table ? ` con una tabla de ${table.rows.length} fila${table.rows.length === 1 ? '' : 's'} y ${table.headers.length} columna${table.headers.length === 1 ? '' : 's'}` : ''} en tu Drive.`;
   const summary = `${base}${verified === true ? ' Comprobado: la tabla está completa.' : verified === false ? ' No pude comprobar la tabla: revísala.' : ''} Enlace: ${url}`;
-  return { created: true, kind: 'document', id, url, title, table: Boolean(table), verified, summary };
+  const opened = await openCreated(context, { url, label: title }).catch(() => null);
+  return { created: true, kind: 'document', id, url, title, table: Boolean(table), verified, opened_in_browser: Boolean(opened), summary: opened ? `${summary} Ya la abrí en tu navegador.` : summary };
 }
 
 const TABLE_ROWS = { type: 'ARRAY', items: { type: 'ARRAY', items: { type: 'STRING' } } };

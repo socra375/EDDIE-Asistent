@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Eddie en tu navegador</title>
+    <style>
+      :root { color-scheme: light dark; --fg: #1d2129; --muted: #667085; --bg: #fff; --line: #d6dae1; --accent: #1f6feb; --bad: #c0392b; --ok: #1a7f4b; }
+      @media (prefers-color-scheme: dark) { :root { --fg: #e8eaf0; --muted: #98a1b3; --bg: #181b22; --line: #2d323d; --accent: #6ea8fe; --bad: #ff7b6e; --ok: #4cc38a; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; width: 320px; padding: 16px; font: 14px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+      h1 { margin: 0 0 4px; font-size: 16px; }
+      p { margin: 6px 0; }
+      .muted { color: var(--muted); font-size: 12.5px; }
+      .ok { color: var(--ok); font-weight: 600; }
+      .bad { color: var(--bad); }
+      ul { margin: 6px 0; padding-left: 18px; }
+      label { display: block; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+      input { width: 100%; margin-top: 3px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: inherit; background: transparent; }
+      .row { display: flex; gap: 8px; margin-top: 12px; }
+      button { flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: inherit; background: transparent; cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      details { margin-top: 12px; }
+      summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <h1>Eddie en tu navegador</h1>
+    <p id="status" class="muted">Cargando…</p>
+
+    <section id="linked" hidden>
+      <p class="muted" id="details"></p>
+      <p class="muted" id="meetings-title" hidden>Próximas reuniones</p>
+      <ul id="meetings"></ul>
+      <p class="muted">Solo abro pestañas: no leo ni controlo lo que tienes abierto. Cambia lo que abro desde Eddie → Conectores → Tu navegador.</p>
+      <div class="row">
+        <button id="refresh" type="button">Revisar ahora</button>
+        <button id="unlink" type="button">Desvincular</button>
+      </div>
+    </section>
+
+    <section id="unlinked" hidden>
+      <p>Para vincularlo, abre Eddie → <b>Conectores → Tu navegador → Vincular este navegador</b>.</p>
+      <details>
+        <summary>Vincular con un código (otra dirección de Eddie)</summary>
+        <label>Dirección de Eddie<input id="server" type="url" placeholder="https://mi-eddie.example.com" /></label>
+        <label>Código (lo ves en Conectores)<input id="code" type="text" maxlength="8" autocomplete="off" placeholder="ABCD2345" /></label>
+        <div class="row"><button id="pair" type="button" class="primary">Vincular</button></div>
+      </details>
+    </section>
+
+    <p id="message" class="bad" hidden></p>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

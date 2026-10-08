@@ -10,6 +10,7 @@ import { consumeLinkCode, getLinkByChat, deleteLink, setVoiceReplies, saveHistor
 import { askEddie, runConfirmed } from '../channels/brain.js';
 import { IMAGE_PROMPT, MAX_IMAGE_BYTES, cardText, closeConversation as closeThread, decisionFromText, speakable, voiceFor } from '../channels/common.js';
 import { safeYoutubeUrl } from '../connectors/youtube/index.js';
+import { safeHttpsUrl } from '../browser/urls.js';
 import { buildBriefing } from '../reminders/briefing.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
@@ -273,10 +274,13 @@ async function runAssistant(link, text, viaVoice, images = [], startedAt = Date.
 
     // Pages Eddie meant to open (YouTube): a bot can't open a browser, so the
     // link goes out with a button that opens it on the phone (or in the app).
-    for (const action of actions.filter((a) => a?.type === 'open_url' || a?.type === 'play_video').slice(0, 2)) {
-      const url = safeYoutubeUrl(action.url);
-      const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || 'YouTube';
-      if (url) await sendMessage(chatId, `▶ ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : '▶ Abrir', url }]] } });
+    // Pages for the user's browser go out the same way unless the extension was already
+    // asked to open them on the computer (the action then carries the queue id).
+    for (const action of actions.filter((a) => a?.type === 'open_url' || a?.type === 'play_video' || (a?.type === 'browser_open' && !a.id)).slice(0, 2)) {
+      const site = action.type === 'browser_open';
+      const url = site ? safeHttpsUrl(action.url) : safeYoutubeUrl(action.url);
+      const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || (site ? 'Enlace' : 'YouTube');
+      if (url) await sendMessage(chatId, `${site ? '🌐' : '▶'} ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : site ? '🌐 Abrir' : '▶ Abrir', url }]] } });
     }
 
     // WhatsApp drafts: the text plus a button that opens WhatsApp with it written (the user presses send there).
