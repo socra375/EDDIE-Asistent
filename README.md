@@ -844,6 +844,29 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
   imágenes sexuales, de menores ni que suplanten a personas reales.
 - **Video**: todavía no. Para video no hay APIs gratis fiables (Veo y similares son de pago); se verá después con un presupuesto.
 
+## Negocios y clientes: el tercer cerebro
+
+Un tercer cerebro (Memoria → **Negocios y clientes**) para tu trabajo: clientes, negocios vendidos o negociados, precios, el contexto de
+tu negocio, cómo trabajas y **cómo hablas**. La vista es una esfera de puntos con seis brazos, uno por área; cada punto es un cliente,
+un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, valor, estado) y añadir o quitar notas.
+
+- **Eddie lo guarda solo** cuando lo cuentas en el chat, por voz o desde Telegram (herramienta `save_business`): «hablé con Ana, pidió
+  descuento», «vendí la web a Luis por 1500», «mi precio básico es 15 000». Te lo dice en una frase. Si ya existe, lo actualiza y
+  añade la nota.
+- **Valor de cada cliente**: se calcula con lo que sabe de él: negocios vendidos y su monto, si está activo y cuánto se ha hablado
+  de él. Eddie dice el valor y **por qué** («2 negocios vendidos por 2300; cliente activo»). Tú o él pueden fijarlo a mano (alto, medio o bajo)
+  y entonces manda el juicio con su motivo.
+- **Cómo hablas**: el área «Cómo hablo» se usa en cada respuesta para escribirte como prefieres.
+- **Antes de contestar** sobre un cliente o una propuesta, Eddie mira lo guardado (y lo consulta con `recall_business`); si un cliente
+  vale mucho o un precio ya se negoció, lo dice con el motivo.
+- **Olvidar** pide tu confirmación con una tarjeta. El tope es de 200 cosas; cada una guarda hasta 20 notas.
+- **Límites**: se buscan palabras completas (con raíces), sin contar tildes, y los nombres de tres letras también cuentan.
+  Eddie no inventa montos: si no los dijiste, los deja vacíos.
+- **Dónde está**: tabla `business_nodes` (migración `0018_business.sql`). Lógica pura en `src/services/business.js` (valor del cliente,
+  búsqueda, montos), vista en `src/memory/BusinessBrain.jsx` y `businessMap.js`, conector en `api/_lib/connectors/business/`.
+- **Pendiente**: que el análisis de cada conversación cerrada también extraiga clientes y negocios por sí solo (hoy se guardan al
+  mencionarlos en el chat o desde la vista).
+
 ## WhatsApp: mensajes listos para enviar (wa.me)
 
 - **Qué hace**: Eddie redacta el mensaje y te deja un botón **«Abrir en WhatsApp»** (en el chat y en Telegram). El botón abre WhatsApp

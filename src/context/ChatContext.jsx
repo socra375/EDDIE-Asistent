@@ -19,6 +19,7 @@ import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { applyMediaActions } from '../services/mediaActions';
 import { applyWhatsappActions } from '../services/whatsappActions';
+import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
 import { MAX_MINUTES, formatMinutes } from '../services/dictation';
@@ -514,6 +515,8 @@ export function ChatProvider({ children }) {
           const pictures = applyMediaActions(result.actions);
           if (pictures.length) assistantMessage.media = pictures;
         }
+        // Things Eddie filed in the third brain (clientes, negocios…): the Negocios screen reloads.
+        if (result.actions?.some((a) => a?.type === 'business_saved')) window.dispatchEvent(new Event(BUSINESS_CHANGED_EVENT));
         // WhatsApp drafts: a button under the reply opens WhatsApp with the message written (the user sends it).
         if (result.actions?.length) {
           const drafts = applyWhatsappActions(result.actions);

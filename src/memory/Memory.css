@@ -999,3 +999,257 @@
 .brain-drop__msg--wait {
   color: var(--accent-2);
 }
+
+/* Negocios y clientes: el tercer cerebro (puntos sobre una esfera con seis brazos) */
+.business-brain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+}
+
+.business-brain__stage {
+  position: relative;
+  width: 100%;
+  max-width: 980px;
+  align-self: center;
+  border-radius: 8px;
+  border: 1px solid rgba(110, 150, 255, 0.2);
+  background: #040716;
+  overflow: hidden;
+}
+
+.business-brain__canvas {
+  display: block;
+  width: 100%;
+  touch-action: pan-y;
+}
+
+.business-brain__empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72%, 420px);
+  transform: translate(-50%, -50%);
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgba(215, 232, 255, 0.85);
+  pointer-events: none;
+}
+
+.business-brain__tip {
+  position: absolute;
+  z-index: 2;
+  width: max-content;
+  max-width: 220px;
+  padding: 0.45rem 0.6rem;
+  transform: translate(-50%, calc(-100% - 14px));
+  border: 1px solid rgba(110, 150, 255, 0.5);
+  background: rgba(8, 12, 32, 0.92);
+  color: #e6efff;
+  pointer-events: none;
+}
+
+.business-brain__tip span {
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.business-brain__tip b {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.business-brain__tip p {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: rgba(200, 215, 245, 0.8);
+}
+
+.business-brain__areas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.business-brain__area {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.business-brain__area i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--area);
+}
+
+.business-brain__area:hover,
+.business-brain__area--on {
+  border-color: var(--area);
+  color: var(--text);
+}
+
+.business-brain__detail,
+.business-brain__list,
+.business-brain__add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--panel-border);
+}
+
+.business-brain__detail > span {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.business-brain__detail h4 {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.business-brain__detail p,
+.business-brain__meta {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.business-brain__value {
+  padding: 0.5rem 0.6rem;
+  border-left: 2px solid var(--accent);
+  font-size: 0.8rem;
+}
+
+.business-brain__value ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1rem;
+  color: var(--text-dim);
+}
+
+.business-brain__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.business-brain__notes li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.business-brain__notes em {
+  font-style: normal;
+  color: var(--text-faint);
+}
+
+.business-brain__x {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.business-brain__row,
+.business-brain__add {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.business-brain__row .input,
+.business-brain__add .input {
+  flex: 1 1 180px;
+  width: auto;
+  min-width: 0;
+}
+
+.business-brain__add label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.business-brain__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.business-brain__list ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.business-brain__pick {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.business-brain__pick:hover {
+  border-color: var(--panel-border);
+}
+
+.business-brain__pick span {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.business-brain__note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.business-brain__note--bad {
+  color: var(--warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .business-brain__canvas {
+    animation: none;
+  }
+}

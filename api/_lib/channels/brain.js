@@ -10,6 +10,7 @@ import { buildSystemPrompt } from '../../../src/services/personality.js';
 import { loadUserContext, applyActionsForUser } from '../telegram/serverActions.js';
 import { recallBlock } from '../episodes/recall.js';
 import { knowledgeBlock } from '../knowledge/recall.js';
+import { businessBlock } from '../business/context.js';
 import { parseLearnCommand } from '../../../src/services/commands.js';
 
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
@@ -25,9 +26,10 @@ export async function askEddie({ link, text, images = [], note }) {
   const disabledConnectors = ctx.memoryOn ? off : [...new Set([...off, 'memory'])];
   const history = link.history.map((m) => ({ role: m.role, content: String(m.content) }));
   const asked = [...history, { role: 'user', content: text }];
-  const [recalled, learned] = await Promise.all([
+  const [recalled, learned, business] = await Promise.all([
     off.includes('conversations') || !ctx.memoryOn ? '' : recallBlock({ userId, messages: asked, timezone: link.timezone }),
     off.includes('knowledge') ? '' : knowledgeBlock({ userId, messages: asked }),
+    off.includes('business') ? '' : businessBlock({ userId, messages: asked }),
   ]);
   const toLearn = off.includes('knowledge') ? null : parseLearnCommand(text);
   const system = `${buildSystemPrompt({
@@ -37,7 +39,7 @@ export async function askEddie({ link, text, images = [], note }) {
     query: text,
     tasks: ctx.tasks,
     disabledConnectors: off,
-  })}${recalled ? `\n\n${recalled}` : ''}${learned ? `\n\n${learned}` : ''}${toLearn ? `\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 300)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.` : ''}\n\n${note}`;
+  })}${recalled ? `\n\n${recalled}` : ''}${learned ? `\n\n${learned}` : ''}${business ? `\n\n${business}` : ''}${toLearn ? `\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 300)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.` : ''}\n\n${note}`;
   const messages = [...history, { role: 'user', content: text, ...(images.length ? { images } : {}) }];
 
   // The answer arrives as pieces through onChunk (the result only carries

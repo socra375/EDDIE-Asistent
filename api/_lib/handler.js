@@ -2,6 +2,7 @@ import { lazySessionUser } from './session.js';
 import { callProvider } from './providers.js';
 import { queryFrom, recallBlock } from './episodes/recall.js';
 import { knowledgeBlock } from './knowledge/recall.js';
+import { businessBlock } from './business/context.js';
 import { parseLearnCommand } from '../../src/services/commands.js';
 import { limitImages, sanitizeImages } from './images.js';
 
@@ -133,6 +134,12 @@ export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, g
       if (recalled) system = `${system}\n\n${recalled}`;
       if (learned) system = `${system}\n\n${learned}`;
     }
+  }
+  // The third brain (clients, deals, prices, how he talks): the relevant part, plus how he talks, on every answer.
+  if (!request.disabledConnectors.includes('business') && process.env.DATABASE_URL) {
+    const user = await getUser();
+    const business = user ? await businessBlock({ userId: user.id, messages: request.messages }) : '';
+    if (business) system = `${system}\n\n${business}`;
   }
   // "Investiga y aprende X": the model must run the research tool, not answer from memory.
   const toLearn = wantKnowledge ? parseLearnCommand(request.messages.at(-1)?.role === 'user' ? request.messages.at(-1).content : '') : null;

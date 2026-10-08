@@ -9,6 +9,7 @@ import Icon from '../layout/Icon';
 import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
 import MemoryOrb from './MemoryOrb';
 import KnowledgeCard from './KnowledgeCard';
+import BusinessBrain from './BusinessBrain';
 import BrainDrop from './BrainDrop';
 import './Memory.css';
 
@@ -492,6 +493,8 @@ export default function MemoryPanel() {
       </form>
 
       <KnowledgeCard />
+
+      <BusinessBrain />
 
       <details className="glass-panel memory__settings">
         <summary>Ajustes de la memoria, palabra clave y aplausos</summary>
