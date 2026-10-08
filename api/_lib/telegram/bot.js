@@ -15,6 +15,7 @@ import { listPendingReminders } from '../reminders/store.js';
 import { whenLabel } from '../connectors/reminders/index.js';
 import { restoreTanda, takeRequest, usageFor, usageLine } from '../usage/store.js';
 import { sendCreatedImages } from './mirror.js';
+import { safeWhatsappUrl } from '../connectors/whatsapp/index.js';
 
 const NOT_LINKED =
   'Hola, soy Eddie. Este chat todavía no está vinculado a tu cuenta.\n\nAbre la app de Eddie → Conectores → Telegram → "Vincular Telegram" y pulsa el enlace que te dará.';
@@ -276,6 +277,14 @@ async function runAssistant(link, text, viaVoice, images = [], startedAt = Date.
       const url = safeYoutubeUrl(action.url);
       const label = action.type === 'play_video' ? `${action.title || 'Video'}${action.channel ? ` · ${action.channel}` : ''}` : action.label || 'YouTube';
       if (url) await sendMessage(chatId, `▶ ${String(label).slice(0, 100)}`, { reply_markup: { inline_keyboard: [[{ text: action.type === 'play_video' ? '▶ Reproducir' : '▶ Abrir', url }]] } });
+    }
+
+    // WhatsApp drafts: the text plus a button that opens WhatsApp with it written (the user presses send there).
+    for (const action of actions.filter((a) => a?.type === 'whatsapp_draft').slice(0, 3)) {
+      const url = safeWhatsappUrl(action.url);
+      if (!url) continue;
+      const who = action.label ? ` para ${String(action.label).slice(0, 60)}` : '';
+      await sendMessage(chatId, `💬 Mensaje listo${who}:\n\n${String(action.text || '').slice(0, 1000)}`, { reply_markup: { inline_keyboard: [[{ text: '💬 Abrir en WhatsApp', url }]] } });
     }
 
     // Pictures Eddie made while answering go out as photos.

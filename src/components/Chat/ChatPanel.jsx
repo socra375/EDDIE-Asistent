@@ -366,6 +366,18 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                   ))}
                 </div>
               )}
+              {m.whatsapp?.length > 0 && (
+                <div className="bubble__wa" aria-label="Mensajes listos para WhatsApp">
+                  {m.whatsapp.map((draft) => (
+                    <figure key={draft.url} className="bubble__wa-draft">
+                      <blockquote>{draft.text}</blockquote>
+                      <a className="btn" href={draft.url} target="_blank" rel="noopener noreferrer">
+                        Abrir en WhatsApp{draft.label ? ` · ${draft.label}` : ''}
+                      </a>
+                    </figure>
+                  ))}
+                </div>
+              )}
               {m.confirmations?.map((card) => (
                 <ConfirmCard key={card.id} card={card} onResolve={(decision, args) => resolveConfirmation(m.id, card.id, decision, args)} />
               ))}
