@@ -906,6 +906,27 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   medias, te da el enlace del archivo para que lo revises.
 - **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive), varias tablas en un mismo documento, ni editar el formato (negritas, estilos) de un documento que ya existe.
 
+## Carpetas de Drive: «Negocio», «Servicio al cliente»…
+
+- **Qué hace**: conectas una o varias carpetas de tu Drive y Eddie las consulta cuando le preguntas por un cliente, un negocio, un precio
+  o un plan: **busca por nombre** (`search_drive`, también en las subcarpetas, hasta 3 niveles), **mira qué hay dentro**
+  (`list_drive_folder`) y **lee los documentos y hojas** que encuentra con `read_document` / `read_spreadsheet`. Siempre te dice de qué
+  archivo sacó el dato. Conector **Carpetas de Drive** (`api/_lib/connectors/drive/`, `api/_lib/drive/`).
+- **Cómo se conecta**: **Conectores → Carpetas de Drive → Conectar Carpetas de Drive** (acepta el permiso). Luego abre la carpeta en
+  drive.google.com, copia el enlace de la barra de direcciones, pégalo en la tarjeta y elige para qué es: **Negocio** (negocios, contexto y
+  planes), **Servicio al cliente** (cómo hablas y tus clientes) u **Otra**. Hasta 10 carpetas. Para que Eddie lea el *texto* de los
+  documentos, conecta también **Google Docs y Sheets**.
+- **Google Cloud**: en **Pantalla de consentimiento → Permisos** agrega `.../auth/drive.metadata.readonly` (y tu correo como usuario de
+  prueba si está en modo «Prueba»). La **Google Drive API** ya debe estar habilitada (la usa «guardar en Drive»); si no, habilítala.
+- **Solo lectura y solo lo que conectas**: el permiso `drive.metadata.readonly` ve nombres y estructura, **nunca el contenido**; el texto de
+  los Docs y Sheets se lee con el permiso de Google Docs y Sheets. Eddie solo mira dentro de las carpetas conectadas (se comprueba que lo
+  pedido está dentro de una de ellas) y nunca cambia, mueve ni borra nada. En la base de datos solo se guarda el id, el nombre y el
+  propósito de cada carpeta (`db/migrations/0020_drive_folders.sql`); nada de su contenido.
+- **Cómo lo usa**: en cada respuesta Eddie sabe qué carpetas tienes y para qué sirve cada una (un bloque corto en el prompt, también en
+  Telegram). Lo que lee en un archivo se trata como datos, nunca como órdenes.
+- **Límites**: busca por *nombre de archivo*, no por lo que dice dentro. Solo lee Google Docs y Hojas: los PDF, Word, Excel y
+  presentaciones aparecen en la lista pero no se leen. Una búsqueda revisa hasta 30 carpetas; si no llega a todas, lo avisa.
+
 ## Tu navegador: Eddie trabaja desde Chrome (extensión)
 
 Eddie corre en una pestaña y una página web no puede abrir otras por su cuenta (el navegador lo bloquea). La extensión **«Eddie en tu
@@ -916,8 +937,9 @@ navegador»** (`extension/`) le da esa mano: abre pestañas, y nada más.
   hojas y presentaciones) y los enlaces de Google, reuniones o YouTube que le pidas (`open_in_browser`), sin pop-ups bloqueados ni
   botones que pulsar. Cualquier otro sitio web (`open_website`) pide tu confirmación en una tarjeta.
 - **Instalar** (Chrome, Edge, Brave… en el Chromebook o el PC): en **Conectores → Tu navegador** descarga la extensión
-  (`/eddie-extension.zip`, se genera en cada `npm run build`), descomprímela, abre `chrome://extensions`, activa **Modo de
-  desarrollador**, **Cargar descomprimida** y elige la carpeta `eddie-extension`. Recarga Eddie y pulsa **Vincular este navegador**:
+  (`/eddie-extension.zip`, se genera en cada `npm run build`), extráela (en el Chromebook, clic derecho → **Extraer todo**; los archivos van sueltos en el zip, así que
+  queda una sola carpeta `eddie-extension` con `manifest.json` dentro), abre `chrome://extensions`, activa **Modo de desarrollador**,
+  **Cargar descomprimida** y elige esa carpeta (la que contiene `manifest.json`). Recarga Eddie y pulsa **Vincular este navegador**:
   la página le pasa a la extensión un código de un solo uso. **Probar** abre una página para comprobarlo.
 - **Qué elige el usuario** (en la tarjeta): abrir o no las reuniones y con cuántos minutos de antelación (0 a 10), y abrir o no lo que
   Eddie crea. **Desvincular** borra el vínculo.
@@ -1178,6 +1200,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
+  _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre y el bloque del prompt
   _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/

@@ -2,7 +2,7 @@
 // called from the backend — the tokens themselves never reach the browser,
 // and they're stored encrypted when CONNECTOR_SECRET is set (secretBox.js).
 import { getDb } from './db.js';
-import { DOCS_SCOPES, GMAIL_SCOPES, refreshAccessToken, SLIDES_SCOPES } from './google.js';
+import { DOCS_SCOPES, DRIVE_SCOPES, GMAIL_SCOPES, refreshAccessToken, SLIDES_SCOPES } from './google.js';
 import { openToken, sealToken } from './secretBox.js';
 
 export async function saveCredentials(userId, tokens) {
@@ -51,6 +51,12 @@ export async function hasSlidesAccess(userId) {
 export async function hasDocsAccess(userId) {
   const granted = await getGrantedScopes(userId);
   return DOCS_SCOPES.every((s) => granted.includes(s));
+}
+
+// Drive folders: opt-in too ("Conectar Carpetas de Drive" in Conectores).
+export async function hasDriveAccess(userId) {
+  const granted = await getGrantedScopes(userId);
+  return DRIVE_SCOPES.every((s) => granted.includes(s));
 }
 
 // Returns a currently-valid access token, transparently refreshing it if

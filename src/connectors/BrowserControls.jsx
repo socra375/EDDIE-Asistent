@@ -243,10 +243,10 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
           <a href="/eddie-extension.zip" download>
             Descarga la extensión
           </a>{' '}
-          y descomprímela: se crea la carpeta <code>eddie-extension</code>.
+          y extráela (en el Chromebook: clic derecho sobre el archivo → <strong>Extraer todo</strong>). Se crea la carpeta <code>eddie-extension</code>; dentro tienen que verse <code>manifest.json</code> y otros archivos.
         </li>
         <li>
-          En Chrome abre esta dirección (cópiala y pégala), activa el <strong>Modo de desarrollador</strong>, pulsa <strong>Cargar descomprimida</strong> y elige esa carpeta:
+          En Chrome abre esta dirección (cópiala y pégala), activa el <strong>Modo de desarrollador</strong> y pulsa <strong>Cargar descomprimida</strong>. Elige la <strong>carpeta</strong> que contiene <code>manifest.json</code> (un clic sobre ella, sin entrar) y pulsa <strong>Abrir</strong>. Si dice «Falta el archivo de manifiesto», elegiste una carpeta de más o de menos.
           <Copy text="chrome://extensions" />
         </li>
         <li>

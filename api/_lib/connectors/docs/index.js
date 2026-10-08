@@ -173,7 +173,7 @@ export default {
   icon: 'doc',
   category: 'productividad',
   // Offered to the model only when the conversation touches the topic.
-  route: /google docs|google sheets|hoja de c[aá]lculo|spreadsheet|\bdocs?\b|\bsheets?\b|\bword\b|excel|tabla|documento|archivo|\bdrive\b/i,
+  route: /google docs|google sheets|hoja de c[aá]lculo|spreadsheet|\bdocs?\b|\bsheets?\b|\bword\b|excel|tabla|documento|archivo|\bdrive\b|carpeta|cliente|negocio|propuesta|contrato/i,
   auth: {
     type: 'google-login',
     scope: 'docs',

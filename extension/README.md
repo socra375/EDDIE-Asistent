@@ -5,8 +5,8 @@ documentos que crea y los enlaces que le pidas.
 
 ## Instalar
 
-1. Descomprime la carpeta `eddie-extension`.
-2. Abre `chrome://extensions`, activa **Modo de desarrollador** y pulsa **Cargar descomprimida**; elige la carpeta.
+1. Extrae el zip (en el Chromebook: clic derecho → **Extraer todo**). Debe quedar una carpeta con `manifest.json` dentro.
+2. Abre `chrome://extensions`, activa **Modo de desarrollador** y pulsa **Cargar descomprimida**; elige la **carpeta que contiene `manifest.json`** (un clic sobre ella y **Abrir**; no son archivos). Si dice «Falta el archivo de manifiesto», elegiste una carpeta de más o de menos.
 3. En Eddie: **Conectores → Tu navegador → Vincular este navegador**.
 
 ## Qué hace y qué no
