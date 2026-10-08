@@ -3,6 +3,7 @@ import { callProvider } from './providers.js';
 import { queryFrom, recallBlock } from './episodes/recall.js';
 import { knowledgeBlock } from './knowledge/recall.js';
 import { businessBlock } from './business/context.js';
+import { driveBlock } from './drive/context.js';
 import { parseLearnCommand } from '../../src/services/commands.js';
 import { limitImages, sanitizeImages } from './images.js';
 
@@ -140,6 +141,12 @@ export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, g
     const user = await getUser();
     const business = user ? await businessBlock({ userId: user.id, messages: request.messages }) : '';
     if (business) system = `${system}\n\n${business}`;
+  }
+  // The Drive folders he connected (Negocio, Servicio al cliente…): where to look before answering about a client or a business.
+  if (!request.disabledConnectors.includes('drive') && process.env.DATABASE_URL) {
+    const user = await getUser();
+    const folders = user ? await driveBlock({ userId: user.id }) : '';
+    if (folders) system = `${system}\n\n${folders}`;
   }
   // "Investiga y aprende X": the model must run the research tool, not answer from memory.
   const toLearn = wantKnowledge ? parseLearnCommand(request.messages.at(-1)?.role === 'user' ? request.messages.at(-1).content : '') : null;

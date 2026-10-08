@@ -7,6 +7,7 @@ import OAuthLinkControls from './OAuthLinkControls';
 import ConnectorOrbit from './ConnectorOrbit';
 import ComputerControls from './ComputerControls';
 import BrowserControls from './BrowserControls';
+import DriveControls from './DriveControls';
 import Icon from '../layout/Icon';
 import { useConnectors } from './useConnectors';
 import './Connectors.css';
@@ -38,7 +39,7 @@ const isLive = (c) => c.status === 'ready' || c.status === 'connected';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onChanged }) {
+function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onChanged, docsConnected }) {
   const switchable = isLive(connector) && connector.tools.length > 0;
   const status = STATUS[switchable && !enabled ? 'off' : connector.status] || STATUS.planned;
 
@@ -103,6 +104,7 @@ function ConnectorCard({ connector, enabled, onToggle, onConnect, userEmail, onC
       {connector.id === 'probe' && <ProbeControls />}
       {connector.id === 'computer' && <ComputerControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
       {connector.id === 'browser' && <BrowserControls connector={connector} signedIn={Boolean(userEmail)} onConnect={onConnect} onChanged={onChanged} />}
+      {connector.id === 'drive' && <DriveControls connector={connector} docsConnected={docsConnected} onChanged={onChanged} />}
 
       {connector.status === 'needs_setup' && (
         <p className="connector__setup">
@@ -188,6 +190,7 @@ export default function ConnectorsPanel({ notice = null }) {
       onConnect={login}
       userEmail={user?.email}
       onChanged={reload}
+      docsConnected={connectors.find((x) => x.id === 'docs')?.status === 'connected'}
     />
   );
 

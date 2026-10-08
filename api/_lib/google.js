@@ -30,6 +30,11 @@ export const SLIDES_SCOPES = ['https://www.googleapis.com/auth/presentations'];
 // edit documents and spreadsheets (the files land in the user's own Drive).
 export const DOCS_SCOPES = ['https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/spreadsheets'];
 
+// Asked for only when the user connects Drive folders: the names and structure of
+// their files (what is in a folder, when it changed), never their contents. The
+// contents of the Docs and Sheets are read with the permissions above.
+export const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly'];
+
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {

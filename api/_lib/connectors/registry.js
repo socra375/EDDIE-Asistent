@@ -8,6 +8,7 @@ import google from './google/index.js';
 import gmail from './gmail/index.js';
 import slides from './slides/index.js';
 import docs from './docs/index.js';
+import drive from './drive/index.js';
 import websearch from './websearch/index.js';
 import news from './news/index.js';
 import wikipedia from './wikipedia/index.js';
@@ -35,7 +36,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, knowledge, websearch, news, wikipedia, currency, gmail, slides, docs, google, github, notion, youtube, media, whatsapp, business, browser, spotify, telegram, devices, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, memory, conversations, knowledge, websearch, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, business, browser, spotify, telegram, devices, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
