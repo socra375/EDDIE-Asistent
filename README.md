@@ -916,8 +916,9 @@ navegador»** (`extension/`) le da esa mano: abre pestañas, y nada más.
   hojas y presentaciones) y los enlaces de Google, reuniones o YouTube que le pidas (`open_in_browser`), sin pop-ups bloqueados ni
   botones que pulsar. Cualquier otro sitio web (`open_website`) pide tu confirmación en una tarjeta.
 - **Instalar** (Chrome, Edge, Brave… en el Chromebook o el PC): en **Conectores → Tu navegador** descarga la extensión
-  (`/eddie-extension.zip`, se genera en cada `npm run build`), descomprímela, abre `chrome://extensions`, activa **Modo de
-  desarrollador**, **Cargar descomprimida** y elige la carpeta `eddie-extension`. Recarga Eddie y pulsa **Vincular este navegador**:
+  (`/eddie-extension.zip`, se genera en cada `npm run build`), extráela (en el Chromebook, clic derecho → **Extraer todo**; los archivos van sueltos en el zip, así que
+  queda una sola carpeta `eddie-extension` con `manifest.json` dentro), abre `chrome://extensions`, activa **Modo de desarrollador**,
+  **Cargar descomprimida** y elige esa carpeta (la que contiene `manifest.json`). Recarga Eddie y pulsa **Vincular este navegador**:
   la página le pasa a la extensión un código de un solo uso. **Probar** abre una página para comprobarlo.
 - **Qué elige el usuario** (en la tarjeta): abrir o no las reuniones y con cuántos minutos de antelación (0 a 10), y abrir o no lo que
   Eddie crea. **Desvincular** borra el vínculo.

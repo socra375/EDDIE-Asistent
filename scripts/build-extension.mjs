@@ -1,7 +1,13 @@
 // Packs extension/ into public/eddie-extension.zip, the file Eddie's hub offers
 // for download ("Descargar la extensión"). Runs before every build, with no
-// tools beyond Node: a small ZIP writer (deflate, one top folder), always the
-// same bytes for the same files so a build doesn't change what didn't change.
+// tools beyond Node: a small ZIP writer (deflate), always the same bytes for the
+// same files so a build doesn't change what didn't change.
+//
+// The files sit at the root of the zip, with no folder around them: extractors
+// (Chromebook's Files app, Windows, macOS) wrap them in a folder named after the
+// zip, and Chrome's "Cargar descomprimida" needs the folder that holds
+// manifest.json itself. A folder inside the zip made two nested folders, and the
+// outer one has no manifest ("Falta el archivo de manifiesto").
 import { deflateRawSync } from 'node:zlib';
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
@@ -10,7 +16,6 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(root, 'extension');
 const TARGET = join(root, 'public', 'eddie-extension.zip');
-const FOLDER = 'eddie-extension';
 // 2026-01-01 00:00:00 in DOS date/time, so the zip is reproducible.
 const DOS_TIME = 0;
 const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1;
@@ -87,8 +92,8 @@ export function zip(files) {
 }
 
 export function buildExtensionZip() {
-  const files = listFiles(SOURCE).map((full) => ({ name: `${FOLDER}/${relative(SOURCE, full).split(sep).join('/')}`, data: readFileSync(full) }));
-  if (!files.some((f) => f.name === `${FOLDER}/manifest.json`)) throw new Error('extension/manifest.json no existe.');
+  const files = listFiles(SOURCE).map((full) => ({ name: relative(SOURCE, full).split(sep).join('/'), data: readFileSync(full) }));
+  if (!files.some((f) => f.name === 'manifest.json')) throw new Error('extension/manifest.json no existe.');
   mkdirSync(dirname(TARGET), { recursive: true });
   const data = zip(files);
   writeFileSync(TARGET, data);
