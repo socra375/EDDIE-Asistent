@@ -21,6 +21,15 @@ export const GOOGLE_SCOPES = [
 // read/search mail and send it — no deleting, labeling or settings.
 export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send'];
 
+// Asked for only when the user connects Google Slides: create and edit
+// presentations. The file lands in the user's own Drive, and Eddie can't
+// delete or share it.
+export const SLIDES_SCOPES = ['https://www.googleapis.com/auth/presentations'];
+
+// Asked for only when the user connects Google Docs and Sheets: create and
+// edit documents and spreadsheets (the files land in the user's own Drive).
+export const DOCS_SCOPES = ['https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/spreadsheets'];
+
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {

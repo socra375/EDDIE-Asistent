@@ -867,6 +867,38 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
 - **Pendiente**: que el análisis de cada conversación cerrada también extraiga clientes y negocios por sí solo (hoy se guardan al
   mencionarlos en el chat o desde la vista).
 
+## Google Slides: presentaciones en tu Drive
+
+- **Qué hace**: Eddie crea una presentación nueva en tu Drive con un título, un subtítulo opcional y diapositivas con viñetas
+  (hasta 15 diapositivas y 8 viñetas cada una), y te da el enlace para editarla. Herramienta `create_presentation`, conector
+  **Google Slides** (`api/_lib/connectors/slides/`). No hace falta confirmarla: crear un archivo se deshace enviándolo a la papelera.
+- **Cómo se conecta**: aparte del login, desde **Conectores → Conectar Google Slides**, y solo pide `presentations`. Eddie no
+  abre, edita ni borra las presentaciones que ya tienes.
+- **Google Cloud**: en el mismo proyecto del login, **Biblioteca → Google Slides API → Habilitar**, y agrega
+  `.../auth/presentations` en **Pantalla de consentimiento → Permisos**. Igual que con Gmail, en modo "Prueba" hay que añadir tu
+  correo en **Usuarios de prueba**.
+- **Requiere** `CONNECTOR_SECRET` (los accesos se guardan cifrados), igual que Gmail.
+- **Comprueba**: tras escribir las diapositivas, Eddie vuelve a leer la presentación y cuenta que estén todas. Si la escritura falla
+  a medias, te da el enlace de la presentación vacía para que la revises.
+
+## Google Docs y Sheets: tablas y documentos en tu Drive
+
+- **Qué hace**: Eddie crea archivos nuevos en tu Drive y te da el enlace. `create_spreadsheet` hace una **hoja de cálculo** con
+  una tabla (hasta 10 columnas y 100 filas; encabezado en negrita y fijo al desplazarte). `create_document` hace un
+  **documento de Google Docs** con el texto que le pidas y, si hace falta, una **tabla al final** (una por documento). Si pides
+  un «Word», hace el documento en Google Docs. Conector **Google Docs y Sheets** (`api/_lib/connectors/docs/`).
+- **Sin tarjeta de confirmación**: crear un archivo se deshace enviándolo a la papelera. Eddie no abre, edita ni borra los que ya tienes.
+- **Cómo se conecta**: aparte del login, desde **Conectores → Conectar Google Docs y Sheets**; pide `documents` y `spreadsheets`.
+  Si ya conectaste otros servicios de Google, pulsa el botón de este para sumar los permisos nuevos.
+- **Google Cloud**: en el mismo proyecto, habilita **Google Docs API** y **Google Sheets API**, y agrega
+  `.../auth/documents` y `.../auth/spreadsheets` en **Pantalla de consentimiento → Permisos**. En modo "Prueba", tu correo debe
+  estar en **Usuarios de prueba**. Requiere `CONNECTOR_SECRET`, igual que Gmail.
+- **Seguridad**: los valores de la hoja se escriben tal cual (nunca se interpretan como fórmulas), y los números se guardan como
+  números para poder sumarlos.
+- **Comprueba**: tras escribir, Eddie vuelve a leer la tabla y verifica su tamaño y su primer encabezado. Si la escritura falla a
+  medias, te da el enlace del archivo para que lo revises.
+- **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive) ni varias tablas en un mismo documento.
+
 ## WhatsApp: mensajes listos para enviar (wa.me)
 
 - **Qué hace**: Eddie redacta el mensaje y te deja un botón **«Abrir en WhatsApp»** (en el chat y en Telegram). El botón abre WhatsApp
