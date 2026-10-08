@@ -4,7 +4,7 @@
 // Express routes in server/dev-server.js are thin adapters over these.
 import { randomUUID } from 'node:crypto';
 import { getDb } from './db.js';
-import { buildAuthorizeUrl, exchangeCodeForTokens, fetchGoogleUserInfo, GMAIL_SCOPES } from './google.js';
+import { buildAuthorizeUrl, exchangeCodeForTokens, fetchGoogleUserInfo, GMAIL_SCOPES, SLIDES_SCOPES } from './google.js';
 import { hasTokenSecret } from './secretBox.js';
 import { saveCredentials } from './googleCredentials.js';
 import { createSession, destroySession, getSessionUser, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from './session.js';
@@ -15,7 +15,7 @@ const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
 // Extra permissions a connector can ask for on top of the login. The name
 // travels in the OAuth state so the callback knows where to send the user.
-const EXTRA_SCOPES = { gmail: GMAIL_SCOPES };
+const EXTRA_SCOPES = { gmail: GMAIL_SCOPES, slides: SLIDES_SCOPES };
 
 // `query.scope` = "gmail" asks for Gmail access too ("Conectar Gmail" in
 // the Conectores hub); without it, it's the plain Google login.

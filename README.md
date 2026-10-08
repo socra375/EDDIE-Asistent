@@ -867,6 +867,20 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
 - **Pendiente**: que el análisis de cada conversación cerrada también extraiga clientes y negocios por sí solo (hoy se guardan al
   mencionarlos en el chat o desde la vista).
 
+## Google Slides: presentaciones en tu Drive
+
+- **Qué hace**: Eddie crea una presentación nueva en tu Drive con un título, un subtítulo opcional y diapositivas con viñetas
+  (hasta 15 diapositivas y 8 viñetas cada una), y te da el enlace para editarla. Herramienta `create_presentation`, conector
+  **Google Slides** (`api/_lib/connectors/slides/`). No hace falta confirmarla: crear un archivo se deshace enviándolo a la papelera.
+- **Cómo se conecta**: aparte del login, desde **Conectores → Conectar Google Slides**, y solo pide `presentations`. Eddie no
+  abre, edita ni borra las presentaciones que ya tienes.
+- **Google Cloud**: en el mismo proyecto del login, **Biblioteca → Google Slides API → Habilitar**, y agrega
+  `.../auth/presentations` en **Pantalla de consentimiento → Permisos**. Igual que con Gmail, en modo "Prueba" hay que añadir tu
+  correo en **Usuarios de prueba**.
+- **Requiere** `CONNECTOR_SECRET` (los accesos se guardan cifrados), igual que Gmail.
+- **Comprueba**: tras escribir las diapositivas, Eddie vuelve a leer la presentación y cuenta que estén todas. Si la escritura falla
+  a medias, te da el enlace de la presentación vacía para que la revises.
+
 ## WhatsApp: mensajes listos para enviar (wa.me)
 
 - **Qué hace**: Eddie redacta el mensaje y te deja un botón **«Abrir en WhatsApp»** (en el chat y en Telegram). El botón abre WhatsApp
