@@ -184,7 +184,7 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
           )}
           <label className="browserlink__option">
             <input type="checkbox" checked={prefs.openCreated} disabled={busy === 'prefs'} onChange={(e) => setPref({ openCreated: e.target.checked })} />
-            <span>Abrir lo que Eddie cree (documentos, hojas, presentaciones)</span>
+            <span>Abrir lo que Eddie cree o edita (documentos, hojas, presentaciones)</span>
           </label>
         </div>
         <div className="probe__actions">

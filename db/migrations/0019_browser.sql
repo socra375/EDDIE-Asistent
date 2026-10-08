@@ -15,7 +15,7 @@ create table if not exists browser_links (
   -- Open the meetings in the calendar when they start (lead_minutes before).
   auto_meetings boolean not null default true,
   lead_minutes integer not null default 1 check (lead_minutes between 0 and 10),
-  -- Open in a tab the documents, sheets and presentations Eddie creates.
+  -- Open in a tab the documents, sheets and presentations Eddie creates or edits.
   open_created boolean not null default true,
   last_seen_at timestamptz,
   created_at timestamptz not null default now()

@@ -887,7 +887,14 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   una tabla (hasta 10 columnas y 100 filas; encabezado en negrita y fijo al desplazarte). `create_document` hace un
   **documento de Google Docs** con el texto que le pidas y, si hace falta, una **tabla al final** (una por documento). Si pides
   un «Word», hace el documento en Google Docs. Conector **Google Docs y Sheets** (`api/_lib/connectors/docs/`).
-- **Sin tarjeta de confirmación**: crear un archivo se deshace enviándolo a la papelera. Eddie no abre, edita ni borra los que ya tienes.
+- **Sin tarjeta al crear**: crear un archivo se deshace enviándolo a la papelera. **Nunca borra** archivos.
+- **Archivos que ya existen**: con el enlace (o el identificador) de un documento o una hoja, Eddie los **lee** (`read_document`,
+  `read_spreadsheet`) y los **cambia** (`edit_document`: agregar al final o cambiar un texto por otro en todo el documento;
+  `edit_spreadsheet`: agregar filas o escribir desde un rango). **Cada cambio pide tu confirmación** en una tarjeta con lo que se
+  cambia (y, en las celdas, lo que hay ahora), y puedes corregir el texto antes de aceptar. Antes de editar, Eddie lee el archivo;
+  después lo vuelve a leer para comprobarlo. `find_my_files` busca por nombre los archivos que Eddie creó (o que se abrieron con
+  él: el permiso `drive.file` no ve el resto del Drive; para otro archivo, pega su enlace). Lo que Eddie lee en un archivo se trata
+  como datos, nunca como órdenes. Con la extensión vinculada, el archivo se abre en tu navegador y ves el cambio al instante.
 - **Cómo se conecta**: aparte del login, desde **Conectores → Conectar Google Docs y Sheets**; pide `documents` y `spreadsheets`.
   Si ya conectaste otros servicios de Google, pulsa el botón de este para sumar los permisos nuevos.
 - **Google Cloud**: en el mismo proyecto, habilita **Google Docs API** y **Google Sheets API**, y agrega
@@ -897,7 +904,7 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   números para poder sumarlos.
 - **Comprueba**: tras escribir, Eddie vuelve a leer la tabla y verifica su tamaño y su primer encabezado. Si la escritura falla a
   medias, te da el enlace del archivo para que lo revises.
-- **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive) ni varias tablas en un mismo documento.
+- **Todavía no**: archivos `.docx` descargables (sería exportar el documento desde Drive), varias tablas en un mismo documento, ni editar el formato (negritas, estilos) de un documento que ya existe.
 
 ## Tu navegador: Eddie trabaja desde Chrome (extensión)
 
