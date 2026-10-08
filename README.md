@@ -844,6 +844,19 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
   imágenes sexuales, de menores ni que suplanten a personas reales.
 - **Video**: todavía no. Para video no hay APIs gratis fiables (Veo y similares son de pago); se verá después con un presupuesto.
 
+## WhatsApp: mensajes listos para enviar (wa.me)
+
+- **Qué hace**: Eddie redacta el mensaje y te deja un botón **«Abrir en WhatsApp»** (en el chat y en Telegram). El botón abre WhatsApp
+  con el contacto y el texto ya escritos; tú solo pulsas enviar. Herramienta `prepare_whatsapp`, conector **WhatsApp**
+  (`api/_lib/connectors/whatsapp/`).
+- **Gratis y sin cuentas**: es solo un enlace `https://wa.me/…?text=…`. No hay claves, no hay API y nada se envía por tu cuenta.
+- **Números**: con código de país (`+1 809 555 1234`, `+34 600 000 000`). Un número dominicano de 10 dígitos que empiece por 809, 829
+  o 849 se toma como +1. Sin número, WhatsApp deja elegir el contacto. Si Eddie tiene guardado el número de alguien en la memoria
+  («recuerda que el número de Ana es +1 809…»), lo usa.
+- **Límites**: el texto llega hasta 1000 caracteres (un enlace muy largo deja de funcionar). Solo se aceptan enlaces `https://wa.me/`.
+- **Lo que no hace**: leer tus chats. Eso requiere la cuenta de WhatsApp dentro de un programa no oficial, que incumple sus condiciones.
+  Para responder a un mensaje, pégalo en el chat o mándale una captura: Eddie la lee y te propone la respuesta.
+
 ## Imágenes: buscar y mandarlas (no solo crearlas)
 
 - **Desde el chat, por voz o desde Telegram**: «mándame una foto del Taj Mahal», «busca imágenes de un okapi», «enséñame el logo de GitHub».

@@ -462,3 +462,27 @@
 .bubble__picture figcaption a {
   color: var(--accent);
 }
+
+.bubble__wa {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.bubble__wa-draft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.bubble__wa-draft blockquote {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--accent);
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}

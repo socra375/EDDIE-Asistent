@@ -18,6 +18,7 @@ import { applyTaskActions, tasksForContext } from '../services/taskActions';
 import { applyMemoryActions } from '../services/memoryActions';
 import { applyBrowserActions } from '../services/browserActions';
 import { applyMediaActions } from '../services/mediaActions';
+import { applyWhatsappActions } from '../services/whatsappActions';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
 import { MAX_MINUTES, formatMinutes } from '../services/dictation';
@@ -512,6 +513,11 @@ export function ChatProvider({ children }) {
         if (result.actions?.length) {
           const pictures = applyMediaActions(result.actions);
           if (pictures.length) assistantMessage.media = pictures;
+        }
+        // WhatsApp drafts: a button under the reply opens WhatsApp with the message written (the user sends it).
+        if (result.actions?.length) {
+          const drafts = applyWhatsappActions(result.actions);
+          if (drafts.length) assistantMessage.whatsapp = drafts;
         }
         // Things Eddie saved to (or removed from) the memory while answering.
         if (result.actions?.length) {
