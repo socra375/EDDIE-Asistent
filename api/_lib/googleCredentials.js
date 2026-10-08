@@ -2,7 +2,7 @@
 // called from the backend — the tokens themselves never reach the browser,
 // and they're stored encrypted when CONNECTOR_SECRET is set (secretBox.js).
 import { getDb } from './db.js';
-import { GMAIL_SCOPES, refreshAccessToken, SLIDES_SCOPES } from './google.js';
+import { DOCS_SCOPES, GMAIL_SCOPES, refreshAccessToken, SLIDES_SCOPES } from './google.js';
 import { openToken, sealToken } from './secretBox.js';
 
 export async function saveCredentials(userId, tokens) {
@@ -45,6 +45,12 @@ export async function hasGmailAccess(userId) {
 export async function hasSlidesAccess(userId) {
   const granted = await getGrantedScopes(userId);
   return SLIDES_SCOPES.every((s) => granted.includes(s));
+}
+
+// Google Docs and Sheets are one opt-in ("Conectar Google Docs y Sheets").
+export async function hasDocsAccess(userId) {
+  const granted = await getGrantedScopes(userId);
+  return DOCS_SCOPES.every((s) => granted.includes(s));
 }
 
 // Returns a currently-valid access token, transparently refreshing it if
