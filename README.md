@@ -1026,6 +1026,11 @@ Solo funciona en el equipo donde corre la sonda. Para el teléfono o Telegram es
 
 ## Tu equipo desde cualquier lugar (EDDIE Prime)
 
+**En Windows: un clic.** **Conectores → Tu equipo (EDDIE Prime) → Descargar instalador para Windows** y abre el archivo: instala
+Python si falta (winget), el agente, lo vincula y lo deja **en segundo plano arrancando solo** cada vez que inicias sesión, sin
+terminal ni administrador, con desinstalador en Configuración → Aplicaciones (detalles en `docs/eddie-prime-agente.md`). En el
+Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre mientras Linux está encendido.
+
 Con el agente `eddie_agent.py` en tu Chromebook, Eddie lo consulta y lo maneja desde la web, el teléfono o
 Telegram: "¿cuánto disco me queda?", "¿qué está gastando memoria?", "abre la terminal". El agente no tiene IA
 propia (un solo cerebro: el de Eddie) y no abre puertos. Espera un aviso sin datos (ntfy) y va a buscar el trabajo con

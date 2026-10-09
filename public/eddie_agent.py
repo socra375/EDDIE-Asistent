@@ -17,11 +17,15 @@ Uso:
   python3 eddie_agent.py pair CÓDIGO [--app https://eddie-asistent.vercel.app] [--name "Mi Chromebook"]
   python3 eddie_agent.py run            # se queda esperando trabajos
   python3 eddie_agent.py test           # prueba las herramientas aquí mismo
-  python3 eddie_agent.py install-service  # arranque automático (systemd de usuario)
+  python3 eddie_agent.py install-service  # arranque automático (systemd de usuario, Linux)
+
+En Windows no hace falta nada de esto a mano: el instalador de un clic que descargas
+en Conectores → «Tu equipo (EDDIE Prime)» lo instala, lo vincula y lo deja arrancando
+solo (en segundo plano, sin ventana) cada vez que inicias sesión.
 
 Requisitos: Python 3.8+ y psutil (pip install psutil).
-Configuración: ~/.config/eddie-agent/config.json (solo tu usuario puede leerla).
-Ahí puedes permitir apps para open_app, por ejemplo:
+Configuración: ~/.config/eddie-agent/config.json en Linux y %APPDATA%\\eddie-agent\\config.json
+en Windows (solo tu usuario puede leerla). Ahí puedes permitir apps para open_app, por ejemplo:
   "apps": {"terminal": ["x-terminal-emulator"], "archivos": ["nautilus"], "code": ["code"]}
 """
 
@@ -38,11 +42,32 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
-CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "eddie-agent")
+IS_WINDOWS = os.name == "nt"
+
+
+def config_dir():
+    """Dónde vive la configuración: %APPDATA% en Windows, ~/.config en Linux y Mac."""
+    if IS_WINDOWS:
+        base = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+        return os.path.join(base, "eddie-agent")
+    return os.path.join(os.path.expanduser("~"), ".config", "eddie-agent")
+
+
+CONFIG_DIR = config_dir()
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
+LOG_PATH = os.path.join(CONFIG_DIR, "agent.log")
+LOCK_PATH = os.path.join(CONFIG_DIR, "agent.lock")
+MAX_LOG_BYTES = 512 * 1024
 HOME = os.path.realpath(os.path.expanduser("~"))
+# Apps que se pueden abrir en Windows sin configurar nada (son de Windows, siempre están).
+WINDOWS_APPS = {
+    "calculadora": ["calc.exe"],
+    "bloc de notas": ["notepad.exe"],
+    "explorador": ["explorer.exe"],
+    "paint": ["mspaint.exe"],
+}
 MAX_LIST = 50
 MIN_FETCH_GAP = 1.0  # segundos entre pedidos de trabajo, por si alguien abusa del aviso
 
@@ -168,10 +193,11 @@ def t_cpu_usage(_args, _cfg):
     per = psutil.cpu_percent(interval=0.8, percpu=True)
     total = round(sum(per) / len(per), 1) if per else 0
     out = {"uso_percent": total, "por_nucleo": per, "nucleos": psutil.cpu_count()}
-    try:
-        out["carga_1_5_15"] = [round(x, 2) for x in os.getloadavg()]
-    except OSError:
-        pass
+    if hasattr(os, "getloadavg"):  # no existe en Windows
+        try:
+            out["carga_1_5_15"] = [round(x, 2) for x in os.getloadavg()]
+        except OSError:
+            pass
     freq = psutil.cpu_freq()
     if freq:
         out["frecuencia_mhz"] = round(freq.current)
@@ -301,8 +327,19 @@ def t_open_app(args, cfg):
         argv = [argv]
     if not argv or not shutil.which(argv[0]):
         raise ValueError(f"No encuentro el programa de «{match}» ({argv[0] if argv else '?'}).")
-    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    kwargs = {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if IS_WINDOWS else {"start_new_session": True}
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
     return {"abierta": match, "summary": f"Abrí {match}"}
+
+
+def _is_mine(proc):
+    """¿El proceso es de este usuario? (uids en Linux/Mac; nombre de usuario en Windows)."""
+    if hasattr(proc, "uids") and hasattr(os, "getuid"):
+        return proc.uids().real == os.getuid()
+    try:
+        return proc.username().lower() == psutil.Process().username().lower()
+    except psutil.Error:
+        return False
 
 
 def t_kill_process(args, _cfg):
@@ -312,7 +349,7 @@ def t_kill_process(args, _cfg):
         raise ValueError("Ese proceso no se puede cerrar.")
     try:
         p = psutil.Process(pid)
-        if p.uids().real != os.getuid():
+        if not _is_mine(p):
             raise ValueError("Solo cierro procesos de tu usuario.")
         name = p.name()
         p.terminate()
@@ -430,9 +467,71 @@ def listen(cfg, on_ring):
                 on_ring()
 
 
+def setup_logging():
+    """Sin terminal (pythonw en Windows, un servicio…) lo que se imprime va a agent.log."""
+    stream = sys.stdout
+    if stream is not None and getattr(stream, "isatty", lambda: False)():
+        return
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        if os.path.exists(LOG_PATH) and os.path.getsize(LOG_PATH) > MAX_LOG_BYTES:
+            os.replace(LOG_PATH, LOG_PATH + ".old")
+        f = open(LOG_PATH, "a", encoding="utf-8", buffering=1)
+    except OSError:
+        return
+    sys.stdout = f
+    sys.stderr = f
+
+
+def pid_is_agent(pid):
+    """¿Ese pid es otro eddie_agent.py en marcha?"""
+    if psutil is None or pid == os.getpid():
+        return False
+    try:
+        return any("eddie_agent" in part for part in psutil.Process(pid).cmdline())
+    except (psutil.Error, OSError):
+        return False
+
+
+def acquire_lock():
+    """Una sola copia del agente a la vez (la tarea de inicio y una terminal no se pisan)."""
+    try:
+        with open(LOCK_PATH, "r", encoding="utf-8") as f:
+            other = int(f.read().strip() or 0)
+    except (OSError, ValueError):
+        other = 0
+    if other and pid_is_agent(other):
+        return False
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(LOCK_PATH, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def release_lock():
+    try:
+        with open(LOCK_PATH, "r", encoding="utf-8") as f:
+            if int(f.read().strip() or 0) != os.getpid():
+                return
+        os.remove(LOCK_PATH)
+    except (OSError, ValueError):
+        pass
+
+
 def cmd_run(cfg):
     if not cfg.get("token"):
         sys.exit("Este equipo no está vinculado. Usa: python3 eddie_agent.py pair CÓDIGO")
+    setup_logging()
+    if not acquire_lock():
+        log("Ya hay otro EDDIE Prime en marcha en este equipo; no abro una segunda copia.")
+        return
+    try:
+        run_loop(cfg)
+    finally:
+        release_lock()
+
+
+def run_loop(cfg):
     stop = {"now": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True) or sys.exit(0))
     last = {"t": 0.0}
@@ -488,10 +587,11 @@ def cmd_pair(args):
     except ApiError as e:
         sys.exit(f"No se pudo vincular: {e}")
     cfg.update({"token": data["token"], "topic": data["topic"], "ntfy": data["ntfy"], "name": data["name"]})
-    cfg.setdefault("apps", {})
+    cfg.setdefault("apps", dict(WINDOWS_APPS) if IS_WINDOWS else {})
     save_config(cfg)
     print(f"Vinculado como «{data['name']}» con {data['tools']} herramientas. Configuración: {CONFIG_PATH}")
-    print("Ahora arráncalo:  python3 eddie_agent.py run   (o install-service para que arranque solo)")
+    if not os.environ.get("EDDIE_INSTALLER"):
+        print("Ahora arráncalo:  python3 eddie_agent.py run   (o install-service para que arranque solo)")
 
 
 def cmd_test(cfg):
@@ -503,6 +603,8 @@ def cmd_test(cfg):
 
 
 def cmd_install_service(_cfg):
+    if IS_WINDOWS:
+        sys.exit("En Windows usa el instalador de un clic de Conectores → «Tu equipo (EDDIE Prime)»: deja el agente arrancando solo al iniciar sesión.")
     unit_dir = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user")
     os.makedirs(unit_dir, exist_ok=True)
     script = os.path.realpath(__file__)

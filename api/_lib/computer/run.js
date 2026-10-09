@@ -82,7 +82,7 @@ export async function runOnDevice(device, tool, args, { fetchImpl, env, pickupMs
     if (state.status === 'error') return { error: `Tu equipo no pudo hacerlo: ${String(state.error || 'error desconocido').slice(0, 300)}` };
     if (state.status === 'queued' && elapsed >= pickupMs) {
       if (await expireJob(jobId)) {
-        return { error: `«${device.name}» no responde: puede estar apagado, dormido o sin el agente de Eddie en marcha (python3 eddie_agent.py run).`, offline: true };
+        return { error: `«${device.name}» no responde: puede estar apagado, dormido o sin el agente de Eddie en marcha (en Windows arranca solo al iniciar sesión; en Linux, python3 eddie_agent.py run; en un Chromebook, Linux se apaga al cerrar la terminal).`, offline: true };
       }
       continue;
     }

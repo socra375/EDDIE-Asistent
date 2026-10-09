@@ -68,7 +68,32 @@ de la herramienta del agente. El servidor solo acepta herramientas que el agente
 arrancar, con su mismo riesgo (una de confirmación nunca corre por `computer_check`), y solo con los argumentos que
 declaró (`api/_lib/computer/catalog.js`).
 
-## Instalación (Chromebook, terminal de Linux)
+## Instalación en Windows (un clic, sin terminal)
+
+En **Conectores → Tu equipo (EDDIE Prime) → Descargar instalador para Windows** (solo el dueño). Se descarga
+`Instalar-EDDIE-Prime.cmd`, con un código de vinculación de un solo uso (30 minutos) ya dentro. Con doble clic:
+
+1. Busca Python 3.8+ (`py -3`, `python`…); si no hay, lo instala con `winget` (oficial, para tu usuario, sin administrador).
+2. Crea `%LOCALAPPDATA%\Eddie` con su propio entorno virtual e instala `psutil`.
+3. Descarga `eddie_agent.py` de este mismo Eddie, comprueba que es el agente y lo vincula con el código.
+4. Lo deja **arrancando solo al iniciar sesión, oculto, en segundo plano**: una tarea programada del usuario (reintenta si se cae;
+   sin límite de tiempo; también con batería). Si Windows no deja crear la tarea, usa la carpeta de Inicio.
+5. Se registra en **Configuración → Aplicaciones → EDDIE Prime** (desinstalador en `%LOCALAPPDATA%\Eddie`) y comprueba en
+   `%APPDATA%\eddie-agent\agent.log` que el agente contactó con Eddie.
+
+Es un archivo de texto: se puede abrir con el Bloc de notas y leer. No usa permisos de administrador. Windows puede mostrar
+«Windows protegió tu PC» porque el archivo no está firmado (Más información → Ejecutar de todas formas). Volver a descargar y ejecutar el
+instalador actualiza el agente. El desinstalador quita la tarea, los procesos, la carpeta y la configuración; falta pulsar **Desvincular** en Eddie.
+
+El agente en Windows: configuración en `%APPDATA%\eddie-agent`, sin ventana (lo que imprime va a `agent.log`, que se rota a
+512 KB), **una sola copia a la vez** (`agent.lock`), y `open_app` abre sin configurar nada la calculadora, el bloc de notas, el
+explorador y Paint (más lo que añadas en `config.json`). Todavía solo se vincula **un equipo por cuenta**: vincular el PC
+reemplaza al anterior.
+
+**Por qué no el Chromebook:** el agente corre en Linux (Crostini), que se apaga al cerrar la terminal y las apps de Linux; con él se
+apaga el agente. Ahí el camino fiable es la extensión «Tu navegador» (vive con Chrome).
+
+## Instalación (Linux / Chromebook, terminal de Linux)
 
 1. En Eddie → **Conectores → Tu equipo (EDDIE Prime)** → **Vincular un equipo** (con la sesión de Google del dueño).
    La tarjeta muestra tres comandos con botón **Copiar**:
