@@ -372,6 +372,29 @@
   min-width: 0;
 }
 
+.computer__devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.computer__device {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.computer__device p {
+  margin: 0;
+}
+
 .computer__steps {
   margin: 0;
   padding-left: 1.2rem;

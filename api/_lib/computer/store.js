@@ -26,17 +26,17 @@ export async function consumePairCode(code) {
   return rows[0]?.user_id || null;
 }
 
-// Links a computer to the user, replacing any earlier one. The token is
+// Links a computer to the user: the same computer again (same name) replaces its earlier link, another one is added. The token is
 // returned once, to the agent; only its hash is kept.
-export async function createDevice(userId, { name, version, tools }) {
+export async function createDevice(userId, { name, version, tools, platform = null }) {
   const sql = getDb();
   const token = randomBytes(32).toString('base64url');
   const topic = `eddie-${randomBytes(18).toString('base64url')}`;
   await sql`
-    insert into computer_devices (user_id, name, token_hash, topic, tools, agent_version, last_seen_at)
-    values (${userId}, ${name}, ${hashToken(token)}, ${topic}, ${JSON.stringify(tools)}, ${version}, now())
-    on conflict (user_id) do update set name = excluded.name, token_hash = excluded.token_hash, topic = excluded.topic,
-      tools = excluded.tools, agent_version = excluded.agent_version, last_seen_at = now(), created_at = now()
+    insert into computer_devices (user_id, name, token_hash, topic, tools, agent_version, platform, last_seen_at)
+    values (${userId}, ${name}, ${hashToken(token)}, ${topic}, ${JSON.stringify(tools)}, ${version}, ${platform}, now())
+    on conflict (user_id, name) do update set token_hash = excluded.token_hash, topic = excluded.topic,
+      tools = excluded.tools, agent_version = excluded.agent_version, platform = excluded.platform, last_seen_at = now(), created_at = now()
   `;
   return { token, topic };
 }
@@ -49,6 +49,7 @@ function shapeDevice(row) {
     topic: row.topic,
     tools: Array.isArray(row.tools) ? row.tools : [],
     version: row.agent_version || null,
+    platform: row.platform || null,
     lastSeen: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
   };
 }
@@ -59,15 +60,21 @@ export async function deviceByToken(token) {
   const sql = getDb();
   const rows = await sql`
     update computer_devices set last_seen_at = now() where token_hash = ${hashToken(token)}
-    returning id, user_id, name, topic, tools, agent_version, last_seen_at
+    returning id, user_id, name, topic, tools, agent_version, platform, last_seen_at
   `;
   return rows[0] ? shapeDevice(rows[0]) : null;
 }
 
-export async function deviceByUser(userId) {
+// Every computer of the user, the one heard from most recently first.
+export async function devicesByUser(userId) {
   const sql = getDb();
-  const rows = await sql`select id, user_id, name, topic, tools, agent_version, last_seen_at from computer_devices where user_id = ${userId}`;
-  return rows[0] ? shapeDevice(rows[0]) : null;
+  const rows = await sql`select id, user_id, name, topic, tools, agent_version, platform, last_seen_at from computer_devices where user_id = ${userId} order by last_seen_at desc nulls last, name`;
+  return rows.map(shapeDevice);
+}
+
+// The most recently seen computer (for the places that show just one).
+export async function deviceByUser(userId) {
+  return (await devicesByUser(userId))[0] || null;
 }
 
 export async function hasDevice(userId) {
@@ -76,14 +83,16 @@ export async function hasDevice(userId) {
   return rows.length > 0;
 }
 
-export async function updateCatalog(deviceId, { version, tools, name }) {
+export async function updateCatalog(deviceId, { version, tools, platform = null }) {
   const sql = getDb();
-  await sql`update computer_devices set tools = ${JSON.stringify(tools)}, agent_version = ${version}, name = coalesce(${name}, name) where id = ${deviceId}`;
+  await sql`update computer_devices set tools = ${JSON.stringify(tools)}, agent_version = ${version}, platform = coalesce(${platform}, platform) where id = ${deviceId}`;
 }
 
-export async function deleteDevice(userId) {
+// One computer (by id), or all of the user's when no id is given.
+export async function deleteDevice(userId, id = null) {
   const sql = getDb();
-  await sql`delete from computer_devices where user_id = ${userId}`;
+  if (id) await sql`delete from computer_devices where user_id = ${userId} and id = ${id}`;
+  else await sql`delete from computer_devices where user_id = ${userId}`;
 }
 
 export async function createJob(deviceId, tool, args) {

@@ -68,6 +68,21 @@ de la herramienta del agente. El servidor solo acepta herramientas que el agente
 arrancar, con su mismo riesgo (una de confirmación nunca corre por `computer_check`), y solo con los argumentos que
 declaró (`api/_lib/computer/catalog.js`).
 
+## Varios equipos
+
+Se pueden vincular **varios equipos** a la misma cuenta (el PC con Windows, el Chromebook…). Cada uno se identifica por su nombre
+(`PC-MARCOS`, `penguin`…) y dice qué sistema es (`windows`, `mac`, `linux` o `chromebook`; el agente detecta Linux dentro de ChromeOS).
+Vincular **el mismo** equipo otra vez (mismo nombre) lo reemplaza y su token anterior deja de valer; otro nombre se añade.
+
+- **A cuál va cada orden:** `computer_check` y `computer_action` aceptan `device` (nombre, parte del nombre o el sistema:
+  «windows», «chromebook»). Con un solo equipo no hace falta. Con varios y sin `device`, **nunca se adivina**: Eddie recibe la lista
+  y pregunta (una orden en el equipo equivocado es peor que una pregunta de más). La tarjeta de confirmación dice en qué equipo se hará.
+- `computer_list` (lectura) lista los equipos con su sistema y lo que puede hacer cada uno.
+- En la tarjeta de Conectores, cada equipo tiene su **Probar desde la nube** y su **Desvincular**; mientras hay un código en
+  pantalla la tarjeta se actualiza sola hasta que aparece el equipo nuevo.
+- Base de datos: `0022_computer_devices_many.sql` (columna `platform` y único `(user_id, name)`, aditiva) y, aplicada **después**
+  de desplegar, `0023_computer_devices_drop_single.sql` (quita el único `user_id` de «un equipo por cuenta»).
+
 ## Instalación en Windows (un clic, sin terminal)
 
 En **Conectores → Tu equipo (EDDIE Prime) → Descargar instalador para Windows** (solo el dueño). Se descarga
@@ -87,8 +102,7 @@ instalador actualiza el agente. El desinstalador quita la tarea, los procesos, l
 
 El agente en Windows: configuración en `%APPDATA%\eddie-agent`, sin ventana (lo que imprime va a `agent.log`, que se rota a
 512 KB), **una sola copia a la vez** (`agent.lock`), y `open_app` abre sin configurar nada la calculadora, el bloc de notas, el
-explorador y Paint (más lo que añadas en `config.json`). Todavía solo se vincula **un equipo por cuenta**: vincular el PC
-reemplaza al anterior.
+explorador y Paint (más lo que añadas en `config.json`).
 
 **Por qué no el Chromebook:** el agente corre en Linux (Crostini), que se apaga al cerrar la terminal y las apps de Linux; con él se
 apaga el agente. Ahí el camino fiable es la extensión «Tu navegador» (vive con Chrome).

@@ -286,7 +286,7 @@ export default function DevicesCard() {
             />
           ))}
           {state.others.map((o) => (
-            <li key={o.kind} className={`device ${o.linked ? 'device--on' : ''}`}>
+            <li key={`${o.kind}-${o.name}`} className={`device ${o.linked ? 'device--on' : ''}`}>
               <span className={`device__dot ${o.kind === 'computer' ? (o.online ? 'device__dot--on' : '') : o.linked ? 'device__dot--on' : ''}`} />
               <div className="device__body">
                 <div className="device__title">

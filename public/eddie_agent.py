@@ -42,9 +42,21 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
+
+
+def detect_platform():
+    """Qué sistema es este equipo, para que Eddie distinga tus equipos: windows, mac, chromebook o linux."""
+    if IS_WINDOWS:
+        return "windows"
+    if sys.platform == "darwin":
+        return "mac"
+    # Linux dentro de ChromeOS (Crostini): el equipo en realidad es un Chromebook.
+    if os.path.exists("/dev/.cros_milestone") or socket.gethostname() == "penguin":
+        return "chromebook"
+    return "linux"
 
 
 def config_dir():
@@ -553,7 +565,7 @@ def run_loop(cfg):
     wait = 5
     while True:
         try:
-            hello = api(cfg, "agent/hello", {"version": VERSION, "tools": catalog(cfg)})
+            hello = api(cfg, "agent/hello", {"version": VERSION, "platform": detect_platform(), "tools": catalog(cfg)})
             break
         except ApiError as e:
             if e.status == 401:
@@ -583,7 +595,7 @@ def cmd_pair(args):
     cfg["app"] = (args.app or cfg.get("app") or DEFAULT_APP).rstrip("/")
     name = args.name or socket.gethostname()
     try:
-        data = api(cfg, "agent/pair", {"code": args.code.strip().upper(), "name": name, "version": VERSION, "tools": catalog(cfg)}, token=False)
+        data = api(cfg, "agent/pair", {"code": args.code.strip().upper(), "name": name, "version": VERSION, "platform": detect_platform(), "tools": catalog(cfg)}, token=False)
     except ApiError as e:
         sys.exit(f"No se pudo vincular: {e}")
     cfg.update({"token": data["token"], "topic": data["topic"], "ntfy": data["ntfy"], "name": data["name"]})

@@ -1031,6 +1031,9 @@ Python si falta (winget), el agente, lo vincula y lo deja **en segundo plano arr
 terminal ni administrador, con desinstalador en Configuración → Aplicaciones (detalles en `docs/eddie-prime-agente.md`). En el
 Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre mientras Linux está encendido.
 
+**Varios equipos**: puedes vincular el PC y el Chromebook a la vez; Eddie los distingue por nombre y sistema («abre la calculadora
+en el PC», «¿cuánto disco queda en el Chromebook?») y, si hay varios y no dices cuál, pregunta en vez de adivinar.
+
 Con el agente `eddie_agent.py` en tu Chromebook, Eddie lo consulta y lo maneja desde la web, el teléfono o
 Telegram: "¿cuánto disco me queda?", "¿qué está gastando memoria?", "abre la terminal". El agente no tiene IA
 propia (un solo cerebro: el de Eddie) y no abre puertos. Espera un aviso sin datos (ntfy) y va a buscar el trabajo con
