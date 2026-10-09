@@ -2,8 +2,8 @@
 // goes with each piece. Pure (no browser APIs) so it can be tested in Node;
 // the texts are written to be heard (no symbols), see speakableText.
 
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+export const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 export function spokenTime(date) {
   const h = date.getHours();
@@ -16,7 +16,7 @@ export function spokenTime(date) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-function weatherPiece(weather, place) {
+export function weatherPiece(weather, place) {
   if (!weather) return 'Todavía no tengo el clima. Activa la ubicación del navegador y vuelve a pedírmelo.';
   const where = place ? `En ${place}` : 'Afuera';
   return `${where} hay ${weather.temperature} grados, ${String(weather.condition).toLowerCase()}, con ${weather.humidity} por ciento de humedad y viento de ${weather.wind} kilómetros por hora.`;
@@ -24,7 +24,7 @@ function weatherPiece(weather, place) {
 
 const RANK = { alta: 3, media: 2, baja: 1 };
 
-function tasksPiece(tasks) {
+export function tasksPiece(tasks) {
   const pending = tasks.filter((t) => !t.done).sort((a, b) => (RANK[b.priority] || 0) - (RANK[a.priority] || 0));
   if (tasks.length === 0) return 'No tienes tareas registradas.';
   if (pending.length === 0) return 'Todas tus tareas están al día.';
