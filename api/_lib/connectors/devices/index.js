@@ -6,7 +6,7 @@
 // lock's proof (a password or fingerprint typed in the confirmation card, never in
 // the chat) and only works from the app, not from Telegram; switching it off needs nothing.
 import { hasTelegramLink } from '../../telegram/store.js';
-import { deviceByUser } from '../../computer/store.js';
+import { devicesByUser } from '../../computer/store.js';
 import { describeAck, findDevice, isOnline, whyNotReachable } from '../../devices/logic.js';
 import { clearFrame, listDevices } from '../../devices/store.js';
 import { LockError, consumeToken, grantView, lockEnforced, lockStatus, requestRemoval, revokeGrant } from '../../devices/cameraLock.js';
@@ -46,13 +46,13 @@ export default {
       run: async (_args, context) => {
         const user = await getUser(context);
         if (!user) return { error: SIGN_IN };
-        const [devices, telegram, computer] = await Promise.all([listDevices(user.id), hasTelegramLink(user.id).catch(() => false), deviceByUser(user.id).catch(() => null)]);
+        const [devices, telegram, computer] = await Promise.all([listDevices(user.id), hasTelegramLink(user.id).catch(() => false), devicesByUser(user.id).catch(() => [])]);
         const shown = devices.map((d) => publicDevice(d));
         const on = shown.filter((d) => d.online);
         return {
           devices: shown.map((d) => ({ name: d.name, platform: d.platform, online: d.online, remoteControl: d.remoteEnabled, lastSeen: d.lastSeen })),
           telegramLinked: Boolean(telegram),
-          computer: computer ? { name: computer.name, online: isOnline(computer.lastSeen) } : null,
+          computers: computer.map((c) => ({ name: c.name, online: isOnline(c.lastSeen) })),
           summary: shown.length ? `${shown.length} dispositivo${shown.length === 1 ? '' : 's'}, ${on.length} encendido${on.length === 1 ? '' : 's'}: ${on.map((d) => d.name).join(', ') || 'ninguno ahora'}` : 'Ningún dispositivo conectado todavía',
         };
       },

@@ -18,7 +18,7 @@ import { requireUser, destroySession, SESSION_COOKIE_NAME } from '../session.js'
 import { getLinkByUser, hasTelegramLink } from '../telegram/store.js';
 import { sendMessage } from '../telegram/api.js';
 import { sendPush } from '../push/send.js';
-import { deviceByUser } from '../computer/store.js';
+import { devicesByUser } from '../computer/store.js';
 import { ntfyBase, ringDoorbell } from '../computer/run.js';
 import { createRateLimiter } from '../rateLimit.js';
 import { LockError, authorize, cancelRemoval, consumeToken, createPasskeyLock, createPasswordLock, grantView, hasGrant, lockStatus, passkeyAuthOptions, passkeyRegistrationOptions, requestRemoval, revokeGrant } from './cameraLock.js';
@@ -139,10 +139,10 @@ export async function handleDevicesRoute({ method, path = [], cookies = {}, quer
   if (sub === 'lock') return handleLockRoute({ user, method, path, body, headers });
 
   if (!sub && method === 'GET') {
-    const [devices, telegram, computer] = await Promise.all([listDevices(user.id), hasTelegramLink(user.id).catch(() => false), deviceByUser(user.id).catch(() => null)]);
+    const [devices, telegram, computer] = await Promise.all([listDevices(user.id), hasTelegramLink(user.id).catch(() => false), devicesByUser(user.id).catch(() => [])]);
     const meClient = CLIENT_ID_RE.test(String(query.me || '')) ? String(query.me) : null;
     const others = [{ kind: 'telegram', name: 'Telegram', linked: Boolean(telegram) }];
-    if (computer) others.push({ kind: 'computer', name: computer.name, linked: true, online: isOnline(computer.lastSeen), lastSeen: computer.lastSeen });
+    for (const c of computer) others.push({ kind: 'computer', name: c.name, linked: true, online: isOnline(c.lastSeen), lastSeen: c.lastSeen });
     return { status: 200, headers: { 'Cache-Control': 'private, no-store' }, json: { devices: devices.map((d) => publicDevice(d, { currentSession: sessionId, meClient })), others } };
   }
 

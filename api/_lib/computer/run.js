@@ -3,7 +3,7 @@
 // listens on a port and the database is only touched while there is real
 // work, so an idle computer costs nothing (Neon's free plan sleeps when idle;
 // an agent asking "anything for me?" every few seconds would keep it awake).
-import { abandonJob, createJob, deviceByUser, expireJob, jobState } from './store.js';
+import { abandonJob, createJob, devicesByUser, expireJob, jobState } from './store.js';
 import { argsFor, listForModel } from './catalog.js';
 
 const DEFAULT_NTFY = 'https://ntfy.sh';
@@ -45,12 +45,39 @@ export async function ringDoorbell(topic, { fetchImpl = globalThis.fetch, env = 
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export const PLATFORM_LABELS = { windows: 'Windows', mac: 'Mac', linux: 'Linux', chromebook: 'Chromebook' };
+
+const plain = (text) => String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+// "PC-MARCOS (Windows)": how the computers are named to the model and in errors.
+export const describeDevice = (d) => `«${d.name}»${d.platform ? ` (${PLATFORM_LABELS[d.platform] || d.platform})` : ''}`;
+
+// Which of the user's computers a request means. `wanted` is what the model passed as `device`:
+// a name ("PC-MARCOS"), part of it, or the kind of system ("windows", "chromebook"). With a single
+// computer no name is needed; with several, never a guess — an action on the wrong machine is worse
+// than one more question. → { device } or { error } (written for the model, with the real list).
+export function pickDevice(devices, wanted) {
+  if (!devices.length) return { error: 'No hay ningún equipo vinculado. En Conectores → «Tu equipo (EDDIE Prime)» se vincula con el agente eddie_agent.py (en Windows, con el instalador).' };
+  const list = devices.map(describeDevice).join(', ');
+  const query = plain(wanted);
+  if (!query) {
+    if (devices.length === 1) return { device: devices[0] };
+    return { error: `Tienes varios equipos vinculados: ${list}. Dime en cuál (argumento device) o pregúntale al usuario.` };
+  }
+  const byName = devices.filter((d) => plain(d.name) === query);
+  const found = byName.length ? byName : devices.filter((d) => plain(d.name).includes(query) || query.includes(plain(d.name)) || plain(d.platform) === query || plain(PLATFORM_LABELS[d.platform]) === query);
+  if (found.length === 1) return { device: found[0] };
+  if (found.length > 1) return { error: `«${String(wanted).slice(0, 40)}» puede ser más de un equipo: ${found.map(describeDevice).join(', ')}. Usa el nombre completo.` };
+  return { error: `No encuentro un equipo llamado «${String(wanted).slice(0, 40)}». Los vinculados son: ${list}.` };
+}
+
 // The user's computer and the catalog entry for `toolName`, or an { error }
 // written for the model (with the list of real tools, so it can retry).
 export async function resolveTool(user, toolName, given, { risk } = {}) {
   if (!user) return { error: 'Para usar tu equipo a distancia, inicia sesión con tu cuenta de Google.' };
-  const device = await deviceByUser(user.id);
-  if (!device) return { error: 'No hay ningún equipo vinculado. En Conectores → «Tu equipo (EDDIE Prime)» se vincula con el agente eddie_agent.py.' };
+  const picked = pickDevice(await devicesByUser(user.id), given?.device);
+  if (picked.error) return picked;
+  const { device } = picked;
   const tool = device.tools.find((t) => t.name === toolName);
   const fitting = device.tools.filter((t) => t.risk === risk);
   if (!tool || tool.risk !== risk) {

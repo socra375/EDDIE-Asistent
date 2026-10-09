@@ -4,13 +4,14 @@
 // whitelisted tools it declared when it linked (disk, memory, processes,
 // opening an allowed app…). Anything that changes the computer goes through
 // the confirmation card. See api/_lib/computer/ and docs/eddie-prime-agente.md.
-import { deviceByUser, hasDevice } from '../../computer/store.js';
-import { resolveTool, runOnComputer, runOnDevice } from '../../computer/run.js';
+import { devicesByUser, hasDevice } from '../../computer/store.js';
+import { PLATFORM_LABELS, describeDevice, resolveTool, runOnComputer, runOnDevice } from '../../computer/run.js';
 import { clip } from '../http.js';
 
 // The arguments most tools use, by name (small models fill these far more
 // reliably than a nested object), plus args_json for anything else.
 const COMMON_ARGS = {
+  device: { type: 'STRING', description: 'Nombre del equipo (o "windows", "chromebook"…). Solo hace falta si el usuario tiene varios equipos vinculados; sin él, con varios, te dirá cuáles hay.' },
   path: { type: 'STRING', description: 'Ruta, relativa a la carpeta personal (ej. "Descargas") o absoluta dentro de ella.' },
   name: { type: 'STRING', description: 'Nombre (de una app, un archivo…), según la herramienta.' },
   pid: { type: 'INTEGER', description: 'Id de un proceso (de top_processes).' },
@@ -49,18 +50,41 @@ export default {
   requiredEnv: ['DATABASE_URL'],
   note: 'El agente nunca abre puertos: espera un aviso sin datos (ntfy) y viene a buscar el trabajo con su propio token. Solo ejecuta su lista de herramientas; nada de comandos libres. Lo que cambia algo (abrir una app, cerrar un proceso) siempre pide tu confirmación.',
   details: async (user) => {
-    const device = user ? await deviceByUser(user.id) : null;
-    if (!device) return null;
+    const devices = user ? await devicesByUser(user.id) : [];
+    if (!devices.length) return null;
     return {
-      device: {
-        name: device.name,
-        version: device.version,
-        lastSeen: device.lastSeen,
-        tools: device.tools.map((t) => ({ name: t.name, label: t.label, risk: t.risk })),
-      },
+      devices: devices.map((d) => ({
+        id: d.id,
+        name: d.name,
+        platform: d.platform,
+        version: d.version,
+        lastSeen: d.lastSeen,
+        tools: d.tools.map((t) => ({ name: t.name, label: t.label, risk: t.risk })),
+      })),
     };
   },
   tools: [
+    {
+      label: 'Ver tus equipos vinculados',
+      activity: 'Mirando tus equipos…',
+      risk: 'read',
+      summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
+      declaration: {
+        name: 'computer_list',
+        description: 'Lista los equipos (PC, Chromebook…) que el usuario vinculó con el agente EDDIE Prime: nombre, sistema y qué puede hacer cada uno. Úsala si no sabes cuál es el equipo al que se refiere, y pásale su nombre en el argumento device de computer_check / computer_action.',
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+      run: async (_args, context) => {
+        const user = await deviceUser(context);
+        if (!user) return { error: 'Para usar tu equipo a distancia, inicia sesión con tu cuenta de Google.' };
+        const devices = await devicesByUser(user.id);
+        if (!devices.length) return { error: 'No hay ningún equipo vinculado. En Conectores → «Tu equipo (EDDIE Prime)» se vincula con el agente eddie_agent.py (en Windows, con el instalador).' };
+        return {
+          devices: devices.map((d) => ({ name: d.name, system: PLATFORM_LABELS[d.platform] || null, lastContact: d.lastSeen, canDo: d.tools.map((t) => `${t.name}${t.risk === 'confirm' ? ' (con confirmación)' : ''}`) })),
+          summary: `${devices.length} equipo${devices.length === 1 ? '' : 's'}: ${devices.map(describeDevice).join(', ')}`,
+        };
+      },
+    },
     {
       label: 'Consultar tu equipo',
       activity: 'Consultando tu equipo…',
@@ -69,7 +93,7 @@ export default {
       declaration: {
         name: 'computer_check',
         description:
-          'Consulta el equipo del usuario (su Chromebook/PC con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram. Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}. Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
+          'Consulta un equipo del usuario (su PC con Windows, Chromebook… con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram. Con varios equipos vinculados, indica cuál en device (nombre; computer_list los muestra). Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}. Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
         parameters: {
           type: 'OBJECT',
           properties: { tool: { type: 'STRING', description: 'Nombre de la herramienta del equipo, ej. "disk_usage".' }, ...COMMON_ARGS },
@@ -88,7 +112,7 @@ export default {
       declaration: {
         name: 'computer_action',
         description:
-          'Pide al equipo del usuario una acción que cambia algo, siempre con su confirmación en una tarjeta. Habituales: open_app {name} (solo las apps que el usuario permitió en el agente), kill_process {pid} (cierra un proceso suyo; primero usa top_processes para el pid). Si una no existe, el error trae la lista real.',
+          'Pide a un equipo del usuario una acción que cambia algo, siempre con su confirmación en una tarjeta (con varios equipos vinculados, indica cuál en device). Habituales: open_app {name} (solo las apps que el usuario permitió en el agente), kill_process {pid} (cierra un proceso suyo; primero usa top_processes para el pid). Si una no existe, el error trae la lista real.',
         parameters: {
           type: 'OBJECT',
           properties: { tool: { type: 'STRING', description: 'Nombre de la acción del equipo, ej. "open_app".' }, ...COMMON_ARGS },

@@ -7,15 +7,18 @@
 import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { plainText, sanitizeCatalog } from './catalog.js';
-import { consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, deviceByUser, finishJob, takeJob, updateCatalog } from './store.js';
+import { consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
 import { ntfyBase, runOnComputer } from './run.js';
 import { INSTALLER_CODE_MINUTES, INSTALLER_FILENAME, installerOrigin, windowsInstaller } from './installer.js';
 
 const MAX_RESULT_CHARS = 16_000;
 const CODE_RE = /^[A-Z2-9]{8}$/;
+const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 const mayPair = (user) => ownerEmails().length === 0 || isOwner(user);
 const cleanName = (value) => plainText(value, 60) || 'Mi equipo';
+const PLATFORMS = ['windows', 'mac', 'linux', 'chromebook'];
+const cleanPlatform = (value) => (PLATFORMS.includes(value) ? value : null);
 const cleanVersion = (value) => (typeof value === 'string' && /^[\w.+-]{1,20}$/.test(value) ? value : null);
 
 function bearer(headers) {
@@ -47,15 +50,15 @@ async function agentRoute(action, { method, headers, body }) {
     if (!userId) return { status: 404, json: { error: 'Ese código no existe o ya caducó. Pide uno nuevo en Conectores.' } };
     const name = cleanName(body?.name);
     const tools = sanitizeCatalog(body?.tools);
-    const { token, topic } = await createDevice(userId, { name, version: cleanVersion(body?.version), tools });
+    const { token, topic } = await createDevice(userId, { name, version: cleanVersion(body?.version), tools, platform: cleanPlatform(body?.platform) });
     return { status: 200, json: { token, topic, ntfy: ntfyBase(), name, tools: tools.length } };
   }
   const device = await agentDevice(headers);
   if (!device) return unauthorized();
   if (action === 'hello') {
     const tools = sanitizeCatalog(body?.tools);
-    await updateCatalog(device.id, { version: cleanVersion(body?.version), tools, name: body?.name ? cleanName(body.name) : null });
-    return { status: 200, json: { ok: true, name: body?.name ? cleanName(body.name) : device.name, topic: device.topic, ntfy: ntfyBase(), tools: tools.length } };
+    await updateCatalog(device.id, { version: cleanVersion(body?.version), tools, platform: cleanPlatform(body?.platform) });
+    return { status: 200, json: { ok: true, name: device.name, topic: device.topic, ntfy: ntfyBase(), tools: tools.length } };
   }
   if (action === 'next') return { status: 200, json: { job: await takeJob(device.id) } };
   if (action === 'result') {
@@ -84,14 +87,20 @@ export async function handleComputerRoute({ method, path = [], cookies = {}, hea
     return { status: 200, json: { filename: INSTALLER_FILENAME, content: windowsInstaller({ code, origin: installerOrigin(headers) }), minutes } };
   }
   if (action === 'unlink') {
-    await deleteDevice(user.id);
+    // One computer (by id), or all of them when none is named.
+    const id = body?.id ? String(body.id) : null;
+    if (id && !UUID_RE.test(id)) return { status: 400, json: { error: 'Indica qué equipo desvincular.' } };
+    await deleteDevice(user.id, id);
     return { status: 200, json: { ok: true } };
   }
   if (action === 'test') {
-    const device = await deviceByUser(user.id);
-    if (!device) return { status: 409, json: { error: 'No hay ningún equipo vinculado.' } };
+    const devices = await devicesByUser(user.id);
+    if (!devices.length) return { status: 409, json: { error: 'No hay ningún equipo vinculado.' } };
+    const id = body?.id ? String(body.id) : null;
+    const device = id ? devices.find((d) => d.id === id) : devices.length === 1 ? devices[0] : null;
+    if (!device) return { status: 409, json: { error: id ? 'Ese equipo ya no está vinculado.' : 'Hay varios equipos: elige cuál probar.' } };
     const started = Date.now();
-    const outcome = await runOnComputer(user, 'system_summary', {});
+    const outcome = await runOnComputer(user, 'system_summary', { device: device.name });
     if (outcome.error) return { status: 200, json: { ok: false, error: outcome.error } };
     return { status: 200, json: { ok: true, ms: Date.now() - started, result: outcome.result } };
   }
