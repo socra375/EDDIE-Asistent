@@ -38,11 +38,12 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -82,6 +83,8 @@ WINDOWS_APPS = {
 }
 MAX_LIST = 50
 MIN_FETCH_GAP = 1.0  # segundos entre pedidos de trabajo, por si alguien abusa del aviso
+STREAM_TIMEOUT = 75  # ntfy manda un latido cada ~45 s: más silencio que esto es una conexión muerta
+POLL_SECS = 10  # además de la conexión abierta, se mira cada tanto lo reciente del tema (ver Aviso)
 
 try:
     import psutil  # type: ignore
@@ -461,22 +464,69 @@ def drain(cfg):
             log("  no pude entregar el resultado:", e)
 
 
-def listen(cfg, on_ring):
-    """Escucha el tema secreto de ntfy (una conexión que se queda abierta)."""
-    url = f"{cfg['ntfy'].rstrip('/')}/{cfg['topic']}/json"
-    req = urllib.request.Request(url, headers={"User-Agent": f"eddie-agent/{VERSION}"})
-    with urllib.request.urlopen(req, timeout=120) as res:  # ntfy manda "keepalive" cada ~45 s
-        log("Esperando trabajos (aviso:", cfg["ntfy"] + ")")
+def ntfy_url(cfg, suffix):
+    return f"{cfg['ntfy'].rstrip('/')}/{cfg['topic']}/{suffix}"
+
+
+def remember(state, msg):
+    """Guarda hasta qué aviso ya se vio, para no atender dos veces el mismo."""
+    if msg.get("id"):
+        state["since"] = msg["id"]
+
+
+def stream_forever(cfg, on_ring, stop, state):
+    """Escucha el tema secreto de ntfy con una conexión abierta (avisa al instante).
+
+    Una conexión así puede morir en silencio (un router, un antivirus o una VPN que la retienen):
+    por eso tiene un tiempo máximo de silencio y, ocurra lo que ocurra, vuelve a conectar.
+    """
+    backoff = 2
+    while not stop.is_set():
+        try:
+            req = urllib.request.Request(ntfy_url(cfg, "json"), headers={"User-Agent": f"eddie-agent/{VERSION}"})
+            with urllib.request.urlopen(req, timeout=STREAM_TIMEOUT) as res:
+                log("Esperando trabajos (aviso:", cfg["ntfy"] + ")")
+                backoff = 2
+                for raw in res:
+                    if stop.is_set():
+                        return
+                    line = raw.decode("utf-8", "replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        msg = json.loads(line)
+                    except ValueError:
+                        continue
+                    if msg.get("event") == "message":
+                        remember(state, msg)
+                        on_ring()
+            on_ring()  # la conexión se cerró limpia: por si llegó algo mientras tanto
+        except Exception as e:  # cualquier fallo: se reconecta, nunca se cae el agente
+            if stop.is_set():
+                return
+            log(f"Aviso desconectado ({e}); reintento en {backoff} s")
+            stop.wait(backoff)
+            backoff = min(backoff * 2, 60)
+            on_ring()
+
+
+def poll_once(cfg, state):
+    """Mira los avisos recientes del tema (una petición corta, sin conexión abierta). → ¿hubo alguno nuevo?"""
+    req = urllib.request.Request(ntfy_url(cfg, f"json?poll=1&since={state['since']}"), headers={"User-Agent": f"eddie-agent/{VERSION}"})
+    rang = False
+    with urllib.request.urlopen(req, timeout=15) as res:
         for raw in res:
             line = raw.decode("utf-8", "replace").strip()
             if not line:
                 continue
             try:
-                event = json.loads(line).get("event")
+                msg = json.loads(line)
             except ValueError:
                 continue
-            if event == "message":
-                on_ring()
+            if msg.get("event") == "message":
+                remember(state, msg)
+                rang = True
+    return rang
 
 
 def setup_logging():
@@ -544,22 +594,38 @@ def cmd_run(cfg):
 
 
 def run_loop(cfg):
-    stop = {"now": False}
-    signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True) or sys.exit(0))
+    stop = threading.Event()
+    state = {"since": "all", "fatal": None}
+    signal.signal(signal.SIGTERM, lambda *_: stop.set() or sys.exit(0))
     last = {"t": 0.0}
+    busy = threading.Lock()
+    again = threading.Event()
 
     def ring():
-        if time.time() - last["t"] < MIN_FETCH_GAP:
-            time.sleep(MIN_FETCH_GAP)
-        last["t"] = time.time()
+        # La conexión abierta y la consulta periódica pueden avisar a la vez: uno trabaja y el otro lo deja anotado.
+        if not busy.acquire(blocking=False):
+            again.set()
+            return
         try:
-            drain(cfg)
-        except ApiError as e:
-            if e.status == 401:
-                sys.exit("Eddie rechazó el token: el equipo se desvinculó. Vuelve a vincularlo desde Conectores.")
-            log("Error al pedir trabajo:", e)
-        except (urllib.error.URLError, OSError) as e:
-            log("Sin conexión con Eddie:", e)
+            while True:
+                again.clear()
+                if time.time() - last["t"] < MIN_FETCH_GAP:
+                    time.sleep(MIN_FETCH_GAP)
+                last["t"] = time.time()
+                try:
+                    drain(cfg)
+                except ApiError as e:
+                    if e.status == 401:
+                        state["fatal"] = "Eddie rechazó el token: el equipo se desvinculó. Vuelve a vincularlo desde Conectores."
+                        stop.set()
+                        return
+                    log("Error al pedir trabajo:", e)
+                except (urllib.error.URLError, OSError) as e:
+                    log("Sin conexión con Eddie:", e)
+                if not again.is_set():
+                    return
+        finally:
+            busy.release()
 
     # Al arrancar: se presenta (catálogo actualizado) y recoge lo pendiente.
     wait = 5
@@ -578,16 +644,24 @@ def run_loop(cfg):
     cfg["topic"], cfg["ntfy"] = hello.get("topic", cfg["topic"]), hello.get("ntfy", cfg["ntfy"])
     log(f"EDDIE Prime {VERSION} listo como «{hello.get('name')}» con {hello.get('tools')} herramientas.")
     ring()
-    backoff = 2
-    while not stop["now"]:
+    threading.Thread(target=stream_forever, args=(cfg, ring, stop, state), daemon=True).start()
+    failing = False
+    while not stop.is_set():
+        stop.wait(POLL_SECS)
+        if stop.is_set():
+            break
         try:
-            listen(cfg, ring)
-            backoff = 2
-        except (urllib.error.URLError, OSError, socket.timeout) as e:
-            log(f"Aviso desconectado ({e}); reintento en {backoff} s")
-            time.sleep(backoff)
-            backoff = min(backoff * 2, 60)
-        ring()  # por si llegó algo mientras no escuchaba
+            if poll_once(cfg, state):
+                ring()
+            if failing:
+                log("La consulta de avisos se recuperó.")
+                failing = False
+        except Exception as e:
+            if not failing:
+                log(f"No pude consultar los avisos ({e}); sigo intentándolo.")
+                failing = True
+    if state["fatal"]:
+        sys.exit(state["fatal"])
 
 
 def cmd_pair(args):
