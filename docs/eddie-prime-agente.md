@@ -61,6 +61,7 @@ vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a 
 | `list_directory {path}` | lectura | archivos de una carpeta **dentro de tu carpeta personal** |
 | `open_app {name}` | confirmación | abre una app **de la lista que tú permitas** |
 | `kill_process {pid}` | confirmación | cierra un proceso **de tu usuario** (nunca el 1 ni el propio agente) |
+| `scan_network` | lectura | qué dispositivos hay en tu red local: IP, MAC y el nombre que cada uno anuncia (ver «Red local») |
 
 Las apps permitidas se definen en `~/.config/eddie-agent/config.json`:
 
@@ -72,6 +73,22 @@ Eddie las ve con `computer_check` / `computer_action`: dos herramientas genéric
 de la herramienta del agente. El servidor solo acepta herramientas que el agente declaró al vincularse o al
 arrancar, con su mismo riesgo (una de confirmación nunca corre por `computer_check`), y solo con los argumentos que
 declaró (`api/_lib/computer/catalog.js`).
+
+## Red local (scan_network)
+
+Dice qué hay conectado a la **misma red** que el equipo: una lista con la IP, la MAC y el nombre que cada dispositivo anuncia
+de sí mismo (impresoras, Chromecast, altavoces, televisores, el router). Solo mira; no entra en nada ni escanea puertos.
+
+- **Cómo lo hace:** manda un paquete suelto a cada dirección de la red (para que el sistema aprenda su MAC y aparezca en su tabla
+  de vecinos: `arp -a` en Windows, `ip neigh` en Linux), pregunta por mDNS y SSDP (los servicios que se anuncian solos en la red) y
+  escucha 2,5 s lo que contestan. Son los mismos anuncios que ve cualquier móvil o PC en la red.
+- **Límites:** solo la red **privada** a la que está conectado (10.x, 172.16–31.x, 192.168.x), y nunca más de una /24 (254 direcciones).
+  No toca otras redes ni Internet.
+- **Lo que no ve:** los dispositivos que el router aísla entre clientes (redes de invitados), los apagados o dormidos, y los móviles
+  modernos que cambian su MAC en cada red (aparecen con su nombre si lo anuncian, sin fabricante). El **fabricante** a partir de la
+  MAC todavía no se identifica.
+- **En un Chromebook** Linux corre dentro de una red virtual: puede no ver tu red real. El resultado lo avisa.
+- **Privacidad:** la lista (con MAC) se manda a Eddie en la respuesta, como cualquier otro dato del equipo. No se guarda aparte.
 
 ## Varios equipos
 
