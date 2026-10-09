@@ -187,7 +187,7 @@ Set-Content -Path $uninstall -Value $uninstallText -Encoding UTF8
 try {
   New-Item -Path $UninstallKey -Force | Out-Null
   Set-ItemProperty -Path $UninstallKey -Name 'DisplayName' -Value 'EDDIE Prime'
-  Set-ItemProperty -Path $UninstallKey -Name 'DisplayVersion' -Value '1.3.0'
+  Set-ItemProperty -Path $UninstallKey -Name 'DisplayVersion' -Value '1.4.0'
   Set-ItemProperty -Path $UninstallKey -Name 'Publisher' -Value 'Eddie'
   Set-ItemProperty -Path $UninstallKey -Name 'InstallLocation' -Value $Dir
   Set-ItemProperty -Path $UninstallKey -Name 'UninstallString' -Value ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $uninstall + '"')

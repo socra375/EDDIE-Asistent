@@ -30,12 +30,16 @@ en Windows (solo tu usuario puede leerla). Ahí puedes permitir apps para open_a
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import platform
+import re
+import select
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -43,7 +47,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -381,6 +385,312 @@ def t_kill_process(args, _cfg):
     return {"pid": pid, "nombre": name, "resultado": how, "summary": f"Cerré {name} ({pid})"}
 
 
+# ---------------------------------------------------------------- red local
+# Qué hay conectado a la red de este equipo. Sin ataques ni escaneo de puertos:
+# se manda un paquete suelto a cada dirección (para que el sistema aprenda su MAC
+# y aparezca en su tabla de vecinos) y se escucha lo que los propios dispositivos
+# anuncian (mDNS: impresoras, Chromecast, altavoces… y SSDP: televisores, routers).
+# Solo la red privada a la que estamos conectados, nunca más de una /24.
+
+NET_LISTEN_S = 2.5
+MDNS_ADDR = ("224.0.0.251", 5353)
+SSDP_ADDR = ("239.255.255.250", 1900)
+SSDP_SEARCH = (
+    'M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: "ssdp:discover"\r\nMX: 2\r\nST: ssdp:all\r\n\r\n'
+).encode()
+MDNS_QUERIES = [
+    "_services._dns-sd._udp.local",
+    "_googlecast._tcp.local",
+    "_airplay._tcp.local",
+    "_spotify-connect._tcp.local",
+    "_ipp._tcp.local",
+    "_smb._tcp.local",
+    "_hap._tcp.local",
+    "_http._tcp.local",
+]
+MAX_DEVICES_SHOWN = 40
+MAC_RE = re.compile(r"\b([0-9A-Fa-f]{2}(?:[-:][0-9A-Fa-f]{2}){5})\b")
+IPV4_RE = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
+
+
+# Solo las redes privadas de verdad (casa, oficina). Python también marca como «privadas»
+# rangos de documentación y similares: aquí no nos sirven.
+PRIVATE_RANGES = [ipaddress.IPv4Network(r) for r in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+
+
+def private_networks():
+    """Las redes privadas a las que está conectado este equipo: [(IP de este equipo, red)]."""
+    found = []
+    if psutil is None:
+        return found
+    for name, addrs in psutil.net_if_addrs().items():
+        if name.lower().startswith("lo"):
+            continue
+        for a in addrs:
+            if a.family != socket.AF_INET or not a.netmask:
+                continue
+            try:
+                iface = ipaddress.IPv4Interface(f"{a.address}/{a.netmask}")
+            except ValueError:
+                continue
+            if any(iface.ip in net for net in PRIVATE_RANGES):
+                found.append((iface.ip, iface.network))
+    return found
+
+
+def parse_neighbors(text, net):
+    """La tabla de vecinos del sistema (arp -a, ip neigh…) → {ip: mac}, solo las IP de la red."""
+    out = {}
+    for line in text.splitlines():
+        ip_m, mac_m = IPV4_RE.search(line), MAC_RE.search(line)
+        if not ip_m or not mac_m:
+            continue
+        try:
+            ip = ipaddress.IPv4Address(ip_m.group(1))
+        except ValueError:
+            continue
+        mac = mac_m.group(1).lower().replace("-", ":")
+        if ip not in net or mac in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff") or int(mac[:2], 16) & 1:
+            continue
+        out[str(ip)] = mac
+    return out
+
+
+def read_neighbors(net):
+    commands = [["arp", "-a"]] if IS_WINDOWS else [["ip", "neigh"], ["arp", "-an"]]
+    table = {}
+    for cmd in commands:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        table.update(parse_neighbors(r.stdout, net))
+    return table
+
+
+def poke(hosts):
+    """Un paquete suelto a cada dirección: el sistema tiene que preguntar su MAC (así aparece en la tabla)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        for host in hosts:
+            try:
+                s.sendto(b"\x00", (str(host), 9))
+            except OSError:
+                pass  # una dirección inalcanzable no es un error
+    finally:
+        s.close()
+
+
+def _dns_name(name):
+    out = b""
+    for label in name.split("."):
+        raw = label.encode("utf-8")
+        out += bytes([len(raw)]) + raw
+    return out + b"\x00"
+
+
+def _dns_query(names):
+    body = b"".join(_dns_name(n) + struct.pack("!HH", 12, 1) for n in names)  # PTR, clase IN
+    return struct.pack("!HHHHHH", 0, 0, len(names), 0, 0, 0) + body
+
+
+def _read_name(buf, pos, depth=0):
+    """Un nombre DNS (con sus punteros de compresión) → (texto, posición siguiente)."""
+    labels, end = [], None
+    while True:
+        if pos >= len(buf) or depth > 16:
+            raise ValueError("nombre DNS fuera de rango")
+        ln = buf[pos]
+        if ln & 0xC0 == 0xC0:
+            if end is None:
+                end = pos + 2
+            pos = ((ln & 0x3F) << 8) | buf[pos + 1]
+            depth += 1
+            continue
+        if ln == 0:
+            return ".".join(labels), (end if end is not None else pos + 1)
+        if pos + 1 + ln > len(buf):
+            raise ValueError("etiqueta DNS fuera de rango")
+        labels.append(buf[pos + 1 : pos + 1 + ln].decode("utf-8", "replace"))
+        pos += 1 + ln
+
+
+def _txt(rdata):
+    parts, i = [], 0
+    while i < len(rdata):
+        ln = rdata[i]
+        parts.append(rdata[i + 1 : i + 1 + ln].decode("utf-8", "replace"))
+        i += 1 + ln
+    return " ".join(parts)
+
+
+def parse_mdns(buf):
+    """Una respuesta mDNS → [(dueño, tipo, valor)]: direcciones, servicios, nombres y textos. Una pregunta da []."""
+    if len(buf) < 12:
+        return []
+    _id, flags, qd, an, ns, ar = struct.unpack("!HHHHHH", buf[:12])
+    if not flags & 0x8000:
+        return []
+    pos = 12
+    for _ in range(qd):
+        _, pos = _read_name(buf, pos)
+        pos += 4
+    out = []
+    for _ in range(an + ns + ar):
+        owner, pos = _read_name(buf, pos)
+        rtype, _cls, _ttl, rdlen = struct.unpack("!HHIH", buf[pos : pos + 10])
+        pos += 10
+        rdata = buf[pos : pos + rdlen]
+        if len(rdata) != rdlen:
+            raise ValueError("registro DNS cortado")
+        if rtype == 1 and rdlen == 4:
+            out.append((owner, "A", socket.inet_ntoa(rdata)))
+        elif rtype == 12:
+            out.append((owner, "PTR", _read_name(buf, pos)[0]))
+        elif rtype == 33:
+            out.append((owner, "SRV", _read_name(buf, pos + 6)[0]))
+        elif rtype == 16:
+            out.append((owner, "TXT", _txt(rdata)))
+        pos += rdlen
+    return out
+
+
+def mdns_summary(entries):
+    """Lo que dice un dispositivo de sí mismo → (nombres, servicios)."""
+    names, services = set(), set()
+    for owner, kind, value in entries:
+        if kind == "PTR":
+            first = value.split(".")[0]
+            if first.startswith("_"):  # una lista de servicios: el servicio es el valor (p. ej. _googlecast._tcp)
+                services.add(".".join(value.split(".")[:2]))
+            elif first:
+                names.add(first)  # una instancia anunciada: su nombre (p. ej. Sala-TV)
+            if owner.startswith("_") and not owner.startswith("_services."):  # y el dueño dice el servicio
+                services.add(".".join(owner.split(".")[:2]))
+        elif kind == "SRV":
+            host = value.split(".")[0]
+            if host:
+                names.add(host)
+        elif kind == "TXT":
+            m = re.search(r"(?:^| )fn=(.+?)(?= [A-Za-z]{2,}=|$)", value)  # nombre amigable (Chromecast…)
+            if m:
+                names.add(m.group(1).strip())
+    return {n[:60] for n in names}, services
+
+
+def parse_ssdp(text):
+    """Una respuesta SSDP → sus cabeceras en minúsculas (o {} si no es una respuesta)."""
+    lines = text.replace("\r", "").split("\n")
+    if not lines or not lines[0].upper().startswith(("HTTP/1.1 200", "NOTIFY")):
+        return {}
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            headers[k.strip().lower()] = v.strip()
+    return headers
+
+
+def discover(net, *, mdns_dest=MDNS_ADDR, ssdp_dest=SSDP_ADDR, listen_s=NET_LISTEN_S):
+    """Pregunta por mDNS y SSDP y escucha un rato lo que contestan los de esta red.
+    → {ip: {"nombres": set, "servicios": set, "anuncia": set}}"""
+    found = {}
+
+    def entry(ip):
+        return found.setdefault(ip, {"nombres": set(), "servicios": set(), "anuncia": set()})
+
+    socks = []
+    try:
+        mdns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socks.append(mdns)
+        ssdp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socks.append(ssdp)
+        # Desde un puerto libre (no el 5353): así los dispositivos contestan directo a este equipo.
+        for dest, payload, sock in ((mdns_dest, _dns_query(MDNS_QUERIES), mdns), (ssdp_dest, SSDP_SEARCH, ssdp)):
+            try:
+                sock.sendto(payload, dest)
+            except OSError:
+                pass  # sin red para este tipo de anuncio: se sigue con el otro
+        end = time.time() + listen_s
+        while True:
+            left = end - time.time()
+            if left <= 0:
+                break
+            ready, _, _ = select.select(socks, [], [], left)
+            for sock in ready:
+                try:
+                    data, (src, _port) = sock.recvfrom(9000)
+                except OSError:
+                    continue
+                if ipaddress.IPv4Address(src) not in net:
+                    continue
+                if sock is mdns:
+                    try:
+                        entries = parse_mdns(data)
+                    except Exception:  # un paquete mal formado de un dispositivo: se ignora
+                        continue
+                    names, services = mdns_summary(entries)
+                    entry(src)["nombres"] |= names
+                    entry(src)["servicios"] |= services
+                    for owner, kind, value in entries:
+                        if kind == "A" and ipaddress.IPv4Address(value) in net and not owner.startswith("_"):
+                            entry(value)["nombres"].add(owner.split(".")[0][:60])
+                else:
+                    server = parse_ssdp(data.decode("utf-8", "replace")).get("server")
+                    if server:
+                        entry(src)["anuncia"].add(server[:60])
+    finally:
+        for sock in socks:
+            sock.close()
+    return found
+
+
+def t_scan_network(_args, _cfg):
+    nets = private_networks()
+    if not nets:
+        return {"dispositivos": [], "total": 0, "summary": "No estoy conectado a una red privada (casa u oficina).", "nota": "Revisa la conexión del equipo."}
+    me, net = nets[0]
+    if net.num_addresses > 256:  # una red enorme: solo la /24 de este equipo
+        net = ipaddress.IPv4Network(f"{me}/24", strict=False)
+    poke(list(net.hosts()))
+    found = discover(net)
+    table = read_neighbors(net)
+    rows = []
+    for ip in sorted(set(table) | set(found), key=ipaddress.IPv4Address):
+        f = found.get(ip, {"nombres": set(), "servicios": set(), "anuncia": set()})
+        names = sorted(f["nombres"])
+        rows.append(
+            {
+                "ip": ip,
+                "mac": table.get(ip),
+                "nombre": names[0] if names else None,
+                "servicios": sorted(f["servicios"])[:4],
+                "anuncia": sorted(f["anuncia"])[:1],
+                "este_equipo": ipaddress.IPv4Address(ip) == me,
+            }
+        )
+    if str(me) not in {r["ip"] for r in rows}:
+        rows.append({"ip": str(me), "mac": None, "nombre": socket.gethostname(), "servicios": [], "anuncia": [], "este_equipo": True})
+        rows.sort(key=lambda r: ipaddress.IPv4Address(r["ip"]))
+    notes = []
+    if detect_platform() == "chromebook":
+        notes.append("Este equipo es un Chromebook: Linux corre dentro de una red virtual, así que puede que no vea los dispositivos reales de tu red.")
+    if len(rows) <= 1:
+        notes.append("Solo aparece este equipo: los demás pueden estar apagados o el router puede aislar a los clientes entre sí.")
+    if len(rows) > MAX_DEVICES_SHOWN:
+        notes.append(f"Muestro {MAX_DEVICES_SHOWN} de {len(rows)}.")
+    named = sum(1 for r in rows if r["nombre"])
+    out = {
+        "red": str(net),
+        "total": len(rows),
+        "dispositivos": rows[:MAX_DEVICES_SHOWN],
+        "summary": f"{len(rows)} dispositivo{'s' if len(rows) != 1 else ''} en {net} ({named} con nombre)",
+    }
+    if notes:
+        out["nota"] = " ".join(notes)
+    return out
+
+
 S = lambda d: {"type": "string", "description": d}  # noqa: E731
 I = lambda d: {"type": "integer", "description": d}  # noqa: E731
 
@@ -396,6 +706,7 @@ TOOLS = {
     "list_directory": (t_list_directory, "Ver una carpeta", "Archivos y carpetas (dentro de tu carpeta personal).", "read", {"path": S("Ruta, ej. Descargas.")}),
     "open_app": (t_open_app, "Abrir una app", "Abre una app de la lista permitida en la configuración.", "confirm", {"name": S("Nombre de la app en la lista.")}),
     "kill_process": (t_kill_process, "Cerrar un proceso", "Cierra un proceso de tu usuario por su pid.", "confirm", {"pid": I("Id del proceso.")}),
+    "scan_network": (t_scan_network, "Dispositivos en tu red", "Qué hay conectado a la misma red (IP, MAC y el nombre que cada uno anuncia). Solo mira; no ataca ni escanea puertos.", "read", {}),
 }
 
 REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"]}

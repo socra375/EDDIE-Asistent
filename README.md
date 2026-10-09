@@ -1033,6 +1033,8 @@ Python si falta (winget), el agente, lo vincula y lo deja **en segundo plano arr
 terminal ni administrador, con desinstalador en Configuración → Aplicaciones (detalles en `docs/eddie-prime-agente.md`). En el
 Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre mientras Linux está encendido.
 
+**Qué hay en tu red**: pregúntale a Eddie «¿qué dispositivos hay conectados en mi red?» (scan_network, en el PC o el Chromebook vinculado): IP, MAC y el nombre que anuncia cada uno, solo de la red privada a la que estás conectado. Sin ataques ni escaneo de puertos; detalles en `docs/eddie-prime-agente.md`.
+
 **Varios equipos**: puedes vincular el PC y el Chromebook a la vez; Eddie los distingue por nombre y sistema («abre la calculadora
 en el PC», «¿cuánto disco queda en el Chromebook?») y, si hay varios y no dices cuál, pregunta en vez de adivinar.
 

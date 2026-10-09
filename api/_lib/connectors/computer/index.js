@@ -93,7 +93,7 @@ export default {
       declaration: {
         name: 'computer_check',
         description:
-          'Consulta un equipo del usuario (su PC con Windows, Chromebook… con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram. Con varios equipos vinculados, indica cuál en device (nombre; computer_list los muestra). Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}. Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
+          'Consulta un equipo del usuario (su PC con Windows, Chromebook… con el agente EDDIE Prime), aunque hable desde el teléfono, Telegram. Con varios equipos vinculados, indica cuál en device (nombre; computer_list los muestra). Herramientas habituales de solo lectura: system_summary (resumen general), disk_usage {path}, memory_usage, cpu_usage, battery_status, top_processes {sort, limit}, network_info, uptime, list_directory {path}, scan_network (qué dispositivos hay en la red de ese equipo: IP, MAC y nombre que anuncia cada uno). Si una no existe, el error trae la lista real. Responde con los datos, sin inventar.',
         parameters: {
           type: 'OBJECT',
           properties: { tool: { type: 'STRING', description: 'Nombre de la herramienta del equipo, ej. "disk_usage".' }, ...COMMON_ARGS },
