@@ -11,7 +11,7 @@ const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
 const MAX_SYSTEM_LENGTH = 12000;
 const MEMORY_CATEGORIES = new Set(['profile', 'preferences', 'projects', 'decisions', 'knowledge', 'context']);
-const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
+const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'cerebras', 'openrouter']);
 
 class ValidationError extends Error {}
 
@@ -35,7 +35,7 @@ function sanitizeRequest(body) {
 
   const provider = body.provider;
   if (!ALLOWED_PROVIDERS.has(provider)) {
-    throw new ValidationError('El proveedor debe ser "gemini", "claude", "groq" u "openrouter".');
+    throw new ValidationError('El proveedor debe ser "gemini", "claude", "groq", "cerebras" u "openrouter".');
   }
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {

@@ -14,7 +14,7 @@ import { businessBlock } from '../business/context.js';
 import { driveBlock } from '../drive/context.js';
 import { parseLearnCommand } from '../../../src/services/commands.js';
 
-const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'openrouter']);
+const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'cerebras', 'openrouter']);
 
 export async function askEddie({ link, text, images = [], note }) {
   const { userId } = link;

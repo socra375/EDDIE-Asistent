@@ -1,7 +1,7 @@
 // Turns a conversation into the short note Eddie keeps (see recall.js). Uses
 // whichever AI provider the server has a key for, Gemini first (the same one
 // that makes the embeddings), so it works without the user picking anything.
-import { callGemini, callGroq, callOpenRouter, defaultModelFor } from '../providers.js';
+import { callCerebras, callGemini, callGroq, callOpenRouter, defaultModelFor } from '../providers.js';
 
 const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 1200;
@@ -20,6 +20,7 @@ const SYSTEM = [
 const PROVIDERS = [
   { id: 'gemini', env: 'GEMINI_API_KEY', call: callGemini },
   { id: 'groq', env: 'GROQ_API_KEY', call: callGroq },
+  { id: 'cerebras', env: 'CEREBRAS_API_KEY', call: callCerebras },
   { id: 'openrouter', env: 'OPENROUTER_API_KEY', call: callOpenRouter },
 ];
 

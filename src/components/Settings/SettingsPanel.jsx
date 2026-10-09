@@ -35,6 +35,10 @@ const PROVIDER_MODELS = {
     { value: '', label: 'openai/gpt-oss-120b (predeterminado, gratis)' },
     { value: 'openai/gpt-oss-20b', label: 'openai/gpt-oss-20b (más rápido)' },
   ],
+  cerebras: [
+    { value: '', label: 'llama-3.3-70b (predeterminado, gratis, muy rápido)' },
+    { value: 'llama3.1-8b', label: 'llama3.1-8b (más rápido, menos capaz)' },
+  ],
   openrouter: [
     { value: '', label: 'openrouter/free (predeterminado, gratis: elige un modelo gratuito)' },
     { value: 'openrouter/auto', label: 'openrouter/auto (elige el mejor modelo; gasta créditos)' },
@@ -44,6 +48,16 @@ const PROVIDER_MODELS = {
 // OpenRouter has hundreds of models, so besides the two above the user can
 // type any model id from openrouter.ai/models.
 const CUSTOM_MODEL = '__custom__';
+
+// Who answers in the chosen provider's place when it fails (see FALLBACKS in
+// api/_lib/providers.js) — kept in the same order so the message below
+// matches what actually happens.
+const FALLBACK_ORDER = [
+  { provider: 'groq', name: 'Groq' },
+  { provider: 'cerebras', name: 'Cerebras' },
+  { provider: 'gemini', name: 'Gemini' },
+  { provider: 'openrouter', name: 'OpenRouter' },
+];
 
 const CLOUD_VOICE = '__elevenlabs__';
 
@@ -128,7 +142,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const knownModels = PROVIDER_MODELS[settings.provider];
   const isCustomModel =
     settings.provider === 'openrouter' && (customModel || (Boolean(settings.model) && !knownModels.some((m) => m.value === settings.model)));
-  const backups = [health?.groq && settings.provider !== 'groq' && 'Groq', health?.openrouter && settings.provider !== 'openrouter' && 'OpenRouter'].filter(Boolean);
+  const backups = FALLBACK_ORDER.filter((f) => f.provider !== settings.provider && health?.[f.provider]).map((f) => f.name);
   const onFreeOpenRouter = settings.provider === 'openrouter' && (!settings.model || settings.model.endsWith(':free') || settings.model === 'openrouter/free');
 
   function chooseVoice(value) {
@@ -156,7 +170,7 @@ export default function SettingsPanel({ onOpenConversation }) {
   const dateFormatter = new Intl.DateTimeFormat(settings.language, { dateStyle: 'medium', timeStyle: 'short' });
 
   const activeSection = SECTIONS.find((x) => x.id === section);
-  const engineLabel = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter' }[settings.provider] || settings.provider;
+  const engineLabel = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter' }[settings.provider] || settings.provider;
   const providerOk = !health || health[settings.provider];
 
   function handleReset() {
@@ -249,6 +263,7 @@ export default function SettingsPanel({ onOpenConversation }) {
               <option value="gemini">Google Gemini Flash</option>
               <option value="claude">Anthropic Claude</option>
               <option value="groq">Groq (gratis y rápido)</option>
+              <option value="cerebras">Cerebras (gratis y muy rápido)</option>
               <option value="openrouter">OpenRouter (cientos de modelos, con opción gratis)</option>
             </select>
           </label>
@@ -292,6 +307,8 @@ export default function SettingsPanel({ onOpenConversation }) {
             <span className={`health-dot ${health.gemini ? 'health-dot--ok' : 'health-dot--off'}`} /> Gemini {health.gemini ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.claude ? 'health-dot--ok' : 'health-dot--off'}`} /> Claude {health.claude ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.groq ? 'health-dot--ok' : 'health-dot--off'}`} /> Groq {health.groq ? 'configurado' : 'no configurado'}
+            <span className={`health-dot ${health.cerebras ? 'health-dot--ok' : 'health-dot--off'}`} /> Cerebras{' '}
+            {health.cerebras ? 'configurado' : 'no configurado'}
             <span className={`health-dot ${health.openrouter ? 'health-dot--ok' : 'health-dot--off'}`} /> OpenRouter{' '}
             {health.openrouter ? 'configurado' : 'no configurado'}
           </div>
@@ -300,7 +317,7 @@ export default function SettingsPanel({ onOpenConversation }) {
           <p className="settings-placeholder">
             {backups.length
               ? `Respaldo activo: si el proveedor elegido falla antes de responder (límite gratuito, saturación o error), responde ${backups.join(' y, si también falla, ')}.`
-              : 'Sin respaldo: agrega GROQ_API_KEY u OPENROUTER_API_KEY en las variables de entorno de Vercel para que otro proveedor responda cuando el elegido falle.'}
+              : 'Sin respaldo: agrega GROQ_API_KEY, CEREBRAS_API_KEY, GEMINI_API_KEY u OPENROUTER_API_KEY en las variables de entorno de Vercel para que otro proveedor responda cuando el elegido falle.'}
           </p>
         )}
         {onFreeOpenRouter && (

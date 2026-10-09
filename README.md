@@ -18,7 +18,7 @@ Navegador (React + Vite)
 Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
-   ├── api/_lib/providers.js → llama a Gemini, Claude, Groq u OpenRouter (con respaldo automático)
+   ├── api/_lib/providers.js → llama a Gemini, Claude, Groq, Cerebras u OpenRouter (con respaldo automático)
    └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, Sonda local…)
    ▼
 Respuesta unificada { content, provider, model }
@@ -98,16 +98,25 @@ exclusivamente desde variables de entorno del backend:
   solicitudes por minuto y 50 al día; con 10 USD de créditos, comprados una
   sola vez, el límite diario sube a 1.000). En Configuración → Proveedor de
   IA puedes elegir `openrouter/auto` o escribir el id de cualquier modelo de
-  https://openrouter.ai/models. También funciona como **respaldo**: si el
-  proveedor elegido falla, responde primero Groq y, si tampoco puede,
-  OpenRouter. `OPENROUTER_MODEL` (opcional) cambia el modelo predeterminado.
+  https://openrouter.ai/models. También funciona como **respaldo**: es el
+  último recurso de la cadena (ver más abajo). `OPENROUTER_MODEL` (opcional)
+  cambia el modelo predeterminado.
 - `GROQ_API_KEY` — habilita Groq (modelo `openai/gpt-oss-120b`, gratis y muy rápido), como
-  proveedor elegible y como **respaldo automático**: si el proveedor elegido
-  falla antes de empezar a responder (límite gratuito, saturación, tiempo
-  agotado o clave faltante), Groq responde en su lugar y la respuesta lleva
-  la etiqueta "vía Groq". `GROQ_MODEL` (opcional) cambia el modelo de Groq
-  sin tocar el código; si Groq retira el modelo, Eddie consulta la lista de
-  modelos vigentes de Groq y cambia solo.
+  proveedor elegible y como **primer respaldo automático** (ver más abajo).
+  `GROQ_MODEL` (opcional) cambia el modelo de Groq sin tocar el código; si
+  Groq retira el modelo, Eddie consulta la lista de modelos vigentes de Groq
+  y cambia solo.
+- `CEREBRAS_API_KEY` — habilita Cerebras (https://cloud.cerebras.ai, modelo
+  `llama-3.3-70b` por defecto), gratis y muy rápido (su infraestructura está
+  hecha para inferencia veloz). Proveedor elegible y segundo respaldo
+  automático. `CEREBRAS_MODEL` (opcional) cambia el modelo.
+
+**Respaldo automático**: si el proveedor que elegiste falla antes de empezar a
+responder (límite gratuito agotado, saturación, tiempo agotado o clave
+faltante), Eddie prueba el siguiente de esta lista, saltando el que ya
+elegiste y cualquiera sin clave configurada: **Groq → Cerebras → Gemini →
+OpenRouter**. La respuesta trae la etiqueta "vía <proveedor>" para que sepas
+cuál contestó. Si los cuatro fallan, el error del primero es el que ves.
   La misma clave activa el **reconocimiento de voz con Whisper**: Eddie
   graba lo que dices y lo transcribe en Groq con `whisper-large-v3-turbo`
   (más preciso que el reconocimiento del navegador). `GROQ_STT_MODEL`
@@ -663,8 +672,8 @@ base de datos del proyecto?". Funciona en la app y en Telegram, y solo con la se
   "Recordar mis conversaciones" (también se apaga con el interruptor de Memoria o con el conector en
   Conectores). Se guardan como máximo 300.
 
-Necesita `GEMINI_API_KEY` (la misma de siempre, para los vectores y los resúmenes; si falta, resume con Groq u
-OpenRouter pero no puede crear vectores), la base de datos de Neon y la migración
+Necesita `GEMINI_API_KEY` (la misma de siempre, para los vectores y los resúmenes; si falta, resume con Groq,
+Cerebras u OpenRouter pero no puede crear vectores), la base de datos de Neon y la migración
 `db/migrations/0004_episodes.sql` (activa la extensión **pgvector**, gratis en Neon: en el editor SQL de
 Neon, pega y ejecuta el archivo). Opcional: `GEMINI_EMBEDDING_MODEL` si Google cambia el nombre del modelo
 (por defecto `gemini-embedding-001`).
@@ -786,10 +795,10 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
   silencio). En Telegram, si Eddie no alcanza a responder en ~54 s, te avisa «tardé demasiado» (y no te descuenta la petición)
   en vez de quedarse mudo.
 - **Respuesta vacía de Gemini** («Gemini no devolvió contenido utilizable»): Eddie ya no se rinde al primer intento. Reintenta tal cual; si sigue vacía, reintenta con el
-  «pensamiento» normal del modelo (el mínimo a veces lo deja sin nada que decir) y por último sin herramientas; solo entonces pasa a Groq/OpenRouter. Si aun así falla,
+  «pensamiento» normal del modelo (el mínimo a veces lo deja sin nada que decir) y por último sin herramientas; solo entonces pasa al respaldo automático (Groq, Cerebras, OpenRouter). Si aun así falla,
   el mensaje trae el detalle técnico (modelo, motivo y lo que llegó) y el registro de Vercel guarda `[callGemini] empty response …` con el intento, el pensamiento, si había herramientas y el último dato recibido.
   También se leen mejor las respuestas en streaming: saltos de línea `\r\n`, un último evento sin su línea en blanco y cuerpos JSON simples; y un **error dentro de un stream que ya empezó**
-  (p. ej. «el modelo está sobrecargado», que Gemini manda con estado 200) se reintenta una vez y, si persiste, se muestra tal cual (y pasa a Groq/OpenRouter) en vez de contarse como «vacío».
+  (p. ej. «el modelo está sobrecargado», que Gemini manda con estado 200) se reintenta una vez y, si persiste, se muestra tal cual (y pasa al respaldo automático) en vez de contarse como «vacío».
 
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
@@ -935,7 +944,7 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
   y negocio. Importar otra vez solo lee los archivos nuevos o modificados, y reemplaza sus notas en vez de repetirlas. **Deshacer
   importación** quita las notas que vinieron de esa carpeta y borra lo que ella creó (y nadie más tocó). Tabla `drive_imports`
   (`db/migrations/0021_drive_imports.sql`): solo nombres y qué se hizo con cada archivo, no su texto. Necesita **Carpetas de Drive**
-  y **Google Docs y Sheets** conectados y una clave de IA en Vercel (Gemini, Groq u OpenRouter).
+  y **Google Docs y Sheets** conectados y una clave de IA en Vercel (Gemini, Groq, Cerebras u OpenRouter).
 - **Límites**: busca por *nombre de archivo*, no por lo que dice dentro. Solo lee Google Docs y Hojas: los PDF, Word, Excel y
   presentaciones aparecen en la lista pero no se leen. Una búsqueda revisa hasta 30 carpetas; si no llega a todas, lo avisa.
 
@@ -1155,8 +1164,8 @@ sirven en el navegador: `/?modulo=tareas|hoy|chat|memoria|conectores|configuraci
 
 1. Sube el repositorio a GitHub.
 2. Importa el repo en Vercel.
-3. En "Environment Variables" añade `GEMINI_API_KEY`, `GROQ_API_KEY` y/o
-   `ANTHROPIC_API_KEY`
+3. En "Environment Variables" añade `GEMINI_API_KEY`, `GROQ_API_KEY`,
+   `CEREBRAS_API_KEY` y/o `ANTHROPIC_API_KEY`
    y, si vas a habilitar el login con Google, también `DATABASE_URL`,
    `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (con tu
    dominio de Vercel) y `APP_URL` (el mismo dominio).

@@ -10,6 +10,7 @@ export default function handler(req, res) {
     gemini: Boolean(process.env.GEMINI_API_KEY),
     claude: Boolean(process.env.ANTHROPIC_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
+    cerebras: Boolean(process.env.CEREBRAS_API_KEY),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
     // Voices to choose from in Configuración (ELEVENLABS_VOICE_ID + ELEVENLABS_VOICES).

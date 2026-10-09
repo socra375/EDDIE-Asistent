@@ -15,7 +15,7 @@ import ConfirmCard from './ConfirmCard';
 import StepTrace from './StepTrace';
 import './Chat.css';
 
-const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', openrouter: 'OpenRouter', probe: 'Sonda local' };
+const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', probe: 'Sonda local' };
 
 // Quick starts on an empty chat: some ask right away, others open a skill.
 const QUICK_STARTS = [
