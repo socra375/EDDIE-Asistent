@@ -1017,7 +1017,9 @@ directamente desde el navegador de ese mismo equipo.
    puede acceder a apps o dispositivos de este equipo, acepta.
 3. Eddie **no depende** de la sonda: el botón **Sonda local** del chat arranca apagado en cada carga (no se guarda),
    y la voz, el anillo y la palabra clave nunca le hablan a ella. Pulsa el botón (OFF → ON) para mandarle lo que
-   **escribas** en el chat (hasta 90 s de espera; la respuesta muestra las herramientas que usó); mientras esté en ON
+   **escribas sobre el equipo** (disco, memoria, batería, procesos, red…; hasta 90 s de espera; la respuesta muestra las
+   herramientas que usó) — **lo demás lo sigue contestando Eddie con normalidad** (la sonda solo conoce la máquina y, si no, contestaría
+   «solo puedo ver el disco o información de la PC»); mientras esté en ON
    aparece «SONDA · ON» en el encabezado. Opcional: en la tarjeta, activa que las preguntas claras sobre el hardware
    («disco duro», RAM, CPU, batería) vayan solas a la sonda (si no responde en 8 s, contesta Eddie). Todo lo demás
    sobre tu equipo lo responde EDDIE Prime desde la nube.

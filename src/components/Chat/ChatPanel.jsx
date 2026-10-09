@@ -235,8 +235,8 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
             aria-pressed={probeOn}
             title={
               probeOn
-                ? 'Apagar: los mensajes vuelven a Eddie en la nube'
-                : `Enviar lo que escribas aquí a la Sonda local de este equipo (${probeConfig.url}/chat). Arranca apagado en cada carga.${autoDetectReady(probeConfig) ? ' Apagado, solo las preguntas claras sobre el hardware (disco duro, RAM, CPU, batería) van a la sonda.' : ''}`
+                ? 'Apagar: todos los mensajes vuelven a Eddie en la nube'
+                : `Enviar las preguntas sobre este equipo (disco, memoria, batería, procesos…) a la Sonda local (${probeConfig.url}/chat); lo demás lo contesta Eddie. Arranca apagado en cada carga.${autoDetectReady(probeConfig) ? ' Apagado, solo las preguntas claras sobre el hardware (disco duro, RAM, CPU, batería) van a la sonda.' : ''}`
             }
           >
             <Icon name="monitor" size={14} />
@@ -261,7 +261,7 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
         <div className="chat-panel__options">
           {probeOn ? (
             <p className="chat-panel__hint chat-panel__hint--probe" role="status">
-              Modo Sonda local: lo que escribas aquí va a {probeConfig.url}/chat (tu equipo), no a Eddie. Apágalo para volver a hablar con Eddie.
+              Modo Sonda local: lo que preguntes sobre tu equipo (disco, memoria, batería, procesos…) va a {probeConfig.url}/chat. Todo lo demás lo sigue contestando Eddie con normalidad.
             </p>
           ) : skill.actions ? (
             <label className="chat-option">

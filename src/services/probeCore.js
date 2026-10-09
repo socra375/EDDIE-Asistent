@@ -176,3 +176,26 @@ export function looksLikeSystemQuestion(text) {
   const t = plain(text);
   return t.length >= 6 && SYSTEM_RE.test(t);
 }
+
+// Questions the probe can have something to say about, for when the «Sonda local» switch is ON.
+// Wider than looksLikeSystemQuestion (here a wrong "yes" only sends to the probe what the
+// switch already sends, while a wrong "no" sends it to Eddie, who answers anything): the probe
+// only knows the machine (disk, memory, CPU, battery, processes, network…), so anything that is
+// not about it — the weather, a letter, a calculation — goes to Eddie in the cloud as usual.
+const MACHINE_RE = new RegExp(
+  '\\b(' +
+    [
+      'disco', 'discos', 'ssd', 'hdd', 'almacenamiento', 'espacio', 'gigas?', 'gb',
+      'ram', 'memoria', 'cpu', 'procesador', 'nucleos?', 'bateria', 'carga', 'cargando',
+      'uptime', 'encendid[oa]', 'temperatura', 'ventilador',
+      'procesos?', 'consume[ns]?', 'consumiendo', 'lento', 'lenta',
+      'red', 'wi-?fi', 'ip', 'internet del equipo',
+      'sistema', 'equipo', 'computador[a]?', 'ordenador', 'pc', 'chromebook', 'laptop', 'portatil', 'linux',
+      'carpeta', 'archivos?', 'descargas', 'terminal',
+    ].join('|') +
+    ')\\b',
+);
+
+export function looksLikeMachineQuestion(text) {
+  return MACHINE_RE.test(plain(text));
+}

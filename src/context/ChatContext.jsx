@@ -29,7 +29,7 @@ import { HUD_EVENT } from '../services/hudBridge';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { IMAGE_PROMPT } from '../services/images';
-import { askProbe, looksLikeSystemQuestion, PROBE_AUTO_TIMEOUT_MS, stepsFromTools } from '../services/probeCore';
+import { askProbe, looksLikeMachineQuestion, looksLikeSystemQuestion, PROBE_AUTO_TIMEOUT_MS, stepsFromTools } from '../services/probeCore';
 import { autoDetectReady, getProbeConfig } from '../services/probe';
 import { markVoice } from '../services/voiceTiming';
 import { getMemory } from '../utils/storage';
@@ -256,7 +256,9 @@ export function ChatProvider({ children }) {
       // if the user turned that on, for clear questions about the machine's
       // hardware (and then the cloud answers if the probe doesn't in time).
       const probeConfig = getProbeConfig();
-      const forcedProbe = probe && !tag && !images.length;
+      // With the switch on, what is not about the machine (the weather, a letter, a sum…) still goes to
+      // Eddie in the cloud: the probe only knows the computer and would answer "I can only see the disk".
+      const forcedProbe = probe && !tag && !images.length && looksLikeMachineQuestion(trimmed);
       const autoProbe = !forcedProbe && !tag && !images.length && autoDetectReady(probeConfig) && looksLikeSystemQuestion(trimmed);
       const viaProbe = forcedProbe || autoProbe;
 
