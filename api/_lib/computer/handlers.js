@@ -1,5 +1,5 @@
 // /api/connectors/computer/*. Two audiences:
-//   the app (signed-in user):   pair-code, unlink, test
+//   the app (signed-in user):   pair-code, installer (the one-click Windows installer, with a code inside), unlink, test
 //   the agent (bearer token):   agent/pair (with the code), agent/hello,
 //                               agent/next, agent/result
 // The agent's token is created at pairing, shown to it once and kept only as
@@ -9,6 +9,7 @@ import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { plainText, sanitizeCatalog } from './catalog.js';
 import { consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, deviceByUser, finishJob, takeJob, updateCatalog } from './store.js';
 import { ntfyBase, runOnComputer } from './run.js';
+import { INSTALLER_CODE_MINUTES, INSTALLER_FILENAME, installerOrigin, windowsInstaller } from './installer.js';
 
 const MAX_RESULT_CHARS = 16_000;
 const CODE_RE = /^[A-Z2-9]{8}$/;
@@ -76,6 +77,11 @@ export async function handleComputerRoute({ method, path = [], cookies = {}, hea
   if (action === 'pair-code') {
     if (!mayPair(user)) return { status: 403, json: { error: 'Solo el dueño de Eddie puede vincular un equipo.' } };
     return { status: 200, json: await createPairCode(user.id) };
+  }
+  if (action === 'installer') {
+    if (!mayPair(user)) return { status: 403, json: { error: 'Solo el dueño de Eddie puede vincular un equipo.' } };
+    const { code, minutes } = await createPairCode(user.id, INSTALLER_CODE_MINUTES);
+    return { status: 200, json: { filename: INSTALLER_FILENAME, content: windowsInstaller({ code, origin: installerOrigin(headers) }), minutes } };
   }
   if (action === 'unlink') {
     await deleteDevice(user.id);

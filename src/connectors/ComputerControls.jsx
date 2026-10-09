@@ -51,6 +51,18 @@ function Command({ text }) {
   );
 }
 
+// Hands a text file to the browser's downloads (the installer is generated on the server, per user).
+function downloadText(filename, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 // EDDIE Prime's card: link the computer with a one-time code (three
 // commands to paste in the Linux terminal), then test it from the cloud or
 // unlink it. While a code is showing the card refreshes quietly and flips to
@@ -60,15 +72,17 @@ export default function ComputerControls({ connector, signedIn, onConnect, onCha
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [test, setTest] = useState(null);
+  // The Windows installer that was just downloaded: { filename, minutes }.
+  const [installer, setInstaller] = useState(null);
   const connected = connector.status === 'connected';
   const device = connector.details?.device;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   useEffect(() => {
-    if (!pairing || connected) return undefined;
+    if ((!pairing && !installer) || connected) return undefined;
     const timer = window.setInterval(() => onChanged(true), POLL_MS);
     return () => window.clearInterval(timer);
-  }, [pairing, connected, onChanged]);
+  }, [pairing, installer, connected, onChanged]);
 
   async function run(action, label) {
     setBusy(label);
@@ -95,6 +109,37 @@ export default function ComputerControls({ connector, signedIn, onConnect, onCha
       </>
     );
   }
+
+  async function downloadInstaller() {
+    const data = await run('installer', 'installer');
+    if (!data) return;
+    downloadText(data.filename, data.content);
+    setInstaller({ filename: data.filename, minutes: data.minutes });
+    setPairing(null);
+  }
+
+  const installerButton = (
+    <button type="button" className="btn btn-primary" disabled={Boolean(busy)} onClick={downloadInstaller}>
+      <Icon name="monitor" size={14} /> {busy === 'installer' ? 'Preparando…' : 'Descargar instalador para Windows'}
+    </button>
+  );
+
+  const installerSteps = installer && (
+    <ol className="computer__steps">
+      <li>
+        Abre <code>{installer.filename}</code> (está en tu carpeta de Descargas) con doble clic. Es un archivo de texto: puedes abrirlo con el Bloc de notas y leer
+        qué hace antes de ejecutarlo.
+      </li>
+      <li>
+        Si Windows dice «Windows protegió tu PC», pulsa <strong>Más información → Ejecutar de todas formas</strong> (el instalador no está firmado).
+      </li>
+      <li>
+        Espera a que diga <strong>Listo</strong>: instala lo que falte, se vincula y queda en segundo plano, arrancando solo cada vez que inicias sesión. Para quitarlo:
+        Configuración de Windows → Aplicaciones → EDDIE Prime.
+      </li>
+      <li>El código del instalador dura {installer.minutes} minutos y sirve una vez: si caduca, descarga otro. Por ahora solo hay un equipo vinculado a la vez: este reemplaza al anterior.</li>
+    </ol>
+  );
 
   const steps = pairing && (
     <ol className="computer__steps">
@@ -146,11 +191,15 @@ export default function ComputerControls({ connector, signedIn, onConnect, onCha
             disabled={Boolean(busy)}
             onClick={async () => {
               const data = await run('pair-code', 'pair');
-              if (data) setPairing(data);
+              if (data) {
+                setPairing(data);
+                setInstaller(null);
+              }
             }}
           >
-            Vincular otro equipo
+            Vincular otro equipo (Linux)
           </button>
+          {installerButton}
           <button
             type="button"
             className="btn btn-danger"
@@ -171,6 +220,7 @@ export default function ComputerControls({ connector, signedIn, onConnect, onCha
             <p>{test.ok ? `Tu equipo respondió en ${(test.ms / 1000).toFixed(1)} s: ${test.result?.summary || 'listo'}.` : test.error}</p>
           </div>
         )}
+        {installerSteps}
         {steps}
         {error && <p className="connectors__warning" role="alert">{error}</p>}
       </div>
@@ -179,23 +229,36 @@ export default function ComputerControls({ connector, signedIn, onConnect, onCha
 
   return (
     <div className="computer">
-      {pairing ? (
+      {pairing || installer ? (
         <>
+          {installerSteps}
           {steps}
           <p className="connector__meta">Esta tarjeta se actualiza sola cuando el equipo queda vinculado.</p>
         </>
       ) : (
-        <button
-          type="button"
-          className="btn btn-primary connector__action"
-          disabled={Boolean(busy)}
-          onClick={async () => {
-            const data = await run('pair-code', 'pair');
-            if (data) setPairing(data);
-          }}
-        >
-          <Icon name="monitor" size={14} /> Vincular un equipo
-        </button>
+        <>
+          <p className="connector__meta">
+            <strong>Windows:</strong> descarga el instalador, ábrelo y listo: se queda en segundo plano y arranca solo. <strong>Linux o Chromebook:</strong> se vincula con tres comandos en la terminal (en el Chromebook, Linux se apaga al cerrar la terminal; ahí
+            conviene más la extensión «Tu navegador»).
+          </p>
+          <div className="probe__actions">
+            {installerButton}
+            <button
+              type="button"
+              className="btn"
+              disabled={Boolean(busy)}
+              onClick={async () => {
+                const data = await run('pair-code', 'pair');
+                if (data) {
+                setPairing(data);
+                setInstaller(null);
+              }
+              }}
+            >
+              Vincular con comandos (Linux)
+            </button>
+          </div>
+        </>
       )}
       {error && <p className="connectors__warning" role="alert">{error}</p>}
     </div>

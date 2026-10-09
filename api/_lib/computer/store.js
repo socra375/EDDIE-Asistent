@@ -9,13 +9,14 @@ const QUEUE_SECONDS = 60;
 
 export const hashToken = (token) => createHash('sha256').update(String(token)).digest('hex');
 
-export async function createPairCode(userId) {
+// `minutes`: how long the code lasts (the one-click installer's lasts longer: it is downloaded, then run).
+export async function createPairCode(userId, minutes = PAIR_MINUTES) {
   const sql = getDb();
   const code = newLinkCode();
-  const expiresAt = new Date(Date.now() + PAIR_MINUTES * 60000).toISOString();
+  const expiresAt = new Date(Date.now() + minutes * 60000).toISOString();
   await sql`delete from computer_pair_codes where user_id = ${userId} or expires_at < now()`;
   await sql`insert into computer_pair_codes (code, user_id, expires_at) values (${code}, ${userId}, ${expiresAt})`;
-  return { code, minutes: PAIR_MINUTES };
+  return { code, minutes };
 }
 
 // The user who made `code` (consuming it), or null when unknown/used/expired.
