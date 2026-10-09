@@ -32,10 +32,16 @@ const GROQ_DEFAULT_MODEL = 'openai/gpt-oss-120b';
 // with any model id from openrouter.ai/models.
 const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 
+// Cerebras' free tier (cloud.cerebras.ai) is generous and very fast; the
+// default is its largest general model with tool support. CEREBRAS_MODEL
+// overrides it (Cerebras' lineup changes over time, like Groq's).
+const CEREBRAS_DEFAULT_MODEL = 'llama-3.3-70b';
+
 export function defaultModelFor(provider) {
   if (provider === 'claude') return CLAUDE_DEFAULT_MODEL;
   if (provider === 'groq') return process.env.GROQ_MODEL || GROQ_DEFAULT_MODEL;
   if (provider === 'openrouter') return process.env.OPENROUTER_MODEL || OPENROUTER_DEFAULT_MODEL;
+  if (provider === 'cerebras') return process.env.CEREBRAS_MODEL || CEREBRAS_DEFAULT_MODEL;
   return GEMINI_DEFAULT_MODEL;
 }
 
@@ -771,6 +777,58 @@ export function callOpenRouter(args) {
   return callOpenAICompatible(OPENROUTER_FLAVOR, args);
 }
 
+// ---- Cerebras ----
+// One key, free tier with very fast inference (cloud.cerebras.ai). Simpler
+// than Groq's flavor: no proactive token-budget trimming (its free-tier
+// limits are more generous), just a clear message when a limit is hit, and
+// the same "drop tools and retry" escape hatch as OpenRouter for whatever
+// model ends up not supporting them.
+const CEREBRAS_MAX_OUTPUT_TOKENS = 4096;
+const CEREBRAS_MAX_TOOL_ROUNDS = 4;
+
+function cerebrasError(status, data, model) {
+  const raw = data?.error?.message || data?.message || '';
+  let message;
+  if (status === 401) {
+    message = 'Cerebras rechazó la clave: CEREBRAS_API_KEY no es válida o fue revocada. Revísala en Vercel.';
+  } else if (status === 429) {
+    message = 'Se alcanzó el límite gratuito de Cerebras por ahora. Espera un momento y vuelve a intentarlo.';
+  } else if (status === 404) {
+    message = `Cerebras no tiene disponible el modelo "${model}". Configura CEREBRAS_MODEL en Vercel con un modelo vigente (ver cloud.cerebras.ai/models).`;
+  } else {
+    message = raw || `Cerebras respondió con estado ${status}.`;
+  }
+  const err = new Error(message);
+  err.code = 'PROVIDER_ERROR';
+  err.status = status;
+  return err;
+}
+
+const CEREBRAS_FLAVOR = {
+  id: 'cerebras',
+  name: 'Cerebras',
+  envVar: 'CEREBRAS_API_KEY',
+  url: 'https://api.cerebras.ai/v1/chat/completions',
+  maxToolRounds: CEREBRAS_MAX_TOOL_ROUNDS,
+  requestBody(model, chat, tools) {
+    const body = { model, messages: chat, stream: true, temperature: 0.7, max_tokens: CEREBRAS_MAX_OUTPUT_TOKENS };
+    if (tools?.length) body.tools = tools;
+    return body;
+  },
+  async onHttpError({ status, data, state }) {
+    // A model with no tool support errors out instead of just ignoring them: answer without tools instead of failing.
+    if ((status === 400 || status === 404) && !state.toolsOff && /tool/i.test(data?.error?.message || '')) {
+      console.error(`[callCerebras] ${state.model} can't use tools — continuing without them`);
+      return { dropTools: true };
+    }
+    throw cerebrasError(status, data, state.model);
+  },
+};
+
+export function callCerebras(args) {
+  return callOpenAICompatible(CEREBRAS_FLAVOR, args);
+}
+
 function callSingleProvider({ provider, model, system, messages, toolset, onChunk }) {
   const resolvedModel = model || defaultModelFor(provider);
   if (provider === 'claude') {
@@ -786,6 +844,9 @@ function callSingleProvider({ provider, model, system, messages, toolset, onChun
   if (provider === 'openrouter') {
     return callOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
   }
+  if (provider === 'cerebras') {
+    return callCerebras({ apiKey: process.env.CEREBRAS_API_KEY, model: resolvedModel, system, messages, toolset, onChunk });
+  }
   const err = new Error(`Proveedor desconocido: ${provider}`);
   err.code = 'BAD_REQUEST';
   throw err;
@@ -796,9 +857,15 @@ function callSingleProvider({ provider, model, system, messages, toolset, onChun
 const FALLBACK_DEADLINE_MS = 40000;
 
 // Who can step in when the chosen provider fails, in order: Groq (fast),
-// then OpenRouter, each only if its key is set on the server.
+// then Cerebras (also fast, generous free tier), then Gemini (generous daily
+// quota even though it's likely the user's own primary — tried here too in
+// case they picked a different primary), then OpenRouter (the most
+// rate-limited free tier of the four) — each only if its key is set on the
+// server and it isn't the one the user already picked (see planProviders).
 const FALLBACKS = [
   { provider: 'groq', name: 'Groq', envVar: 'GROQ_API_KEY' },
+  { provider: 'cerebras', name: 'Cerebras', envVar: 'CEREBRAS_API_KEY' },
+  { provider: 'gemini', name: 'Gemini', envVar: 'GEMINI_API_KEY' },
   { provider: 'openrouter', name: 'OpenRouter', envVar: 'OPENROUTER_API_KEY' },
 ];
 
