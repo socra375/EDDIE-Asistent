@@ -7,7 +7,7 @@ import { abandonJob, createJob, devicesByUser, expireJob, jobState } from './sto
 import { argsFor, listForModel } from './catalog.js';
 
 const DEFAULT_NTFY = 'https://ntfy.sh';
-export const PICKUP_MS = 10_000; // the agent should take the job within this
+export const PICKUP_MS = 15_000; // the agent should take the job within this (its open connection is instant, its fallback look every 10 s)
 export const RESULT_MS = 15_000; // and answer within this (the chat stops waiting at ~30 s)
 const POLL_MS = 600;
 
@@ -24,15 +24,17 @@ export function ntfyBase(env = process.env) {
 }
 
 // The doorbell carries no data: just "there is work". The agent then fetches
-// the job from Eddie with its own token. Not cached, not forwarded to phones.
-export async function ringDoorbell(topic, { fetchImpl = globalThis.fetch, env = process.env } = {}) {
+// the job from Eddie with its own token. Never forwarded to phones. `cache`: ntfy keeps the
+// (empty) "job" message for a few hours so the agent can also pick it up by asking for the
+// recent ones, which still works when its open connection died quietly (EDDIE Prime does).
+export async function ringDoorbell(topic, { fetchImpl = globalThis.fetch, env = process.env, cache = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const res = await fetchImpl(`${ntfyBase(env)}/${topic}`, {
       method: 'POST',
       body: 'job',
-      headers: { Cache: 'no', Firebase: 'no' },
+      headers: { ...(cache ? {} : { Cache: 'no' }), Firebase: 'no' },
       signal: controller.signal,
     });
     return res.ok;
@@ -94,7 +96,7 @@ export async function resolveTool(user, toolName, given, { risk } = {}) {
 // the expected cases: computer off, agent stopped, too slow).
 export async function runOnDevice(device, tool, args, { fetchImpl, env, pickupMs = PICKUP_MS, resultMs = RESULT_MS, pollMs = POLL_MS, sleep = wait } = {}) {
   const jobId = await createJob(device.id, tool.name, args);
-  const rang = await ringDoorbell(device.topic, { fetchImpl, env });
+  const rang = await ringDoorbell(device.topic, { fetchImpl, env, cache: true });
   if (!rang) {
     await abandonJob(jobId);
     return { error: 'No pude avisarle a tu equipo (el servicio de aviso ntfy no respondió). Inténtalo de nuevo en un momento.' };

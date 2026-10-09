@@ -28,13 +28,18 @@ usa y tiene 100 horas de cómputo al mes. Un agente que preguntara a la base tod
 las 730 horas del mes. Con el timbre, la base solo trabaja cuando hay un trabajo de verdad.
 
 El timbre usa [ntfy](https://ntfy.sh), un servicio libre y gratuito. El tema es un nombre aleatorio de 24 caracteres
-que solo conocen Eddie y tu agente. El mensaje no lleva datos ("job"), no se guarda (`Cache: no`) y no se reenvía a
-teléfonos (`Firebase: no`). El trabajo y su resultado solo pasan entre tu agente y Eddie, con el token. Si prefieres
-tu propio servidor ntfy, ponlo en `EDDIE_NTFY_URL` (https).
+que solo conocen Eddie y tu agente. El mensaje no lleva datos ("job") y no se reenvía a teléfonos (`Firebase: no`). El trabajo y su
+resultado solo pasan entre tu agente y Eddie, con el token. Si prefieres tu propio servidor ntfy, ponlo en `EDDIE_NTFY_URL` (https).
+
+**Dos formas de recibir el aviso, a la vez** (desde el agente 1.3.0): una conexión abierta (`/json`, avisa al instante, con un
+tiempo máximo de silencio de 75 s y reconexión ante cualquier fallo) y, además, una consulta corta cada 10 s de los avisos recientes
+del tema (`/json?poll=1&since=<último>`). Una conexión abierta puede morir en silencio —un router, un antivirus o una VPN que la
+retienen— y entonces el aviso no llega; la consulta corta sí. Para eso el servidor deja que ntfy **guarde unas horas** el mensaje
+vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a ntfy por equipo, dentro de su límite gratuito.
 
 ## Tiempos
 
-- El agente tiene **10 s** para recoger el trabajo. Si no lo hace: «Tu equipo no responde: puede estar apagado,
+- El agente tiene **15 s** para recoger el trabajo. Si no lo hace: «Tu equipo no responde: puede estar apagado,
   dormido o sin el agente».
 - Después tiene **15 s** para responder. Lo normal es 1–3 s; la primera llamada tras un rato puede tardar algo más
   porque Vercel y Neon "despiertan".
