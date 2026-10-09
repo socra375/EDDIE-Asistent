@@ -309,12 +309,6 @@
   color: #fff;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  animation: boot-count 2.2s cubic-bezier(0.3, 0.1, 0.2, 1) calc(1.4s + var(--i) * 0.2s) forwards;
-  counter-reset: boot-n var(--boot-n);
-}
-
-.boot__num::after {
-  content: counter(boot-n) '%';
 }
 
 .boot__gauge em {
@@ -327,9 +321,9 @@
   display: block;
   height: 100%;
   background: var(--b);
-  transform: scaleX(0);
+  transform: scaleX(var(--v, 0));
   transform-origin: left;
-  animation: boot-grow 2.2s cubic-bezier(0.3, 0.1, 0.2, 1) calc(1.4s + var(--i) * 0.2s) forwards;
+  transition: transform 0.9s cubic-bezier(0.3, 0.1, 0.2, 1);
 }
 
 /* ---- Progress and hint ---- */
@@ -349,9 +343,9 @@
   display: block;
   height: 100%;
   background: linear-gradient(90deg, var(--b), #fff);
-  transform: scaleX(0);
+  transform: scaleX(var(--v, 0));
   transform-origin: left;
-  animation: boot-grow 3.2s cubic-bezier(0.35, 0.1, 0.25, 1) 0.6s forwards;
+  transition: transform 0.6s cubic-bezier(0.35, 0.1, 0.25, 1);
 }
 
 .boot__hint {
@@ -417,8 +411,6 @@
   to { opacity: 1; transform: none; }
 }
 @keyframes boot-type { to { clip-path: inset(0 0 0 0); } }
-@keyframes boot-count { from { --boot-n: 0; } to { --boot-n: 100; } }
-@keyframes boot-grow { to { transform: scaleX(1); } }
 
 /* ---- Small screens ---- */
 @media (max-width: 900px) {
@@ -458,6 +450,175 @@
   .boot__shock, .boot__sparks, .boot__scan { display: none; }
   .boot__halo { opacity: 0.6; }
   .boot__core { transform: none; }
-  .boot__bar i, .boot__gauge em i { transform: none; }
-  .boot__num::after { content: '100%'; }
+  .boot__bar i, .boot__gauge em i { transition: none; }
 }
+
+/* ---- The morning brief (Eddie reads it while the screen is up) ---- */
+.boot--brief {
+  --size: min(25vh, 30vw, 240px);
+}
+
+.boot--brief .boot__title {
+  font-size: clamp(1.2rem, 3.2vw, 2rem);
+}
+
+/* The progress bar sits low, under the cards. */
+.boot--brief .boot__bar {
+  bottom: 9vh;
+}
+
+.boot__date {
+  min-height: 1em;
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--bs);
+}
+
+.boot__caption {
+  min-height: 2.6em;
+  max-width: min(640px, 84vw);
+  margin: 0.4rem 0 0;
+  font-size: clamp(0.8rem, 1.7vw, 0.98rem);
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 0 10px var(--b);
+}
+
+.boot__sub,
+.boot__caption,
+.boot__date {
+  animation: boot-rise 0.6s ease-out both;
+}
+
+.boot__brief {
+  display: flex;
+  gap: 0.7rem;
+  width: min(760px, 90vw);
+  margin-top: 0.9rem;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.boot__card {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--bd) 60%, transparent);
+  background: rgba(1, 6, 9, 0.7);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.boot__card.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+.boot__card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--b);
+}
+
+.boot__big {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.boot__small {
+  margin: 0.15rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--bs);
+}
+
+.boot__list {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--bs);
+}
+
+.boot__list li {
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boot__list li span {
+  color: var(--b);
+  font-variant-numeric: tabular-nums;
+}
+
+.boot__more {
+  color: var(--bd) !important;
+}
+
+.boot__high {
+  padding: 0 0.3em;
+  border: 1px solid var(--b);
+  color: var(--b);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The day as a 24-hour line; each timed event is a block on it. */
+.boot__timeline {
+  position: relative;
+  height: 8px;
+  margin-top: 0.3rem;
+  background: color-mix(in srgb, var(--bd) 30%, transparent);
+}
+
+.boot__timeline i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--b);
+  box-shadow: 0 0 6px var(--b);
+}
+
+.boot__retry {
+  position: absolute;
+  bottom: 5vh;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--b);
+  background: rgba(1, 6, 9, 0.8);
+  color: #fff;
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .boot--brief {
+    --size: min(18vh, 40vw, 160px);
+  }
+
+  .boot__brief {
+    flex-direction: column;
+    width: min(360px, 88vw);
+  }
+
+  .boot__card { padding: 0.4rem 0.55rem; }
+  .boot__card:not(.is-on) { display: none; }
+  .boot__caption { font-size: 0.75rem; }
+}
+
