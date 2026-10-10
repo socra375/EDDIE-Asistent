@@ -9,7 +9,14 @@ import { limitImages, sanitizeImages } from './images.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
-const MAX_SYSTEM_LENGTH = 12000;
+// CORE_PERSONALITY alone (src/services/personality.js) is already close to
+// 16000; this must stay comfortably above CORE_PERSONALITY + every other
+// part buildSystemPrompt can add (memory, tasks, mode, language…), or the
+// cut lands inside CORE_PERSONALITY itself and silently drops whatever
+// follows it — including FORMAT_INSTRUCTION when it isn't first (it is,
+// precisely so a too-tight cap here can't take it, but nothing else in
+// CORE_PERSONALITY has that protection).
+const MAX_SYSTEM_LENGTH = 22000;
 const MEMORY_CATEGORIES = new Set(['profile', 'preferences', 'projects', 'decisions', 'knowledge', 'context']);
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'cerebras', 'openrouter']);
 

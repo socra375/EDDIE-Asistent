@@ -618,15 +618,18 @@ otra librería de estado, solo React Context + `useState`/`useMemo`.
   por defecto `DEFAULT_MODE`, más rápido, explicativo, tutor, técnico,
   investigación y creativo).
   `buildSystemPrompt({ mode, language, memory, query, tasks })` combina todo
-  eso en el texto que se envía como `system` a la API, con hasta 1400
+  eso en el texto que se envía como `system` a la API, con hasta 2000
   caracteres de memoria (solo lo relevante para `query`, el mensaje actual,
   ver `formatMemoryForPrompt`) y las 8 tareas pendientes más prioritarias. En el
-  peor caso queda por debajo de los 10000 caracteres que acepta el backend
-  (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`). `CORE_PERSONALITY` incluye
-  una instrucción de formato explícita: nada de asteriscos, guiones de
-  viñeta ni almohadillas (la interfaz no interpreta Markdown, así que se
-  verían como caracteres sueltos), y separar ideas en párrafos con línea
-  en blanco entre ellos — ver `RichText.jsx` para cómo se renderiza eso.
+  peor caso queda por debajo de los 22000 caracteres que acepta el backend
+  (`MAX_SYSTEM_LENGTH` en `api/_lib/handler.js`; `CORE_PERSONALITY` sola ya
+  pesa cerca de 16000, así que este tope tiene que quedar bien por encima de
+  eso o recorta el propio prompt). `FORMAT_INSTRUCTION` (nada de asteriscos,
+  guiones de viñeta ni almohadillas —la interfaz no interpreta Markdown, así
+  que se verían como caracteres sueltos—, y separar ideas en párrafos con
+  línea en blanco entre ellos) va siempre primero en `buildSystemPrompt`,
+  para que ningún recorte futuro se la lleve antes que a cualquier otra
+  cosa — ver `RichText.jsx` para cómo se renderiza eso.
 - **`skills.js`** — las habilidades del chat, que reemplazan a las viejas
   pantallas de Estudio, Programación y Documentos. Cada habilidad (`SKILLS`)
   define su modo, sus acciones (plantillas `build(texto, opción)`), una
