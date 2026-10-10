@@ -192,6 +192,17 @@ async function runTool(tools, name, args, context, hooks) {
       return finish(toolError(name, err));
     }
     if (prepared?.error) return finish({ error: prepared.error });
+    // A tool's own prepare() can say this exact call was already approved
+    // before (e.g. computer_action's open_app, once granted) — same effect
+    // as the user confirming again, without making them do it: run it now,
+    // with the original args, instead of raising a card.
+    if (prepared?.skipConfirmation) {
+      try {
+        return finish(await tool.run(args || {}, context));
+      } catch (err) {
+        return finish(toolError(name, err));
+      }
+    }
     hooks.confirmations.push({ id: randomUUID(), stepId: step.id, tool: name, label: tool.label, args: prepared.args, preview: prepared.preview });
     return finish({
       status: 'awaiting_confirmation',

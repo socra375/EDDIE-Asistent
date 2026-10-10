@@ -49,7 +49,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const PLATFORM_LABELS = { windows: 'Windows', mac: 'Mac', linux: 'Linux', chromebook: 'Chromebook' };
 
-const plain = (text) => String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+export const plain = (text) => String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 // "PC-MARCOS (Windows)": how the computers are named to the model and in errors.
 export const describeDevice = (d) => `«${d.name}»${d.platform ? ` (${PLATFORM_LABELS[d.platform] || d.platform})` : ''}`;

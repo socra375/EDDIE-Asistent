@@ -59,20 +59,35 @@ vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a 
 | `network_info` | lectura | interfaces, IPs locales, tráfico |
 | `uptime` | lectura | desde cuándo está encendido |
 | `list_directory {path}` | lectura | archivos de una carpeta **dentro de tu carpeta personal** |
-| `open_app {name}` | confirmación | abre una app **de la lista que tú permitas** |
+| `open_app {name}` | confirmación (una vez por app) | busca y abre **cualquier app instalada** por su nombre |
 | `kill_process {pid}` | confirmación | cierra un proceso **de tu usuario** (nunca el 1 ni el propio agente) |
 | `scan_network` | lectura | qué dispositivos hay en tu red local: IP, MAC y el nombre que cada uno anuncia (ver «Red local») |
-
-Las apps permitidas se definen en `~/.config/eddie-agent/config.json`:
-
-```json
-"apps": { "terminal": ["x-terminal-emulator"], "archivos": ["nautilus"], "code": ["code"] }
-```
 
 Eddie las ve con `computer_check` / `computer_action`: dos herramientas genéricas cuyo argumento `tool` es el nombre
 de la herramienta del agente. El servidor solo acepta herramientas que el agente declaró al vincularse o al
 arrancar, con su mismo riesgo (una de confirmación nunca corre por `computer_check`), y solo con los argumentos que
 declaró (`api/_lib/computer/catalog.js`).
+
+### `open_app`: cualquier app instalada, con permiso la primera vez
+
+**El agente (desde la versión 1.5.0) busca la app por su nombre**, sin necesidad de configurar nada: en Windows, en
+el registro (`App Paths`) y en los accesos directos del menú Inicio; en Mac, en `/Applications`; en Linux, en los
+`.desktop` de `/usr/share/applications` y similares. Si no la encuentra así, prueba el PATH (`shutil.which`). Si de
+verdad no está, o tiene un nombre que el agente no adivina, se le puede dar uno a mano en
+`~/.config/eddie-agent/config.json`:
+
+```json
+"apps": { "mi script": ["/home/yo/bin/cosa.sh"] }
+```
+
+(esa entrada manual se prueba primero, antes de la búsqueda automática).
+
+**Permiso**: la primera vez que se pide abrir una app nueva en un equipo, Eddie muestra la tarjeta de confirmación de
+siempre, con una nota de que no se volverá a pedir. Al confirmarla, el servidor la recuerda (tabla
+`computer_app_grants`, por equipo y por nombre de app) y las siguientes veces la abre directo, sin tarjeta — igual
+que si el usuario hubiera dicho que sí otra vez. Es **por equipo**: aprobar Spotify en el PC de la oficina no aprueba
+Spotify en el de casa. Todo lo demás (`kill_process`…) sigue pidiendo confirmación siempre; esto es exclusivo de
+`open_app`.
 
 ## Red local (scan_network)
 
@@ -123,8 +138,8 @@ Es un archivo de texto: se puede abrir con el Bloc de notas y leer. No usa permi
 instalador actualiza el agente. El desinstalador quita la tarea, los procesos, la carpeta y la configuración; falta pulsar **Desvincular** en Eddie.
 
 El agente en Windows: configuración en `%APPDATA%\eddie-agent`, sin ventana (lo que imprime va a `agent.log`, que se rota a
-512 KB), **una sola copia a la vez** (`agent.lock`), y `open_app` abre sin configurar nada la calculadora, el bloc de notas, el
-explorador y Paint (más lo que añadas en `config.json`).
+512 KB), **una sola copia a la vez** (`agent.lock`), y `open_app` busca cualquier app instalada (ver arriba); la calculadora, el
+bloc de notas, el explorador y Paint tienen además un alias en español listo desde que se vincula.
 
 **Por qué no el Chromebook:** el agente corre en Linux (Crostini), que se apaga al cerrar la terminal y las apps de Linux; con él se
 apaga el agente. Ahí el camino fiable es la extensión «Tu navegador» (vive con Chrome).
@@ -173,8 +188,9 @@ algo quedó esperando.
 - **Token por equipo.** Son 32 bytes aleatorios; en Neon solo se guarda su SHA-256. «Desvincular» lo invalida al
   momento (el agente recibe 401 y se detiene). La configuración local es `0600`.
 - **Solo el dueño.** Con `EDDIE_OWNER_EMAIL` configurado, solo esa cuenta puede generar códigos (10 min, un solo uso).
-- **Lista blanca.** No hay ejecución de comandos arbitrarios. Las rutas no salen de tu carpeta personal, las apps son
-  solo las permitidas y los procesos solo los tuyos. Abrir y cerrar siempre piden confirmación.
+- **Lista blanca.** No hay ejecución de comandos arbitrarios. Las rutas no salen de tu carpeta personal y los procesos
+  solo los tuyos. Abrir una app pide confirmación la primera vez (luego se recuerda, por equipo); cerrar un proceso,
+  siempre.
 - **Cada equipo solo responde sus trabajos.** Un token no puede leer ni responder los trabajos de otro equipo.
 
 ## Relación con la Sonda local (fase 1)

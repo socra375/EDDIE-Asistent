@@ -147,3 +147,16 @@ export async function abandonJob(jobId) {
   const sql = getDb();
   await sql`update computer_jobs set status = 'expired', finished_at = now() where id = ${jobId} and status in ('queued', 'running')`;
 }
+
+// open_app asks once per app per computer: these two back that (see
+// computer_action in api/_lib/connectors/computer/index.js).
+export async function isAppGranted(deviceId, appKey) {
+  const sql = getDb();
+  const rows = await sql`select 1 from computer_app_grants where device_id = ${deviceId} and app_key = ${appKey}`;
+  return rows.length > 0;
+}
+
+export async function grantApp(deviceId, appKey) {
+  const sql = getDb();
+  await sql`insert into computer_app_grants (device_id, app_key) values (${deviceId}, ${appKey}) on conflict do nothing`;
+}

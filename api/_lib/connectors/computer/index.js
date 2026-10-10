@@ -4,8 +4,8 @@
 // whitelisted tools it declared when it linked (disk, memory, processes,
 // opening an allowed app…). Anything that changes the computer goes through
 // the confirmation card. See api/_lib/computer/ and docs/eddie-prime-agente.md.
-import { devicesByUser, hasDevice } from '../../computer/store.js';
-import { PLATFORM_LABELS, describeDevice, resolveTool, runOnComputer, runOnDevice } from '../../computer/run.js';
+import { devicesByUser, grantApp, hasDevice, isAppGranted } from '../../computer/store.js';
+import { PLATFORM_LABELS, describeDevice, plain, resolveTool, runOnComputer, runOnDevice } from '../../computer/run.js';
 import { clip } from '../http.js';
 
 // The arguments most tools use, by name (small models fill these far more
@@ -21,6 +21,14 @@ const COMMON_ARGS = {
 };
 
 const deviceUser = async (context) => context.getUser?.();
+
+// Normalized app name, as granted/checked (same per-device, whatever casing
+// or accents the user typed): "Spotify" and "spotify" are the same grant.
+const appKey = (resolved) => plain(resolved.args?.name);
+const appGranted = (resolved) => {
+  const key = appKey(resolved);
+  return key ? isAppGranted(resolved.device.id, key) : false;
+};
 
 function summarizeResult(result) {
   const r = result?.result;
@@ -38,17 +46,17 @@ export default {
   id: 'computer',
   name: 'Tu equipo (EDDIE Prime)',
   description:
-    'Eddie consulta y maneja tu Chromebook o PC desde cualquier lugar —la web, el teléfono, Telegram— a través del agente EDDIE Prime: disco, memoria, procesador, batería, procesos, archivos de tu carpeta y abrir las apps que permitas.',
+    'Eddie consulta y maneja tu Chromebook o PC desde cualquier lugar —la web, el teléfono, Telegram— a través del agente EDDIE Prime: disco, memoria, procesador, batería, procesos, archivos de tu carpeta y abrir cualquier app instalada (pide tu confirmación la primera vez; luego la recuerda).',
   icon: 'monitor',
   category: 'asistente',
   route:
-    /\b(disco|almacenamiento|espacio|memoria ram|\bram\b|cpu|procesador|bater[ií]a|procesos?|uptime|encendid[oa]|equipo|computador[a]?|ordenador|chromebook|\bpc\b|laptop|port[aá]til|linux|crostini|carpeta|archivos?|descargas|abre|abrir|cierra|cerrar|mata|terminal|\bip\b|red local|wi-?fi|sistema)\b/i,
+    /\b(disco|almacenamiento|espacio|memoria ram|\bram\b|cpu|procesador|bater[ií]a|procesos?|uptime|encendid[oa]|equipo|computador[a]?|ordenador|chromebook|\bpc\b|laptop|port[aá]til|linux|crostini|carpeta|archivos?|descargas|abre|abrir|cierra|cerrar|mata|terminal|\bip\b|red|internet|wi-?fi|sistema)\b/i,
   auth: {
     type: 'computer-link',
     isConnected: (user) => hasDevice(user.id),
   },
   requiredEnv: ['DATABASE_URL'],
-  note: 'El agente nunca abre puertos: espera un aviso sin datos (ntfy) y viene a buscar el trabajo con su propio token. Solo ejecuta su lista de herramientas; nada de comandos libres. Lo que cambia algo (abrir una app, cerrar un proceso) siempre pide tu confirmación.',
+  note: 'El agente nunca abre puertos: espera un aviso sin datos (ntfy) y viene a buscar el trabajo con su propio token. Solo ejecuta su lista de herramientas; nada de comandos libres. Lo que cambia algo pide tu confirmación: abrir una app solo la primera vez (luego se recuerda, por app y por equipo); cerrar un proceso, siempre.',
   details: async (user) => {
     const devices = user ? await devicesByUser(user.id) : [];
     if (!devices.length) return null;
@@ -112,7 +120,7 @@ export default {
       declaration: {
         name: 'computer_action',
         description:
-          'Pide a un equipo del usuario una acción que cambia algo, siempre con su confirmación en una tarjeta (con varios equipos vinculados, indica cuál en device). Habituales: open_app {name} (solo las apps que el usuario permitió en el agente), kill_process {pid} (cierra un proceso suyo; primero usa top_processes para el pid). Si una no existe, el error trae la lista real.',
+          'Pide a un equipo del usuario una acción que cambia algo (con varios equipos vinculados, indica cuál en device). Habituales: open_app {name} (busca y abre cualquier app instalada por su nombre; pide confirmación la primera vez que se abre esa app en ese equipo, luego ya no vuelve a pedirla), kill_process {pid} (cierra un proceso suyo; primero usa top_processes para el pid; pide confirmación siempre). Si una no existe, el error trae la lista real.',
         parameters: {
           type: 'OBJECT',
           properties: { tool: { type: 'STRING', description: 'Nombre de la acción del equipo, ej. "open_app".' }, ...COMMON_ARGS },
@@ -120,15 +128,22 @@ export default {
         },
       },
       // Checks the computer and the action before the card is shown, so the
-      // user confirms exactly what will run.
+      // user confirms exactly what will run. open_app is the one exception:
+      // once the user has approved opening a given app on a given computer,
+      // appGranted() below finds it already recorded and skipConfirmation
+      // tells runTool (registry.js) to run it straight away, same as any
+      // other time they already said yes — every other action (kill_process…)
+      // still asks every time.
       prepare: async (args, context) => {
         const resolved = await resolveTool(await deviceUser(context), args.tool, args, { risk: 'confirm' });
         if (resolved.error) return { error: resolved.error };
+        if (resolved.tool.name === 'open_app' && (await appGranted(resolved))) return { skipConfirmation: true };
         const fields = [
           { key: 'device', label: 'Equipo', value: resolved.device.name },
           { key: 'tool', label: 'Acción', value: resolved.tool.label },
           ...Object.entries(resolved.args).map(([key, value]) => ({ key, label: key, value: String(value) })),
         ];
+        if (resolved.tool.name === 'open_app') fields.push({ key: 'nota', label: 'Nota', value: 'La próxima vez se abrirá sin pedir confirmación.' });
         return {
           args: { tool: resolved.tool.name, ...(Object.keys(resolved.args).length ? { args_json: JSON.stringify(resolved.args) } : {}) },
           preview: { title: `${resolved.tool.label} en ${resolved.device.name}`, confirmLabel: 'Hacerlo', fields },
@@ -138,6 +153,10 @@ export default {
         const resolved = await resolveTool(await deviceUser(context), args.tool, args, { risk: 'confirm' });
         if (resolved.error) return { error: resolved.error };
         const outcome = await runOnDevice(resolved.device, resolved.tool, resolved.args);
+        if (!outcome.error && resolved.tool.name === 'open_app') {
+          const key = appKey(resolved);
+          if (key) await grantApp(resolved.device.id, key);
+        }
         const full = { ...outcome, device: resolved.device.name, tool: resolved.tool };
         return { ...forModel(full), ...(outcome.error ? {} : { summary: summarizeResult(full) }) };
       },

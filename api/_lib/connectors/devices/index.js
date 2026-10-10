@@ -40,7 +40,7 @@ export default {
       summarize: (result) => (result?.error ? undefined : clip(result?.summary || '', 120)),
       declaration: {
         name: 'list_devices',
-        description: 'Lista los dispositivos del usuario donde Eddie está abierto con su cuenta: nombre, si están encendidos ahora y si permiten órdenes desde otros dispositivos.',
+        description: 'Lista los dispositivos del usuario donde Eddie está abierto con su cuenta: nombre, si están encendidos ahora y si permiten órdenes desde otros dispositivos. No es una lista de lo que hay en su red o internet: para eso usa computer_check con scan_network.',
         parameters: { type: 'OBJECT', properties: {} },
       },
       run: async (_args, context) => {
