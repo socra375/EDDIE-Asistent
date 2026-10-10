@@ -1,19 +1,16 @@
 import { useEffect, useRef } from 'react';
-import * as THREE from 'three';
 
 const TWO_PI = Math.PI * 2;
 
 const isCalm = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 const isLite = () => document.documentElement.dataset.perf === 'lite';
 
-// Fewer points/bands on weak devices (Modo ligero): same shape, less geometry.
+// Fewer particles/ticks on weak devices (Modo ligero): same shape, less to draw.
 function countsFor(lite) {
-  return lite
-    ? { bands: 6, bandParticles: 90, filaments: 5, filamentSegments: 48, hazeParticles: 1000, coreParticles: 220 }
-    : { bands: 12, bandParticles: 190, filaments: 10, filamentSegments: 96, hazeParticles: 2600, coreParticles: 550 };
+  return lite ? { particles: 900, ticks: 24 } : { particles: 3000, ticks: 48 };
 }
 
-// The colour a CSS custom property resolves to, as "r,g,b" (a throw-away element lets the browser do the work).
+// The colour a CSS custom property resolves to, as [r,g,b] (a throw-away element lets the browser do the work).
 function resolveRgb(host, varName, fallback) {
   const probe = document.createElement('span');
   probe.style.cssText = `position:absolute;visibility:hidden;color:var(${varName})`;
@@ -23,238 +20,52 @@ function resolveRgb(host, varName, fallback) {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : fallback;
 }
 
-const mixRgb = (rgb, target, amount) => rgb.map((c, i) => c + (target[i] - c) * amount);
-const toThreeColor = (rgb) => new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
-
-// Jarvis-style mood palette: cyan/the user's own colour at rest, violet while it works
-// something out, red-orange on a warning or error (see the HUD spec this was asked to
-// follow). `user` is the orb's own --ring/--ring-soft (the core-colour picker in
-// Configuración still controls the resting colour).
+// Jarvis-style mood palette: the user's own colour (the core-colour picker in
+// Configuración → Interfaz HUD) at rest, violet while it works something out, red-orange
+// on a warning or error.
 function paletteFor(state, user) {
-  if (state === 'processing') return { primary: [168, 85, 247], secondary: [205, 160, 255] };
-  if (state === 'error') return { primary: [255, 73, 46], secondary: [255, 170, 90] };
+  if (state === 'processing') return [157, 0, 255];
+  if (state === 'error') return [255, 51, 0];
   return user;
 }
 
-// A soft round dot, white with a fading edge: the colour comes from each material's own
-// tint (set in retint), not from the texture, so recolouring never needs a new texture.
-function createGlowTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
-  gradient.addColorStop(0.5, 'rgba(255,255,255,0.2)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 64, 64);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function randomAxis() {
-  return new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
-}
-
-// Builds the hologram: a bright glassy core, a swirl of independently orbiting particle
-// bands (the "particle matrix"), a few thin neon filaments threading through them, and an
-// outer haze for depth. Every material is tagged 'primary' | 'secondary' | 'core' so
-// `retint` can recolour (and, per state, repaint the mood colour over) the whole thing
-// with no geometry rebuild.
-function buildHologram(quality) {
-  const hologramGroup = new THREE.Group();
-  const rotatingLayers = [];
-  const materials = { primary: [], secondary: [], core: [] };
-  const disposables = []; // geometries + textures, disposed on unmount
-
-  function material(kind, Ctor, opts) {
-    const mat = new Ctor(opts);
-    materials[kind].push(mat);
-    return mat;
-  }
-
-  // Layer 1: the orbital particle bands — thin rings of light at random tilts and radii,
-  // each spinning at its own speed so they interlace instead of all turning together.
-  for (let i = 0; i < quality.bands; i += 1) {
-    const radius = 9 + Math.random() * 9;
-    const axis = randomAxis();
-    const tilt = Math.random() * TWO_PI;
-    const n = quality.bandParticles;
-    const pos = new Float32Array(n * 3);
-    for (let j = 0; j < n; j += 1) {
-      const theta = (j / n) * TWO_PI + Math.random() * 0.25;
-      const wobble = radius * (1 + (Math.random() - 0.5) * 0.1);
-      const p = new THREE.Vector3(wobble * Math.cos(theta), wobble * Math.sin(theta), (Math.random() - 0.5) * radius * 0.06);
-      p.applyAxisAngle(axis, tilt);
-      pos[j * 3] = p.x;
-      pos[j * 3 + 1] = p.y;
-      pos[j * 3 + 2] = p.z;
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    disposables.push(geo);
-    const mat = material(i % 3 === 0 ? 'primary' : 'secondary', THREE.PointsMaterial, {
-      size: 0.32 + Math.random() * 0.22,
-      transparent: true,
-      opacity: 0.55 + Math.random() * 0.3,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const points = new THREE.Points(geo, mat);
-    hologramGroup.add(points);
-    const dir = Math.random() > 0.5 ? 1 : -1;
-    const speed = (0.0015 + Math.random() * 0.004) * dir;
-    rotatingLayers.push({ obj: points, speedX: speed * 0.6, speedY: speed, speedZ: speed * 0.3 });
-  }
-
-  // Layer 2: a handful of thin spiral filaments (the "neon thread" accents) — structure
-  // enough to read as a sphere, without going back to a geometric wireframe ball.
-  for (let i = 0; i < quality.filaments; i += 1) {
-    const radius = 11 + Math.random() * 7;
-    const axis = randomAxis();
-    const tilt = Math.random() * TWO_PI;
-    const turns = 2 + Math.random() * 3;
-    const segs = quality.filamentSegments;
-    const points = [];
-    for (let j = 0; j <= segs; j += 1) {
-      const t = j / segs;
-      const theta = t * TWO_PI * turns;
-      const phi = Math.PI * t;
-      const p = new THREE.Vector3(radius * Math.sin(phi) * Math.cos(theta), radius * Math.sin(phi) * Math.sin(theta), radius * Math.cos(phi) * 0.9);
-      p.applyAxisAngle(axis, tilt);
-      points.push(p);
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    disposables.push(geo);
-    const mat = material(i % 2 === 0 ? 'primary' : 'secondary', THREE.LineBasicMaterial, {
-      transparent: true,
-      opacity: 0.5,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const line = new THREE.Line(geo, mat);
-    hologramGroup.add(line);
-    const dir = Math.random() > 0.5 ? 1 : -1;
-    rotatingLayers.push({ obj: line, speedX: 0.0008 * dir, speedY: 0.0014 * -dir, speedZ: 0.0006 * dir });
-  }
-
-  // Layer 3: outer haze — a sparse, large dust cloud for depth and particle count, the
-  // dimmest layer so the bands and filaments keep reading as the main shape.
-  (function outerHaze() {
-    const radius = 19;
-    const n = quality.hazeParticles;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n * 3; i += 3) {
-      const r = radius * (0.75 + Math.random() * 0.3);
-      const theta = Math.random() * TWO_PI;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i + 2] = r * Math.cos(phi);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    disposables.push(geo);
-    const mat = material('secondary', THREE.PointsMaterial, { size: 0.16, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
-    const points = new THREE.Points(geo, mat);
-    hologramGroup.add(points);
-    rotatingLayers.push({ obj: points, speedX: 0.0004, speedY: 0.0007, speedZ: -0.0003 });
-  })();
-
-  // Layer 4: the glassy core — a billboard glow (always facing the camera, so it reads as
-  // a bright solid lens rather than a flat disc) plus a tight cluster of particles.
-  const glowTexture = createGlowTexture();
-  disposables.push(glowTexture);
-  const coreSpriteMat = material('core', THREE.SpriteMaterial, { map: glowTexture, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-  const coreSprite = new THREE.Sprite(coreSpriteMat);
-  coreSprite.scale.set(11, 11, 1);
-  hologramGroup.add(coreSprite);
-
-  (function coreCluster() {
-    const radius = 5;
-    const n = quality.coreParticles;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n * 3; i += 3) {
-      const r = radius * Math.pow(Math.random(), 1 / 3);
-      const theta = Math.random() * TWO_PI;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i + 2] = r * Math.cos(phi);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    disposables.push(geo);
-    const mat = material('core', THREE.PointsMaterial, { size: 0.4, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, map: glowTexture, alphaTest: 0.01 });
-    const points = new THREE.Points(geo, mat);
-    hologramGroup.add(points);
-    rotatingLayers.push({ obj: points, speedX: 0.01, speedY: -0.016, speedZ: 0.008 });
-  })();
-
-  return {
-    hologramGroup,
-    rotatingLayers,
-    coreSprite,
-    materials,
-    dispose() {
-      for (const d of disposables) d.dispose();
-      for (const list of Object.values(materials)) for (const m of list) m.dispose();
-    },
-  };
-}
-
-// A one-shot expanding shockwave (a thin ring that grows and fades): the "blown out"
-// pulse the orb gives when it starts listening or starts working something out.
-function buildBurst() {
-  const geo = new THREE.RingGeometry(0.92, 1, 64);
-  const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.scale.setScalar(6);
-  return { mesh, geo, mat, t: 1 }; // t >= 1: finished/idle
-}
-
-// How quickly the hologram spins and how brightly its core glows, per push-to-talk state.
-function energyFor(state) {
+// How fast it spins and how tightly the swarm pulls toward the core, per state: calm at
+// rest, a fast inward collapse while it thinks, a held, pulsing contraction on a warning.
+function motionFor(state) {
   switch (state) {
+    case 'processing':
+      return { spin: 3.2, radius: 0.55 };
     case 'listening':
     case 'speaking':
-      return { speed: 1.6, glow: 1.15 };
-    case 'processing':
-      return { speed: 2.2, glow: 1.3 };
+      return { spin: 1.5, radius: 0.92 };
     case 'disabled':
-      return { speed: 0.25, glow: 0.5 };
-    case 'error':
-      return { speed: 1, glow: 1 };
+      return { spin: 0.3, radius: 1 };
     default:
-      return { speed: 1, glow: 1 };
+      return { spin: 1, radius: 1 };
   }
 }
 
-// The states that fire the activation pulse: the moment the orb starts listening (it
-// just "received a command") or starts working something out ("interpreting" it).
-const BURST_STATES = new Set(['listening', 'processing']);
+const SHOCK_SLOTS = 4; // a small fixed pool, reused — no allocating during the render loop
+const SHOCK_LIFE = 0.9; // seconds
+const WARNING_PERIOD = 0.9; // seconds between shockwaves while in a warning/error state
 
-// A Jarvis-style holographic orb: a glassy core inside a swirl of independently orbiting
-// particle bands and a few neon filaments, over a solid black backdrop (the floating
-// effect). No OrbitControls on purpose: the circle is a push-to-talk button, not
-// something to drag or zoom. Colour is reactive, not fixed: cyan (or whatever the core-
-// colour picker in Configuración → Interfaz HUD is set to) at rest, violet while
-// thinking, red-orange on an error — with a one-shot pulse when it starts listening or
-// processing. (Two things from the brief this does NOT do yet, for lack of a real event
-// to hook them to: particles "absorbing" into the core on saving a memory, and the orb
-// splitting into sub-orbs while delegating a subtask.)
+// A J.A.R.V.I.S.-style holographic orb drawn with Canvas 2D only (no WebGL/Three.js): a
+// pulsing glassy core, a swarm of particles orbiting in a faked 3D space (rotated with Y
+// then Z rotation matrices and projected with simple perspective), three concentric
+// dashed data rings — one with compass-style radial ticks — and a soft mouse-parallax
+// tilt. Colour and motion both react to `state`: the user's own core colour (and a calm
+// pulse) at rest, violet with a fast inward collapse while "thinking", red-orange with
+// recurring shockwaves on a warning or error. Everything the render loop touches each
+// frame is allocated once, up front, to keep this at 60 fps.
 export default function HologramOrb({ state }) {
   const wrapRef = useRef(null);
-  const live = useRef({ state, refreshColor: () => {}, request: () => {}, triggerBurst: () => {} });
+  const live = useRef({ state, refreshColor: () => {}, request: () => {}, triggerShock: () => {} });
 
   useEffect(() => {
     const prev = live.current.state;
     live.current.state = state;
     live.current.refreshColor();
-    if (state !== prev && BURST_STATES.has(state) && !BURST_STATES.has(prev)) live.current.triggerBurst();
+    if (state !== prev && (state === 'listening' || state === 'processing') && prev !== 'listening' && prev !== 'processing') live.current.triggerShock();
     live.current.request();
   }, [state]);
 
@@ -262,98 +73,245 @@ export default function HologramOrb({ state }) {
     const wrap = wrapRef.current;
     const s = live.current;
     const lite = isLite();
-    const { hologramGroup, rotatingLayers, coreSprite, materials, dispose } = buildHologram(countsFor(lite));
-    const burst = buildBurst();
+    const { particles: COUNT, ticks: TICKS } = countsFor(lite);
 
-    const BLACK = 0x050510; // solid black (not the app's theme), for the floating effect
+    const canvas = document.createElement('canvas');
+    canvas.className = 'eddie-orb__canvas';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
 
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(BLACK, 0.015);
-    scene.add(hologramGroup);
-    scene.add(burst.mesh);
+    // ---- allocate once: the particle swarm (unit-sphere positions, biased toward the
+    // shell so it reads as a hollow globe, not a solid ball) and the shockwave pool. ----
+    const px = new Float32Array(COUNT);
+    const py = new Float32Array(COUNT);
+    const pz = new Float32Array(COUNT);
+    const psize = new Float32Array(COUNT);
+    const palpha = new Float32Array(COUNT);
+    for (let i = 0; i < COUNT; i += 1) {
+      const u = Math.random() * 2 - 1;
+      const theta = Math.random() * TWO_PI;
+      const ring = Math.sqrt(1 - u * u);
+      const r = 0.72 + Math.random() * 0.28;
+      px[i] = ring * Math.cos(theta) * r;
+      py[i] = ring * Math.sin(theta) * r;
+      pz[i] = u * r;
+      psize[i] = 0.7 + Math.random() * 1.3;
+      palpha[i] = 0.35 + Math.random() * 0.5;
+    }
+    const shocks = Array.from({ length: SHOCK_SLOTS }, () => ({ t: SHOCK_LIFE }));
+    let nextShock = 0;
+    let warningClock = 0;
 
-    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-    camera.position.set(0, 0, 32);
+    const BLACK = '#050510'; // solid black (not the app's theme), for the floating effect
+    const SPHERE_R = 150;
+    const CAMERA_D = 340;
+    const FOCAL = 260;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
-    renderer.setClearColor(BLACK, 1);
-    renderer.domElement.className = 'eddie-orb__canvas';
-    wrap.appendChild(renderer.domElement);
+    let w = 0;
+    let h = 0;
+    let cx = 0;
+    let cy = 0;
 
-    let userRgb = { primary: [63, 232, 255], secondary: [185, 247, 255] };
-    let rgb = userRgb;
+    function resize() {
+      const cw = wrap.clientWidth;
+      const ch = wrap.clientHeight || cw;
+      if (!cw || !ch) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1 : 1.5);
+      canvas.width = Math.round(cw * dpr);
+      canvas.height = Math.round(ch * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      w = cw;
+      h = ch;
+      cx = w / 2;
+      cy = h / 2;
+      draw();
+    }
+
+    let userRgb = [63, 232, 255];
+    let colorNow = userRgb.slice();
     s.refreshColor = () => {
       const host = wrap.closest('.eddie-orb') || wrap;
-      userRgb = { primary: resolveRgb(host, '--ring', userRgb.primary), secondary: resolveRgb(host, '--ring-soft', userRgb.secondary) };
-      const mood = paletteFor(s.state, userRgb);
-      rgb = { primary: mood.primary, secondary: mood.secondary, core: mixRgb(mood.secondary, [255, 255, 255], 0.55) };
-      for (const m of materials.primary) m.color = toThreeColor(rgb.primary);
-      for (const m of materials.secondary) m.color = toThreeColor(rgb.secondary);
-      for (const m of materials.core) m.color = toThreeColor(rgb.core);
-      burst.mat.color = toThreeColor(rgb.primary);
+      userRgb = resolveRgb(host, '--ring', userRgb);
     };
     s.refreshColor();
+    colorNow = paletteFor(s.state, userRgb).slice();
 
-    s.triggerBurst = () => {
-      burst.t = 0;
+    s.triggerShock = () => {
+      shocks[nextShock].t = 0;
+      nextShock = (nextShock + 1) % SHOCK_SLOTS;
     };
+
+    // ---- mouse parallax: a soft eased tilt, not a drag — the circle is a button, not a
+    // thing to spin by hand. ----
+    let targetTiltY = 0;
+    let targetTiltZ = 0;
+    let tiltY = 0;
+    let tiltZ = 0;
+    function onMove(e) {
+      const rect = wrap.getBoundingClientRect();
+      const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const my = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      targetTiltY = mx * 0.5;
+      targetTiltZ = my * 0.35;
+    }
+    function onLeave() {
+      targetTiltY = 0;
+      targetTiltZ = 0;
+    }
+    wrap.addEventListener('mousemove', onMove);
+    wrap.addEventListener('mouseleave', onLeave);
 
     let running = false;
     let visible = true;
+    let last = 0;
     let time = 0;
-    let energy = energyFor(s.state);
-    let lastEnergy = energy;
+    let spinY = 0;
+    let spinZ = 0;
+    let radiusFactor = 1;
+    // Scratch variables for the per-particle loop, declared once so the 60fps loop never
+    // allocates: this is the whole point of preallocating the typed arrays above too.
+    let x0, y0, z0, x1, y1, z1, x2, y2, z2, zc, scale, sx, sy, size, alpha;
+    let cosY, sinY, cosZ, sinZ;
 
-    function resize() {
-      const w = wrap.clientWidth;
-      const h = wrap.clientHeight || w;
-      if (!w || !h) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, lite ? 1 : 1.5);
-      renderer.setPixelRatio(dpr);
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      render();
+    function draw() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = BLACK;
+      ctx.fillRect(0, 0, w, h);
+
+      const target = paletteFor(s.state, userRgb);
+      colorNow[0] += (target[0] - colorNow[0]) * 0.06;
+      colorNow[1] += (target[1] - colorNow[1]) * 0.06;
+      colorNow[2] += (target[2] - colorNow[2]) * 0.06;
+      const [r, g, b] = colorNow;
+
+      ctx.globalCompositeOperation = 'lighter';
+
+      // The particle swarm: rotate each point with Y then Z rotation matrices, project
+      // with basic perspective, draw as a tiny filled dot.
+      cosY = Math.cos(spinY + tiltY);
+      sinY = Math.sin(spinY + tiltY);
+      cosZ = Math.cos(spinZ + tiltZ);
+      sinZ = Math.sin(spinZ + tiltZ);
+      const R = SPHERE_R * radiusFactor;
+      for (let i = 0; i < COUNT; i += 1) {
+        x0 = px[i];
+        y0 = py[i];
+        z0 = pz[i];
+        x1 = x0 * cosY + z0 * sinY;
+        z1 = -x0 * sinY + z0 * cosY;
+        y1 = y0;
+        x2 = x1 * cosZ - y1 * sinZ;
+        y2 = x1 * sinZ + y1 * cosZ;
+        z2 = z1;
+        zc = z2 * R + CAMERA_D;
+        scale = FOCAL / zc;
+        sx = cx + x2 * R * scale;
+        sy = cy + y2 * R * scale;
+        size = psize[i] * scale * 1.4;
+        if (size < 0.15) continue;
+        alpha = palpha[i] * Math.min(1, scale * 1.3);
+        ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${alpha})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, size, 0, TWO_PI);
+        ctx.fill();
+      }
+
+      // Three concentric dashed data rings, each at its own speed and direction; the
+      // outermost also gets compass-style radial ticks.
+      const ringBase = Math.min(w, h) * 0.46;
+      const ringSpecs = [
+        { radiusMul: 1, squash: 0.92, speed: 0.4, dash: [10, 8], width: 1.4 },
+        { radiusMul: 0.8, squash: 0.8, speed: -0.65, dash: [3, 7], width: 1.1 },
+        { radiusMul: 0.62, squash: 0.68, speed: 0.95, dash: [1, 5], width: 1 },
+      ];
+      ctx.lineWidth = 1;
+      for (let i = 0; i < ringSpecs.length; i += 1) {
+        const spec = ringSpecs[i];
+        const radius = ringBase * spec.radiusMul;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, spec.squash);
+        ctx.rotate(time * spec.speed);
+        ctx.setLineDash(spec.dash);
+        ctx.lineDashOffset = -time * 60 * Math.sign(spec.speed || 1);
+        ctx.strokeStyle = `rgba(${r | 0},${g | 0},${b | 0},0.55)`;
+        ctx.lineWidth = spec.width;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, TWO_PI);
+        ctx.stroke();
+        if (i === 0) {
+          ctx.setLineDash([]);
+          for (let t = 0; t < TICKS; t += 1) {
+            const a = (t / TICKS) * TWO_PI;
+            const long = t % (TICKS / 8) === 0;
+            const inner = radius - (long ? 10 : 5);
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+            ctx.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
+      // The core: a pulsing glassy glow, white at the centre fading into the mood
+      // colour, with real canvas bloom (shadowBlur) since it is a single draw.
+      const breathing = 1 + 0.12 * Math.sin(time * 1.6);
+      const audioJitter = s.state === 'listening' || s.state === 'speaking' ? (Math.random() - 0.5) * 0.1 + Math.sin(time * 14) * 0.05 : 0;
+      const flash = s.state === 'error' ? 0.7 + 0.3 * Math.abs(Math.sin(time * 9)) : 1;
+      const coreR = Math.min(w, h) * 0.1 * (breathing + audioJitter) * flash;
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = `rgba(${r | 0},${g | 0},${b | 0},0.9)`;
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.35, `rgba(${r | 0},${g | 0},${b | 0},0.9)`);
+      grad.addColorStop(1, `rgba(${r | 0},${g | 0},${b | 0},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, TWO_PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // The activation/warning pulse: a ring expanding outward from the core, fading out.
+      for (let i = 0; i < SHOCK_SLOTS; i += 1) {
+        const sh = shocks[i];
+        if (sh.t >= SHOCK_LIFE) continue;
+        const t = sh.t / SHOCK_LIFE;
+        const rad = coreR + t * ringBase * 1.1;
+        ctx.strokeStyle = `rgba(${r | 0},${g | 0},${b | 0},${(1 - t) * 0.8})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, TWO_PI);
+        ctx.stroke();
+      }
     }
 
-    function render() {
-      renderer.render(scene, camera);
-    }
-
-    function frame() {
+    function frame(now) {
       running = false;
       const calm = isCalm();
-      const target = energyFor(s.state);
-      lastEnergy = { speed: lastEnergy.speed + (target.speed - lastEnergy.speed) * 0.08, glow: lastEnergy.glow + (target.glow - lastEnergy.glow) * 0.08 };
-      energy = lastEnergy;
       const animating = !calm && visible && !document.hidden;
       if (animating) {
-        const dt = 0.034 * energy.speed;
+        const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
+        last = now;
         time += dt;
-        hologramGroup.position.y = Math.sin(time) * 1.5;
-        hologramGroup.rotation.x += 0.0016 * energy.speed;
-        hologramGroup.rotation.y += 0.0032 * energy.speed;
-        hologramGroup.rotation.z = Math.sin(time * 0.5) * 0.08;
-        for (const layer of rotatingLayers) {
-          layer.obj.rotation.x += layer.speedX * energy.speed;
-          layer.obj.rotation.y += layer.speedY * energy.speed;
-          layer.obj.rotation.z += layer.speedZ * energy.speed;
-        }
-        // The core glow breathes with a slow pulse at rest, and brighter/faster per state;
-        // on an error it flashes instead of breathing.
-        const flash = s.state === 'error' ? 0.65 + 0.35 * Math.abs(Math.sin(time * 9)) : 0.85 + 0.15 * Math.sin(time * 1.6);
-        coreSprite.scale.setScalar(11 * (0.92 + 0.08 * flash));
-        for (const m of materials.core) m.opacity = (m.userData.baseOpacity ??= m.opacity) * energy.glow * flash;
-        // The activation pulse: a ring expanding outward from the core while it fades.
-        if (burst.t < 1) {
-          burst.t = Math.min(1, burst.t + dt * 1.1);
-          burst.mesh.scale.setScalar(6 + burst.t * 24);
-          burst.mat.opacity = (1 - burst.t) * 0.8;
-        } else if (burst.mat.opacity !== 0) {
-          burst.mat.opacity = 0;
-        }
+        const motion = motionFor(s.state);
+        spinY += dt * 0.5 * motion.spin;
+        spinZ += dt * 0.32 * motion.spin;
+        tiltY += (targetTiltY - tiltY) * 0.08;
+        tiltZ += (targetTiltZ - tiltZ) * 0.08;
+        radiusFactor += (motion.radius - radiusFactor) * 0.05;
+        for (let i = 0; i < SHOCK_SLOTS; i += 1) if (shocks[i].t < SHOCK_LIFE) shocks[i].t += dt;
+        if (s.state === 'error') {
+          warningClock += dt;
+          if (warningClock >= WARNING_PERIOD) {
+            warningClock = 0;
+            s.triggerShock();
+          }
+        } else warningClock = 0;
+      } else {
+        last = 0;
       }
-      render();
+      draw();
       if (animating) request();
     }
 
@@ -386,14 +344,12 @@ export default function HologramOrb({ state }) {
       seen.disconnect();
       mode.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
+      wrap.removeEventListener('mousemove', onMove);
+      wrap.removeEventListener('mouseleave', onLeave);
       s.request = () => {};
-      s.triggerBurst = () => {};
+      s.triggerShock = () => {};
       running = true;
-      dispose();
-      burst.geo.dispose();
-      burst.mat.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
+      canvas.remove();
     };
   }, []);
 
