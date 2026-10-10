@@ -50,7 +50,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -497,6 +497,44 @@ def t_open_app(args, cfg):
     return {"abierta": label, "summary": f"Abrí {label}"}
 
 
+PARTIAL_DOWNLOAD_EXT = (".crdownload", ".part", ".download", ".tmp")
+RECENT_DOWNLOAD_SECS = 120  # qué tan reciente cuenta como "recién terminado"
+
+
+def t_check_downloads(_args, _cfg):
+    """Para las rutinas de evento ("cuando termine la descarga, avísame"): no
+    sabe qué se está descargando ni de dónde, solo mira la carpeta Descargas —
+    archivos a medio bajar (.crdownload, .part…) cuentan como "descargando";
+    el resto, modificados hace poco, como "recién llegados". Eddie compara
+    esto con lo que vio la última vez para notar cuándo una descarga termina."""
+    target = os.path.join(HOME, "Downloads")
+    if not os.path.isdir(target):
+        return {"descargando": False, "recientes": [], "summary": "No encuentro una carpeta de Descargas."}
+    now = time.time()
+    downloading = False
+    recent = []
+    try:
+        with os.scandir(target) as it:
+            for e in it:
+                if e.name.startswith("."):
+                    continue
+                try:
+                    st = e.stat(follow_symlinks=False)
+                except OSError:
+                    continue
+                if e.name.lower().endswith(PARTIAL_DOWNLOAD_EXT):
+                    downloading = True
+                    continue
+                if e.is_file(follow_symlinks=False) and now - st.st_mtime < RECENT_DOWNLOAD_SECS:
+                    recent.append({"nombre": e.name, "hace_s": round(now - st.st_mtime)})
+    except OSError:
+        return {"descargando": False, "recientes": [], "summary": "No pude leer la carpeta Descargas."}
+    recent.sort(key=lambda x: x["hace_s"])
+    recent = recent[:5]
+    summary = "Descargando…" if downloading else (f"Recién llegó {recent[0]['nombre']}" if recent else "Sin descargas recientes.")
+    return {"descargando": downloading, "recientes": recent, "summary": summary}
+
+
 def _is_mine(proc):
     """¿El proceso es de este usuario? (uids en Linux/Mac; nombre de usuario en Windows)."""
     if hasattr(proc, "uids") and hasattr(os, "getuid"):
@@ -853,6 +891,7 @@ TOOLS = {
     "open_app": (t_open_app, "Abrir una app", "Busca y abre cualquier app instalada por su nombre.", "confirm", {"name": S("Nombre de la app a abrir.")}),
     "kill_process": (t_kill_process, "Cerrar un proceso", "Cierra un proceso de tu usuario por su pid.", "confirm", {"pid": I("Id del proceso.")}),
     "scan_network": (t_scan_network, "Dispositivos en tu red", "Qué hay conectado a la misma red (IP, MAC y el nombre que cada uno anuncia). Solo mira; no ataca ni escanea puertos.", "read", {}),
+    "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
 }
 
 REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"]}

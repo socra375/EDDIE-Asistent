@@ -30,7 +30,7 @@ export function reminderText(reminder, now = new Date()) {
 }
 
 // Telegram only when it is configured: a push-only user must not hit its API.
-const telegramSend = (chatId, text) => (process.env.TELEGRAM_BOT_TOKEN ? sendMessage(chatId, text) : { ok: false });
+export const telegramSend = (chatId, text) => (process.env.TELEGRAM_BOT_TOKEN ? sendMessage(chatId, text) : { ok: false });
 
 // What the notification on the phone says for a reminder.
 export function reminderPush(reminder, now = new Date()) {
@@ -50,8 +50,9 @@ export function briefingPush(text) {
 }
 
 // Telegram (if linked) and the devices with notifications on: it counts as
-// delivered if either one got it.
-async function deliver({ userId, chatId }, text, notification, { send, push }) {
+// delivered if either one got it. Exported so routines/run.js (and anything
+// else that needs to reach a user outside a live chat) can reuse it.
+export async function deliver({ userId, chatId }, text, notification, { send, push }) {
   let ok = false;
   if (chatId) ok = Boolean((await send(chatId, text))?.ok);
   const sent = await push(userId, notification).catch((err) => {

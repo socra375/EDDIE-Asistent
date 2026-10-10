@@ -62,6 +62,7 @@ vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a 
 | `open_app {name}` | confirmación (una vez por app) | busca y abre **cualquier app instalada** por su nombre |
 | `kill_process {pid}` | confirmación | cierra un proceso **de tu usuario** (nunca el 1 ni el propio agente) |
 | `scan_network` | lectura | qué dispositivos hay en tu red local: IP, MAC y el nombre que cada uno anuncia (ver «Red local») |
+| `check_downloads` | lectura | si hay una descarga a medias en tu carpeta Descargas y qué llegó hace poco; la usan las rutinas automáticas (ver `docs/eddie-2-arquitectura.md` o el README) |
 
 Eddie las ve con `computer_check` / `computer_action`: dos herramientas genéricas cuyo argumento `tool` es el nombre
 de la herramienta del agente. El servidor solo acepta herramientas que el agente declaró al vincularse o al
@@ -88,6 +89,20 @@ siempre, con una nota de que no se volverá a pedir. Al confirmarla, el servidor
 que si el usuario hubiera dicho que sí otra vez. Es **por equipo**: aprobar Spotify en el PC de la oficina no aprueba
 Spotify en el de casa. Todo lo demás (`kill_process`…) sigue pidiendo confirmación siempre; esto es exclusivo de
 `open_app`.
+
+## Descargas (check_downloads) y rutinas por evento
+
+`check_downloads` (agente 1.6.0+) no sabe qué se está descargando ni de dónde: solo mira la carpeta
+**Descargas** del equipo. Un archivo con una extensión de descarga a medias (`.crdownload`, `.part`,
+`.download`, `.tmp`) cuenta como "descargando"; el resto, modificado en los últimos 2 minutos, como
+"recién llegado".
+
+Una rutina automática por evento ("cuando termine la descarga, avísame", ver README → Rutinas
+automáticas) la llama cada 5 minutos (el mismo cron de los recordatorios) a través de `computer_check`.
+El servidor compara la respuesta con la de la vez anterior: solo el paso de "sí estaba descargando" a
+"ya no" dispara la rutina — una sola lectura de "no está descargando" nunca la dispara (sería falso si
+simplemente no había empezado nada), y un equipo apagado o sin este agente actualizado tampoco (una
+lectura que no se pudo hacer no cuenta como cambio).
 
 ## Red local (scan_network)
 
