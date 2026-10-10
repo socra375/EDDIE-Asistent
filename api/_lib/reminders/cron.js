@@ -4,6 +4,7 @@
 // Without that secret nobody can trigger it.
 import { timingSafeEqual } from 'node:crypto';
 import { runScheduledJobs } from './run.js';
+import { runRoutines } from '../routines/run.js';
 
 function secretMatches(headers) {
   const expected = Buffer.from(String(process.env.CRON_SECRET || ''));
@@ -20,8 +21,8 @@ export async function handleCronRequest({ method, headers = {} }) {
   if (!secretMatches(headers)) return { status: 401, json: { error: 'No autorizado.' } };
   if (!process.env.DATABASE_URL) return { status: 503, json: { error: 'Falta DATABASE_URL.' } };
   try {
-    const result = await runScheduledJobs();
-    return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { ok: true, ...result } };
+    const [reminders, routines] = await Promise.all([runScheduledJobs(), runRoutines()]);
+    return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { ok: true, ...reminders, routines } };
   } catch (err) {
     console.error('[cron] failed:', err);
     return { status: 500, json: { error: 'El trabajo programado falló.' } };

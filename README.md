@@ -19,7 +19,7 @@ Backend (Express en local · función serverless en Vercel)
    │
    ├── api/_lib/handler.js   → valida y normaliza la solicitud
    ├── api/_lib/providers.js → llama a Gemini, Claude, Groq, Cerebras u OpenRouter (con respaldo automático)
-   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Recuerdos de conversaciones, Telegram, Sonda local…)
+   └── api/_lib/connectors/  → herramientas de los conectores activos (hora, calculadora, clima, tareas, memoria, internet, noticias, Wikipedia, monedas, Gmail, Calendario, GitHub, Notion, YouTube, Recordatorios, Rutinas automáticas, Recuerdos de conversaciones, Telegram, Sonda local…)
    ▼
 Respuesta unificada { content, provider, model }
    ▼
@@ -687,6 +687,30 @@ minutos es un flujo de GitHub Actions.
 llama además una vez al día (11:00 UTC) desde `vercel.json`. Se puede llamar las veces que sea: cada
 aviso y cada resumen se reservan con una sola operación en la base antes de enviarse, así que no se
 repiten.
+
+## Rutinas automáticas
+
+Varias acciones encadenadas que corren solas, por hora del día o por un evento en un equipo vinculado con
+EDDIE Prime — el aviso llega por Telegram o notificación push, igual que los recordatorios, aunque la app
+esté cerrada.
+
+- **Por hora**: "a las 8, dame el resumen y pon mi música" → `create_routine` con `time="08:00"` y
+  `actions=[{"type":"summary"},{"type":"play_music"}]`. Corre una vez al día, con la misma ventana de
+  tolerancia de 3 horas que el resumen de la mañana.
+- **Por evento**: "cuando termine la descarga, avísame" → `create_routine` con
+  `event="download_complete"` (el equipo a vigilar, si tienes varios) y
+  `actions=[{"type":"notify","text":"Tu descarga terminó."}]`. El cron de cada 5 minutos le pregunta al
+  agente EDDIE Prime si hay una descarga a medias en tu carpeta de Descargas; cuando pasa de "sí" a "no",
+  dispara la rutina. Necesita el agente en versión **1.6.0** o más nueva (vuelve a descargar el instalador
+  en Windows, o actualiza `eddie_agent.py` a mano en Linux/Mac).
+- **Acciones posibles** (una lista fija, nunca una herramienta sensible ni arbitraria, porque nadie
+  confirma una tarjeta cuando una rutina corre sola): `summary` (el resumen del día, igual que
+  `set_morning_briefing`), `play_music` (pone algo en YouTube desde tu navegador vinculado —
+  `query` opcional; sin ella pone "Creed - Lonely" por defecto), `notify` (manda el texto que le digas).
+- "¿qué rutinas tengo?" → `list_routines`. "cancela la rutina de la mañana" → `cancel_routine`.
+
+Usa la misma base de datos y el mismo cron que los recordatorios: aplica `db/migrations/0026_routines.sql`
+además de lo que ya pedía esa sección. No necesita variables nuevas.
 
 ## Telegram (hablar con Eddie desde el celular)
 
