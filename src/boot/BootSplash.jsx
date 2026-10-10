@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useVoice } from '../context/VoiceContext';
-import { BOOT_GAUGES, BOOT_REPLAY_EVENT, BOOT_SEEN_KEY, shouldShowBoot } from '../services/boot';
+import { BOOT_GAUGES, BOOT_REPLAY_EVENT, BOOT_SEEN_KEY, shouldShowBoot, todayKey } from '../services/boot';
 import { useMorningBrief } from './useMorningBrief';
 import './Boot.css';
 
@@ -35,10 +35,12 @@ function reducedMotion() {
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 }
 
+// localStorage, not sessionStorage: it has to remember across closing and
+// reopening the app, not just across reloads of the same tab.
 function storage(action, key, value) {
   try {
-    if (action === 'get') return window.sessionStorage.getItem(key);
-    window.sessionStorage.setItem(key, value);
+    if (action === 'get') return window.localStorage.getItem(key);
+    window.localStorage.setItem(key, value);
   } catch {
     // Without storage it just plays on every load.
   }
@@ -100,7 +102,7 @@ export default function BootSplash() {
   const voice = useVoice();
   const [phase, setPhase] = useState(() => {
     const shortcut = new URLSearchParams(window.location.search).has('accion');
-    return shouldShowBoot({ enabled: settings.display?.boot !== false, seen: storage('get', BOOT_SEEN_KEY) === '1', shortcut }) ? 'run' : 'off';
+    return shouldShowBoot({ enabled: settings.display?.boot !== false, seenDay: storage('get', BOOT_SEEN_KEY), shortcut }) ? 'run' : 'off';
   });
   const [run, setRun] = useState(0);
   const [current, setCurrent] = useState(-1); // the piece of the brief Eddie is saying
@@ -118,7 +120,7 @@ export default function BootSplash() {
   }, []);
 
   useEffect(() => {
-    if (phase === 'run') storage('set', BOOT_SEEN_KEY, '1');
+    if (phase === 'run') storage('set', BOOT_SEEN_KEY, todayKey());
   }, [phase]);
 
   const leave = useCallback(() => {

@@ -22,11 +22,21 @@ export function greetingFor(date = new Date()) {
   return `${part}, señor.`;
 }
 
-// It plays once each time Eddie is opened (not on every reload of the same
-// tab), unless the user turned it off, and never when a shortcut opened Eddie
-// to do something right away ("Hablar con Eddie", "Modo Vigilancia").
-export function shouldShowBoot({ enabled = true, seen = false, shortcut = false } = {}) {
-  return Boolean(enabled) && !seen && !shortcut;
+// The calendar day a date falls on, in local time ("2026-10-10"): what
+// `shouldShowBoot` compares against what was last stored under BOOT_SEEN_KEY.
+export function todayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// It plays once per day (the first time Eddie is opened that day; closing and
+// reopening the same day does not replay it), unless the user turned it off,
+// and never when a shortcut opened Eddie to do something right away ("Hablar
+// con Eddie", "Modo Vigilancia").
+export function shouldShowBoot({ enabled = true, seenDay = null, today = todayKey(), shortcut = false } = {}) {
+  return Boolean(enabled) && seenDay !== today && !shortcut;
 }
 
 // How long it runs before it leaves by itself (ms); a lot shorter when the
