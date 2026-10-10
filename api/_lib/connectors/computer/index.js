@@ -145,7 +145,12 @@ export default {
         ];
         if (resolved.tool.name === 'open_app') fields.push({ key: 'nota', label: 'Nota', value: 'La próxima vez se abrirá sin pedir confirmación.' });
         return {
-          args: { tool: resolved.tool.name, ...(Object.keys(resolved.args).length ? { args_json: JSON.stringify(resolved.args) } : {}) },
+          // `device` must travel with the card: without it, confirming re-resolves
+          // with no device given and, with more than one linked, always fails
+          // ("tienes varios equipos vinculados…") — even though the user already
+          // picked one right here. The name (not the id) because run() resolves
+          // it the same way pickDevice always has, by name/platform.
+          args: { tool: resolved.tool.name, device: resolved.device.name, ...(Object.keys(resolved.args).length ? { args_json: JSON.stringify(resolved.args) } : {}) },
           preview: { title: `${resolved.tool.label} en ${resolved.device.name}`, confirmLabel: 'Hacerlo', fields },
         };
       },
