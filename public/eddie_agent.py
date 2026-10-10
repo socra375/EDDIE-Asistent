@@ -336,6 +336,18 @@ def t_list_directory(args, _cfg):
     return {"carpeta": short_path(target), "total": len(entries), "elementos": entries[:MAX_LIST], "summary": f"{len(entries)} elementos en {short_path(target)}"}
 
 
+def _app_paths_value_to_exe(raw):
+    """App Paths' default value is always just the executable's path, quoted
+    or not, never arguments after it — so an unquoted one with spaces (e.g.
+    msedge.exe: C:\\Program Files (x86)\\...) must be kept whole, not cut at
+    its first space. A quoted one keeps only what is inside the quotes
+    (some entries add a trailing `"%1"` placeholder after the path)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    return raw[1 : raw.find('"', 1)] if raw.startswith('"') else raw
+
+
 def _find_windows_app(name):
     """Registro (App Paths) y accesos directos del menú Inicio, luego el PATH."""
     needle = name.lower()
@@ -362,12 +374,10 @@ def _find_windows_app(name):
                         continue
                     try:
                         with winreg.OpenKey(key, sub) as sk:
-                            raw = (winreg.QueryValue(sk, None) or "").strip()
+                            raw = winreg.QueryValue(sk, None)
                     except OSError:
                         continue
-                    if not raw:
-                        continue
-                    exe = raw[1 : raw.find('"', 1)] if raw.startswith('"') else raw.split(" ")[0]
+                    exe = _app_paths_value_to_exe(raw)
                     if exe:
                         return [exe]
     # Accesos directos del menú Inicio (.lnk): Windows abre uno tal cual con
