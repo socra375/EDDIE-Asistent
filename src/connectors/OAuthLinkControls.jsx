@@ -3,7 +3,7 @@ import { useState } from 'react';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 // Connect / disconnect for a connector that links an account through its own
-// OAuth page (Spotify): "Conectar" goes to the server, which sends the user to
+// OAuth page: "Conectar" goes to the server, which sends the user to
 // the service and brings them back; "Desconectar" makes the server forget the tokens.
 export default function OAuthLinkControls({ connector, signedIn, onConnect, onChanged }) {
   const [busy, setBusy] = useState(false);

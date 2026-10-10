@@ -33,7 +33,6 @@ api/
       gmail/                   ← (sesiones 9–11) buscar, leer y enviar/responder con confirmación (permisos incrementales)
       google/                  ← (sesión 12) Calendario: ver, crear, y mover/borrar con confirmación (+ Drive y Tareas → Calendario)
       telegram/
-      spotify/
       notion/
     memory/                    ← NUEVO: memoria vectorial (pgvector)
 src/
@@ -90,7 +89,7 @@ export default {
 - **Sistema de herramientas.** Cada conector tiene `category` y cada herramienta un riesgo (`toolRisk`): `read` (consulta), `write` (guarda un cambio reversible, como crear una tarea) o `confirm` (`sensitive`, pide tarjeta). El hub los muestra. El **enrutado por intención** ahorra tokens (el plan gratis de Groq da 8K por minuto) y le deja menos opciones equivocadas a un modelo pequeño: `createToolset({ intent })` recibe el texto de los últimos mensajes (`intentFromMessages`: los dos últimos del usuario y la última respuesta de Eddie, para que un "sí, mándalo" siga apuntando al correo) y solo ofrece los conectores sin `route` (planificador, hora, calculadora, tareas, búsqueda web) más los cuyo `route` coincide. Sin `intent` (el resumen de Hoy, la confirmación de tarjetas) se ofrece todo. `toolset.offered` lista los conectores ofrecidos.
 - Estados que muestra el hub: `ready`, `connected`, `needs_account`, `needs_setup` y `planned`; "apagado" es la decisión del usuario y vive en sus ajustes.
 - Una herramienta `sensitive` nunca se ejecuta desde la IA: pasa por el protocolo de confirmación (abajo).
-- Los tokens se guardan cifrados en Postgres (AES-256-GCM con una clave derivada de `CONNECTOR_SECRET`, `api/_lib/secretBox.js`). Los de Google ya van así en `google_credentials` (sesión 9); Spotify, que tiene cuenta propia, usa su tabla `spotify_credentials` con el mismo cifrado (`api/_lib/spotify/auth.js`); Notion usa un token de integración en variables de entorno.
+- Los tokens se guardan cifrados en Postgres (AES-256-GCM con una clave derivada de `CONNECTOR_SECRET`, `api/_lib/secretBox.js`). Los de Google ya van así en `google_credentials` (sesión 9); Notion usa un token de integración en variables de entorno.
 
 ## Protocolo de confirmación
 
@@ -132,6 +131,10 @@ La memoria ya no es un mapa plano sino un documento v2 (`src/services/memory.js`
 ### WhatsApp (retirado)
 
 Se construyó con la API oficial de Meta (WhatsApp Cloud API) y se quitó: exige una cuenta de WhatsApp Business y un número propio de empresa, lo que no encaja con un asistente personal. El cerebro compartido (`api/_lib/channels/`) quedó para Telegram. Las tablas `whatsapp_*` de `0005_whatsapp.sql` se borraron de Neon (el archivo queda solo como historial).
+
+### Spotify (retirado)
+
+Música por voz (buscar, poner, pausar, volumen) sobre la cuenta de Spotify del usuario, por OAuth. Se quitó del hub y del código (`api/_lib/connectors/spotify/`, `api/_lib/spotify/auth.js`, rutas `/api/connectors/spotify/*`). La tabla `spotify_credentials` de `0007_spotify.sql` se borró de Neon con `0024_drop_spotify.sql` (ambos archivos quedan solo como historial).
 
 ### Sonda Local (EDDIE Prime, fase 1)
 
@@ -193,7 +196,6 @@ Seis herramientas en `api/_lib/connectors/github/`: `github_list_repos`, `github
 | `TELEGRAM_BOT_TOKEN` | 17 | Bot de Telegram (token de @BotFather) |
 | `TELEGRAM_WEBHOOK_SECRET` | 17 | Verifica que los mensajes vienen de Telegram |
 | `TAVILY_API_KEY` | 13 | Búsqueda web con Tavily (opcional: funciona sin clave con un límite bajo) |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | 23 | Spotify |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | 25 | Notion |
 | `CRON_SECRET` | 16 | Protege las tareas programadas |
 
