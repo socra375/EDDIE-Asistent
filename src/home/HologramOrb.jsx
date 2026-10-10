@@ -63,22 +63,22 @@ function buildHologram(quality) {
 
   const lineMaterialBase = material('primary', THREE.LineBasicMaterial, {
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.7,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   const circuitMaterial = material('secondary', THREE.LineBasicMaterial, {
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.9,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   const glowTexture = createGlowTexture();
   disposables.push(glowTexture);
   const particleMaterial = material('core', THREE.PointsMaterial, {
-    size: 0.3,
+    size: 0.4,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.9,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     map: glowTexture,
@@ -147,16 +147,16 @@ function buildHologram(quality) {
     shellParticlesGeo.setAttribute('position', new THREE.BufferAttribute(shellPosArray, 3));
     disposables.push(shellParticlesGeo);
     const shellParticleMat = material('secondary', THREE.PointsMaterial, {
-      size: 0.15,
+      size: 0.22,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.55,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     group.add(new THREE.Points(shellParticlesGeo, shellParticleMat));
 
     hologramGroup.add(group);
-    rotatingLayers.push({ obj: group, speedX: 0.001, speedY: 0.002, speedZ: -0.0005 });
+    rotatingLayers.push({ obj: group, speedX: 0.002, speedY: 0.0035, speedZ: -0.0012 });
   })();
 
   // Layer 2: middle structure (equatorial rings + sparse icosahedron wires).
@@ -202,7 +202,7 @@ function buildHologram(quality) {
     }
 
     hologramGroup.add(group);
-    rotatingLayers.push({ obj: group, speedX: -0.003, speedY: 0.001, speedZ: 0.002 });
+    rotatingLayers.push({ obj: group, speedX: -0.006, speedY: 0.0022, speedZ: 0.0042 });
   })();
 
   // Layer 3: inner core (dense wireframe sphere + concentrated particles + fast rings).
@@ -248,7 +248,7 @@ function buildHologram(quality) {
     }
 
     hologramGroup.add(group);
-    rotatingLayers.push({ obj: group, speedX: 0.005, speedY: -0.008, speedZ: 0.004 });
+    rotatingLayers.push({ obj: group, speedX: 0.01, speedY: -0.016, speedZ: 0.008 });
   })();
 
   return {
@@ -280,12 +280,13 @@ function energyFor(state) {
 }
 
 // The exact holographic-sphere design asked for (three nested, independently spinning
-// layers of lines, wireframes and glowing particles, warm-tinted), ported from a static
-// Three.js scene into this React component. No OrbitControls on purpose: the circle is a
-// push-to-talk button, not something to drag or zoom. The only liberty taken is colour:
-// instead of the fixed orange/gold of the original, each layer's tint is read from the
-// orb's own --ring/--ring-soft custom properties, so the core-colour picker in
-// Configuración → Interfaz HUD still recolours it exactly as it did the old ring.
+// layers of lines, wireframes and glowing particles over a solid black backdrop, for the
+// floating effect), ported from a static Three.js scene into this React component. No
+// OrbitControls on purpose: the circle is a push-to-talk button, not something to drag or
+// zoom. The only liberty taken is colour: instead of the fixed orange/gold of the original,
+// each layer's tint is read from the orb's own --ring/--ring-soft custom properties, so the
+// core-colour picker in Configuración → Interfaz HUD still recolours it exactly as it did
+// the old ring.
 export default function HologramOrb({ state }) {
   const wrapRef = useRef(null);
   const live = useRef({ state, refreshColor: () => {}, request: () => {} });
@@ -302,15 +303,17 @@ export default function HologramOrb({ state }) {
     const lite = isLite();
     const { hologramGroup, rotatingLayers, materials, dispose } = buildHologram(countsFor(lite));
 
+    const BLACK = 0x050510; // the body background of the original design: solid black (not the app's theme), for the floating effect
+
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050510, 0.015);
+    scene.fog = new THREE.FogExp2(BLACK, 0.015);
     scene.add(hologramGroup);
 
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-    camera.position.set(0, 0, 45);
+    camera.position.set(0, 0, 32);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-    renderer.setClearColor(0x000000, 0);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
+    renderer.setClearColor(BLACK, 1);
     renderer.domElement.className = 'eddie-orb__canvas';
     wrap.appendChild(renderer.domElement);
 
@@ -323,8 +326,6 @@ export default function HologramOrb({ state }) {
       for (const m of materials.primary) m.color = toThreeColor(rgb.primary);
       for (const m of materials.secondary) m.color = toThreeColor(rgb.secondary);
       for (const m of materials.core) m.color = toThreeColor(rgb.core);
-      const bg = resolveRgb(host, '--bg', [5, 5, 16]);
-      scene.fog.color = toThreeColor(bg);
     };
     s.refreshColor();
 
@@ -358,11 +359,12 @@ export default function HologramOrb({ state }) {
       energy = lastEnergy;
       const animating = !calm && visible && !document.hidden;
       if (animating) {
-        const dt = 0.02 * energy.speed;
+        const dt = 0.034 * energy.speed;
         time += dt;
         hologramGroup.position.y = Math.sin(time) * 1.5;
-        hologramGroup.rotation.y += 0.001 * energy.speed;
-        hologramGroup.rotation.z = Math.sin(time * 0.5) * 0.05;
+        hologramGroup.rotation.x += 0.0016 * energy.speed;
+        hologramGroup.rotation.y += 0.0032 * energy.speed;
+        hologramGroup.rotation.z = Math.sin(time * 0.5) * 0.08;
         for (const layer of rotatingLayers) {
           layer.obj.rotation.x += layer.speedX * energy.speed;
           layer.obj.rotation.y += layer.speedY * energy.speed;
