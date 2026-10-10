@@ -264,8 +264,8 @@ function AppShell() {
       <ChatList onOpenChat={openChat} />
       {chatListOpen && <div className="chatlist-backdrop" onClick={() => setChatListOpen(false)} aria-hidden="true" />}
       <div className="app-main">
-        <Header section={moduleLabel(activeModule)} />
-        <main className="app-content">
+        {activeModule !== 'home' && <Header section={moduleLabel(activeModule)} />}
+        <main className={`app-content ${activeModule === 'home' ? 'app-content--bare' : ''}`}>
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} focusOrb={launch.action === 'hablar'} />}
           {activeModule === 'today' && (
             <TodayPanel onOpenTasks={() => setActiveModule('tasks')} onOpenConnectors={() => setActiveModule('connectors')} onOpenChat={openChat} />

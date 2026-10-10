@@ -28,6 +28,11 @@
   padding: 1.25rem 1.5rem 1.5rem;
 }
 
+/* Inicio: no header, no padding — just the black HUD and the orb, edge to edge. */
+.app-content--bare {
+  padding: 0;
+}
+
 .app-content > * {
   height: 100%;
 }
