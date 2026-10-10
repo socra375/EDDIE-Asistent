@@ -251,8 +251,8 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
                 />
               ))}
             </>
-          ) : visual === 'processing' ? null : (
-            <p className="home__hint">{sttSupported ? 'TOCA EL ORBE PARA HABLAR' : 'ESCRÍBELE A EDDIE EN LA CONVERSACIÓN'}</p>
+          ) : visual === 'processing' || sttSupported ? null : (
+            <p className="home__hint">ESCRÍBELE A EDDIE EN LA CONVERSACIÓN</p>
           )}
         </div>
 

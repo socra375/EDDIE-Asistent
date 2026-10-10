@@ -18,10 +18,13 @@ function useCenterImage() {
   return image;
 }
 
-// Eddie's central control: a holographic sphere (Three.js) inside an empty dark
-// disc, with the EDDIE name and a status chip under it. The whole circle is the
-// push-to-talk button. `state` drives the animation: idle | listening | processing
-// | speaking | disabled | error (see HologramOrb and Home.css).
+// Eddie's central control: just the holographic sphere (Three.js), full size,
+// with nothing drawn over it — no name, no status chip, no hint: the whole
+// circle is the push-to-talk button, and its look and `state`-driven effects
+// (idle | listening | processing | speaking | disabled | error) are all there
+// is (see HologramOrb and Home.css). The one exception is the status chip,
+// which still appears, clickable, when the wake word needs the user to retry
+// (`onLabelClick` is set) — otherwise there is nothing to click or read.
 //
 // The picture Eddie is asked for (see services/centerImage.js) floats over the
 // sphere when there is one, in the same `eddie-orb__slot` disc as before.
@@ -46,22 +49,16 @@ export default function EddieOrb({ state, label, onActivate, actionLabel, labelT
         )}
       </button>
 
-      <h2 className="eddie-orb__name">E.D.D.I.E.</h2>
       {picture && (
         <button type="button" className="eddie-orb__clear" onClick={() => setCenterImage(null)} title={picture.prompt || 'Imagen del centro'}>
           Quitar la imagen del centro
         </button>
       )}
-      {onLabelClick ? (
+      {onLabelClick && (
         <button type="button" className="eddie-orb__status eddie-orb__status--action" onClick={onLabelClick} title={labelTitle}>
           <span className="eddie-orb__dot" aria-hidden="true" />
           {label}
         </button>
-      ) : (
-        <p className="eddie-orb__status" role="status" title={labelTitle}>
-          <span className="eddie-orb__dot" aria-hidden="true" />
-          {label}
-        </p>
       )}
     </div>
   );

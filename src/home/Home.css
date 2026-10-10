@@ -5,6 +5,11 @@
   grid-template-columns: 1fr minmax(300px, 380px);
   gap: 1.4rem;
   min-height: 0;
+  background: #050510; /* solid black behind the orb, for the floating effect; the light theme doesn't want this */
+}
+
+:root[data-theme='light'] .home {
+  background: none;
 }
 
 /* The info panels float over the left of the screen while they are asked
@@ -226,7 +231,7 @@
   flex-direction: column;
   align-items: center;
   gap: 0.7rem;
-  width: min(100%, calc(100vh - 430px), 440px);
+  width: min(100%, calc(100vh - 260px), 620px);
   min-width: 220px;
 }
 
@@ -634,7 +639,7 @@
   }
 
   .eddie-orb {
-    width: min(86%, 380px);
+    width: min(92%, 460px);
   }
 
   .home__conversation {
