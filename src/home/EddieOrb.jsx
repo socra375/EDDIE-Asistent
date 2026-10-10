@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import ParticleRing from './ParticleRing';
+import HologramOrb from './HologramOrb';
 import { CENTER_IMAGE_EVENT, getCenterImage, setCenterImage } from '../services/centerImage';
 import { mediaUrl } from '../services/media';
 
@@ -18,21 +18,22 @@ function useCenterImage() {
   return image;
 }
 
-// Eddie's central control: a ring of flowing light particles around an empty
-// dark disc, with the EDDIE name and a status chip under it. The whole circle
-// is the push-to-talk button. `state` drives the animation: idle | listening |
-// processing | speaking | disabled | error (see ParticleRing and Home.css).
+// Eddie's central control: a holographic sphere (Three.js) inside an empty dark
+// disc, with the EDDIE name and a status chip under it. The whole circle is the
+// push-to-talk button. `state` drives the animation: idle | listening | processing
+// | speaking | disabled | error (see HologramOrb and Home.css).
 //
-// The disc in the middle (`eddie-orb__slot`) is kept clear on purpose: it is
-// where the picture Eddie is asked for appears (see services/centerImage.js).
+// The picture Eddie is asked for (see services/centerImage.js) floats over the
+// sphere when there is one, in the same `eddie-orb__slot` disc as before.
 export default function EddieOrb({ state, label, onActivate, actionLabel, labelTitle, onLabelClick }) {
   const picture = useCenterImage();
   return (
     <div className="eddie-orb" data-state={state}>
       <button type="button" className="eddie-orb__hit" onClick={onActivate} aria-label={actionLabel}>
+        <HologramOrb state={state} />
         <span className="eddie-orb__glow" aria-hidden="true" />
-        <span className="eddie-orb__slot" aria-hidden="true">
-          {picture && (
+        {picture && (
+          <span className="eddie-orb__slot" aria-hidden="true">
             <img
               key={picture.id}
               className="eddie-orb__image"
@@ -41,9 +42,8 @@ export default function EddieOrb({ state, label, onActivate, actionLabel, labelT
               draggable="false"
               onError={() => setCenterImage(null)}
             />
-          )}
-        </span>
-        <ParticleRing state={state} />
+          </span>
+        )}
       </button>
 
       <h2 className="eddie-orb__name">E.D.D.I.E.</h2>
