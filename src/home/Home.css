@@ -471,12 +471,16 @@
   cursor: pointer;
 }
 
-/* ---- Buttons under the orb ---- */
+/* ---- Buttons: a fixed cluster in the bottom-right corner, not inline under
+   the orb, so the hologram keeps the centre clear. ---- */
 .home__actions {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  z-index: 4;
   display: flex;
-  justify-content: center;
-  gap: 0.8rem;
-  margin-top: 0.3rem;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
 .home__fab {
