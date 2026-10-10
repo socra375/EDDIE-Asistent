@@ -1021,6 +1021,11 @@ Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre 
 
 **Qué hay en tu red**: pregúntale a Eddie «¿qué dispositivos hay conectados en mi red?» (scan_network, en el PC o el Chromebook vinculado): IP, MAC y el nombre que anuncia cada uno, solo de la red privada a la que estás conectado. Sin ataques ni escaneo de puertos; detalles en `docs/eddie-prime-agente.md`.
 
+**Abrir una app**: «abre Spotify», «abre la calculadora en el PC»… Eddie busca cualquier app instalada por su nombre (no
+hace falta configurar nada) y la primera vez que abres una pide tu confirmación; luego la recuerda y no vuelve a
+preguntar para esa app en ese equipo. Si no la encuentra (nombre distinto, instalada en otro sitio), se le puede dar
+un alias a mano en `config.json` del agente.
+
 **Varios equipos**: puedes vincular el PC y el Chromebook a la vez; Eddie los distingue por nombre y sistema («abre la calculadora
 en el PC», «¿cuánto disco queda en el Chromebook?») y, si hay varios y no dices cuál, pregunta en vez de adivinar.
 
@@ -1034,8 +1039,9 @@ su token. Solo ejecuta su lista blanca de herramientas, y lo que cambia algo pid
    mismo entorno de Python que tu sonda, o `pip install psutil`.
 3. `python3 eddie_agent.py install-service` para que arranque solo; luego **Probar desde la nube**.
 
-No necesita variables nuevas (usa `DATABASE_URL` y la migración `0006_computer.sql`). Opcional: `EDDIE_NTFY_URL` si
-usas tu propio servidor ntfy. Detalles, herramientas, contrato y seguridad: `docs/eddie-prime-agente.md`.
+No necesita variables nuevas (usa `DATABASE_URL` y las migraciones `0006_computer.sql` y `0025_computer_app_grants.sql`,
+esta última para recordar qué apps ya aprobaste). Opcional: `EDDIE_NTFY_URL` si usas tu propio servidor ntfy. Detalles,
+herramientas, contrato y seguridad: `docs/eddie-prime-agente.md`.
 
 ## Voz (Speech-to-Text / Text-to-Speech)
 

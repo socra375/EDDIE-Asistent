@@ -25,8 +25,10 @@ solo (en segundo plano, sin ventana) cada vez que inicias sesión.
 
 Requisitos: Python 3.8+ y psutil (pip install psutil).
 Configuración: ~/.config/eddie-agent/config.json en Linux y %APPDATA%\\eddie-agent\\config.json
-en Windows (solo tu usuario puede leerla). Ahí puedes permitir apps para open_app, por ejemplo:
-  "apps": {"terminal": ["x-terminal-emulator"], "archivos": ["nautilus"], "code": ["code"]}
+en Windows (solo tu usuario puede leerla). open_app busca cualquier app instalada por su nombre
+(registro de Windows y menú Inicio; /Applications en Mac; .desktop en Linux); "apps" ahí solo
+hace falta para darle un nombre propio a algo que no encuentra solo, por ejemplo:
+  "apps": {"mi script": ["/home/yo/bin/cosa.sh"]}
 """
 
 import argparse
@@ -36,6 +38,7 @@ import os
 import platform
 import re
 import select
+import shlex
 import shutil
 import signal
 import socket
@@ -47,7 +50,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -333,22 +336,155 @@ def t_list_directory(args, _cfg):
     return {"carpeta": short_path(target), "total": len(entries), "elementos": entries[:MAX_LIST], "summary": f"{len(entries)} elementos en {short_path(target)}"}
 
 
+def _find_windows_app(name):
+    """Registro (App Paths) y accesos directos del menú Inicio, luego el PATH."""
+    needle = name.lower()
+    try:
+        import winreg
+    except ImportError:
+        winreg = None
+    if winreg:
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                key = winreg.OpenKey(hive, r"Software\Microsoft\Windows\CurrentVersion\App Paths")
+            except OSError:
+                continue
+            with key:
+                i = 0
+                while True:
+                    try:
+                        sub = winreg.EnumKey(key, i)
+                    except OSError:
+                        break
+                    i += 1
+                    stem = sub[:-4] if sub.lower().endswith(".exe") else sub
+                    if needle not in stem.lower():
+                        continue
+                    try:
+                        with winreg.OpenKey(key, sub) as sk:
+                            raw = (winreg.QueryValue(sk, None) or "").strip()
+                    except OSError:
+                        continue
+                    if not raw:
+                        continue
+                    exe = raw[1 : raw.find('"', 1)] if raw.startswith('"') else raw.split(" ")[0]
+                    if exe:
+                        return [exe]
+    # Accesos directos del menú Inicio (.lnk): Windows abre uno tal cual con
+    # os.startfile, sin que haga falta resolver a qué programa apunta.
+    for base in (
+        os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "Microsoft", "Windows", "Start Menu", "Programs"),
+        os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs"),
+    ):
+        if not base or not os.path.isdir(base):
+            continue
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                if f.lower().endswith(".lnk") and needle in f[:-4].lower():
+                    return [os.path.join(root, f)]
+    which = shutil.which(name) or shutil.which(f"{name}.exe")
+    return [which] if which else None
+
+
+def _find_mac_app(name):
+    """/Applications (y las otras carpetas de apps habituales), luego el PATH."""
+    needle = name.lower()
+    fallback = None
+    for base in ("/Applications", "/System/Applications", os.path.join(os.path.expanduser("~"), "Applications")):
+        if not os.path.isdir(base):
+            continue
+        try:
+            entries = os.listdir(base)
+        except OSError:
+            continue
+        for e in entries:
+            if not e.lower().endswith(".app"):
+                continue
+            stem = e[:-4].lower()
+            path = os.path.join(base, e)
+            if stem == needle:
+                return ["open", path]
+            if fallback is None and needle in stem:
+                fallback = path
+    if fallback:
+        return ["open", fallback]
+    which = shutil.which(name)
+    return [which] if which else None
+
+
+def _find_linux_app(name):
+    """Un .desktop cuyo Name coincida (usando su Exec), luego el PATH."""
+    needle = name.lower()
+    fallback = None
+    for base in ("/usr/share/applications", "/usr/local/share/applications", os.path.join(os.path.expanduser("~"), ".local", "share", "applications")):
+        if not os.path.isdir(base):
+            continue
+        try:
+            entries = os.listdir(base)
+        except OSError:
+            continue
+        for fname in entries:
+            if not fname.endswith(".desktop"):
+                continue
+            try:
+                with open(os.path.join(base, fname), "r", encoding="utf-8", errors="ignore") as fh:
+                    text = fh.read()
+            except OSError:
+                continue
+            label = re.search(r"^Name=(.*)$", text, re.MULTILINE)
+            run = re.search(r"^Exec=(.*)$", text, re.MULTILINE)
+            if not label or not run:
+                continue
+            title = label.group(1).strip()
+            if needle not in title.lower():
+                continue
+            cleaned = re.sub(r"%[a-zA-Z]", "", run.group(1)).strip()
+            try:
+                argv = shlex.split(cleaned)
+            except ValueError:
+                continue
+            if not argv:
+                continue
+            if title.lower() == needle:
+                return argv
+            if fallback is None:
+                fallback = argv
+    if fallback:
+        return fallback
+    which = shutil.which(name)
+    return [which] if which else None
+
+
+def _find_app(name):
+    if IS_WINDOWS:
+        return _find_windows_app(name)
+    if detect_platform() == "mac":
+        return _find_mac_app(name)
+    return _find_linux_app(name)  # linux y chromebook
+
+
 def t_open_app(args, cfg):
     apps = cfg.get("apps") or {}
-    name = str(args.get("name") or "").strip().lower()
-    if not apps:
-        raise ValueError("No hay apps permitidas. Agrégalas en ~/.config/eddie-agent/config.json, en \"apps\".")
-    match = next((k for k in apps if k.lower() == name), None)
-    if not match:
-        raise ValueError(f"«{name}» no está en la lista de apps permitidas: {', '.join(sorted(apps))}.")
-    argv = apps[match]
+    name = str(args.get("name") or "").strip()
+    if not name:
+        raise ValueError("Dime el nombre de la app a abrir.")
+    match = next((k for k in apps if k.lower() == name.lower()), None)
+    argv = apps[match] if match else _find_app(name)
     if isinstance(argv, str):
         argv = [argv]
-    if not argv or not shutil.which(argv[0]):
-        raise ValueError(f"No encuentro el programa de «{match}» ({argv[0] if argv else '?'}).")
-    kwargs = {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if IS_WINDOWS else {"start_new_session": True}
-    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
-    return {"abierta": match, "summary": f"Abrí {match}"}
+    if not argv:
+        hint = f" Lo que ya tienes a mano: {', '.join(sorted(apps))}." if apps else ""
+        raise ValueError(f"No encuentro «{name}» instalada en este equipo.{hint} Si se llama distinto, agrégala en \"apps\" de config.json.")
+    exe = argv[0]
+    if exe != "open" and not os.path.exists(exe) and not shutil.which(exe):
+        raise ValueError(f"No encuentro el programa de «{match or name}» ({exe}).")
+    label = match or name
+    if IS_WINDOWS and exe.lower().endswith(".lnk"):
+        os.startfile(exe)  # type: ignore[attr-defined]  # un acceso directo: Windows resuelve a qué apunta
+    else:
+        kwargs = {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if IS_WINDOWS else {"start_new_session": True}
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+    return {"abierta": label, "summary": f"Abrí {label}"}
 
 
 def _is_mine(proc):
@@ -704,7 +840,7 @@ TOOLS = {
     "network_info": (t_network_info, "Red", "Interfaces, IPs locales y tráfico.", "read", {}),
     "uptime": (t_uptime, "Tiempo encendido", "Desde cuándo está encendido.", "read", {}),
     "list_directory": (t_list_directory, "Ver una carpeta", "Archivos y carpetas (dentro de tu carpeta personal).", "read", {"path": S("Ruta, ej. Descargas.")}),
-    "open_app": (t_open_app, "Abrir una app", "Abre una app de la lista permitida en la configuración.", "confirm", {"name": S("Nombre de la app en la lista.")}),
+    "open_app": (t_open_app, "Abrir una app", "Busca y abre cualquier app instalada por su nombre.", "confirm", {"name": S("Nombre de la app a abrir.")}),
     "kill_process": (t_kill_process, "Cerrar un proceso", "Cierra un proceso de tu usuario por su pid.", "confirm", {"pid": I("Id del proceso.")}),
     "scan_network": (t_scan_network, "Dispositivos en tu red", "Qué hay conectado a la misma red (IP, MAC y el nombre que cada uno anuncia). Solo mira; no ataca ni escanea puertos.", "read", {}),
 }
@@ -716,7 +852,7 @@ def catalog(cfg):
     out = []
     for name, (_fn, label, desc, risk, params) in TOOLS.items():
         if name == "open_app" and cfg.get("apps"):
-            desc = f"{desc} Permitidas: {', '.join(sorted(cfg['apps']))}."
+            desc = f"{desc} Con nombre propio en la configuración: {', '.join(sorted(cfg['apps']))}."
         out.append({"name": name, "label": label, "description": desc, "risk": risk,
                     "parameters": {"properties": params, "required": REQUIRED.get(name, [])}})
     return out
