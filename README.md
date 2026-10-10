@@ -588,7 +588,7 @@ Tocar la notificación abre (o enfoca) Eddie en el sitio correcto (el resumen ab
   envía el aviso cifrado al servicio de notificaciones del navegador (Google, Mozilla, Apple, Microsoft) y el *service worker*
   (`public/sw.js`) lo muestra. Si el aviso se entrega por Telegram **o** por notificación, cuenta como enviado.
 - **Sin configurar nada**: la llave VAPID se crea sola la primera vez y se guarda en Neon con la parte privada cifrada con
-  `CONNECTOR_SECRET` (el mismo de Gmail/Spotify; no se muestra ni se pega en ningún sitio). Opcional: `VAPID_PUBLIC_KEY`,
+  `CONNECTOR_SECRET` (el mismo de Gmail; no se muestra ni se pega en ningún sitio). Opcional: `VAPID_PUBLIC_KEY`,
   `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en Vercel para usar las tuyas.
 - **Probar**: «Enviar prueba» en la misma tarjeta. Desactivar: «Desactivar aquí» (o quita el permiso en el candado del navegador);
   un navegador que ya no existe se borra solo cuando el servicio de notificaciones lo informa.
@@ -629,30 +629,6 @@ Pasos (los haces tú, una sola vez):
 Si Eddie dice que no encuentra una página, casi siempre es el paso 3. El contenido que escribe usa Markdown
 sencillo (títulos con `#`, listas con `-`, tareas con `- [ ]`, citas con `>`, código con tres comillas
 invertidas); el formato dentro de una línea (negritas, enlaces) se guarda como texto normal.
-
-## Spotify (música por voz)
-
-«Pon música de Bad Bunny», «pausa», «siguiente canción», «sube el volumen a 60», «¿qué suena?»: Eddie busca y controla la
-reproducción de **tu cuenta de Spotify**. Es un conector por cuenta (OAuth): se vincula desde **Conectores → Conectar
-Spotify** y se puede quitar con **Desconectar Spotify**.
-
-- **Qué hace**: `spotify_search` (canciones, artistas, álbumes, playlists), `spotify_play` (el primer resultado, o
-  reanudar lo que sonaba), `spotify_control` (pausar, reanudar, siguiente, anterior, volumen, aleatorio) y
-  `spotify_now_playing`. Tras poner o pausar, Eddie vuelve a leer el reproductor y lo anota en el recibo como
-  «comprobado». Solo pide permisos de **lectura y control de la reproducción**; nunca toca tus listas ni tu biblioteca.
-- **Lo que necesita Spotify**: una cuenta **Premium** (Spotify no deja controlar la reproducción desde otras apps con
-  cuentas gratis) y **Spotify abierto en algún dispositivo**: la app del teléfono o del computador, o
-  open.spotify.com en una pestaña. Si no hay ninguno activo pero hay uno abierto, Eddie lo arranca ahí; si no hay
-  ninguno, te lo dice.
-- **Configurarlo** (una vez): en https://developer.spotify.com/dashboard crea una app («Web API»), agrega como
-  **Redirect URI** `https://TU-DOMINIO/api/connectors/spotify/callback` (o la de `SPOTIFY_REDIRECT_URI`) y, mientras la
-  app esté en modo desarrollo, agrega tu correo de Spotify en **User Management**. En **Vercel → Settings →
-  Environment Variables → Production** pon `SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET` (junto a `CONNECTOR_SECRET`,
-  `DATABASE_URL` y `APP_URL`, que ya usan Google y Telegram) y vuelve a desplegar. Nunca pegues esas claves en el chat.
-  Hace falta aplicar `db/migrations/0007_spotify.sql` (tabla `spotify_credentials`; los tokens se guardan cifrados).
-- **Cómo funciona**: `/api/connectors/spotify/{connect,callback,disconnect}` viven en la misma función de conectores
-  (no suman funciones a Vercel). Eddie solo le ofrece estas herramientas a la IA cuando la conversación habla de música.
-  También funciona desde Telegram.
 
 ## Memoria de conversaciones (Eddie recuerda lo que hablaron)
 
@@ -1155,7 +1131,7 @@ sirven en el navegador: `/?modulo=tareas|hoy|chat|memoria|conectores|configuraci
   (`VISION_MAX_PER_MINUTE`). Responden 429 con `Retry-After`.
 - El nombre de modelo que manda el navegador se valida (letras, números y `. _ : -`, y `/` solo en Groq/OpenRouter; nunca
   `..`): no puede cambiar la dirección de la petición al proveedor.
-- Los accesos de Spotify y Google se guardan cifrados (AES-256-GCM); las acciones delicadas (enviar, borrar, mover) siempre
+- Los accesos de Google se guardan cifrados (AES-256-GCM); las acciones delicadas (enviar, borrar, mover) siempre
   piden tu confirmación en una tarjeta; sin ejecución de código arbitrario en el navegador. Ver `docs/seguridad.md`.
 
 ## Despliegue
