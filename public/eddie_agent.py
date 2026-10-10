@@ -15,13 +15,15 @@ cerrar un proceso) Eddie lo pide siempre con tu confirmación.
 
 Uso:
   python3 eddie_agent.py pair CÓDIGO [--app https://eddie-asistent.vercel.app] [--name "Mi Chromebook"]
-  python3 eddie_agent.py run            # se queda esperando trabajos
+  python3 eddie_agent.py run            # se queda esperando trabajos (si no lo deja hecho "pair")
   python3 eddie_agent.py test           # prueba las herramientas aquí mismo
-  python3 eddie_agent.py install-service  # arranque automático (systemd de usuario, Linux)
+  python3 eddie_agent.py install-service  # vuelve a dejarlo arrancando solo (systemd de usuario en Linux, LaunchAgent en Mac)
 
-En Windows no hace falta nada de esto a mano: el instalador de un clic que descargas
-en Conectores → «Tu equipo (EDDIE Prime)» lo instala, lo vincula y lo deja arrancando
-solo (en segundo plano, sin ventana) cada vez que inicias sesión.
+"pair" ya deja el equipo arrancando solo desde que se encuentra encendido (al iniciar
+sesión): en Linux y Mac lo hace él mismo justo después de vincularse, sin ningún paso
+aparte; en Windows no hace falta nada de esto a mano, el instalador de un clic que
+descargas en Conectores → «Tu equipo (EDDIE Prime)» lo instala, lo vincula y lo deja
+arrancando solo (en segundo plano, sin ventana) cada vez que inicias sesión.
 
 Requisitos: Python 3.8+ y psutil (pip install psutil).
 Configuración: ~/.config/eddie-agent/config.json en Linux y %APPDATA%\\eddie-agent\\config.json
@@ -50,7 +52,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -1172,8 +1174,16 @@ def cmd_pair(args):
     cfg.setdefault("apps", dict(WINDOWS_APPS) if IS_WINDOWS else {})
     save_config(cfg)
     print(f"Vinculado como «{data['name']}» con {data['tools']} herramientas. Configuración: {CONFIG_PATH}")
-    if not os.environ.get("EDDIE_INSTALLER"):
-        print("Ahora arráncalo:  python3 eddie_agent.py run   (o install-service para que arranque solo)")
+    if os.environ.get("EDDIE_INSTALLER"):
+        return  # el instalador (Windows) se encarga él mismo del arranque automático
+    if IS_WINDOWS:
+        print("Ahora arráncalo:  python3 eddie_agent.py run   (o usa el instalador de un clic para que arranque solo)")
+        return
+    try:
+        cmd_install_service(cfg)
+        print("Listo: EDDIE Prime ya arranca solo cada vez que enciendes el equipo.")
+    except Exception as e:
+        print(f"Vinculado, pero no pude dejarlo arrancando solo ({e}). Arráncalo a mano:  python3 eddie_agent.py run")
 
 
 def cmd_test(cfg):
@@ -1184,9 +1194,41 @@ def cmd_test(cfg):
             print(name, "→ error:", e)
 
 
-def cmd_install_service(_cfg):
-    if IS_WINDOWS:
-        sys.exit("En Windows usa el instalador de un clic de Conectores → «Tu equipo (EDDIE Prime)»: deja el agente arrancando solo al iniciar sesión.")
+MAC_LAUNCH_AGENT_LABEL = "com.eddie.agent"
+
+
+def _install_service_mac():
+    """LaunchAgent de usuario: arranca solo al iniciar sesión y Mac lo reinicia si se cae."""
+    agents_dir = os.path.join(os.path.expanduser("~"), "Library", "LaunchAgents")
+    os.makedirs(agents_dir, exist_ok=True)
+    script = os.path.realpath(__file__)
+    log = os.path.join(config_dir(), "agent.log")
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>{MAC_LAUNCH_AGENT_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array><string>{sys.executable}</string><string>{script}</string><string>run</string></array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>{log}</string>
+    <key>StandardErrorPath</key><string>{log}</string>
+</dict>
+</plist>
+"""
+    path = os.path.join(agents_dir, f"{MAC_LAUNCH_AGENT_LABEL}.plist")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(plist)
+    print("LaunchAgent escrito en", path)
+    uid = os.getuid()
+    subprocess.run(["launchctl", "bootout", f"gui/{uid}/{MAC_LAUNCH_AGENT_LABEL}"], capture_output=True, text=True)
+    r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", path], capture_output=True, text=True)
+    print("$ launchctl bootstrap →", "ok" if r.returncode == 0 else (r.stderr.strip() or r.returncode))
+    print("Ver el registro: ", log)
+
+
+def _install_service_linux():
     unit_dir = os.path.join(os.path.expanduser("~"), ".config", "systemd", "user")
     os.makedirs(unit_dir, exist_ok=True)
     script = os.path.realpath(__file__)
@@ -1205,6 +1247,14 @@ def cmd_install_service(_cfg):
     print("Ver el registro:  journalctl --user -u eddie-agent -f")
 
 
+def cmd_install_service(_cfg):
+    if IS_WINDOWS:
+        sys.exit("En Windows usa el instalador de un clic de Conectores → «Tu equipo (EDDIE Prime)»: deja el agente arrancando solo al iniciar sesión.")
+    if sys.platform == "darwin":
+        return _install_service_mac()
+    return _install_service_linux()
+
+
 def main():
     parser = argparse.ArgumentParser(description="EDDIE Prime: el agente de Eddie en tu equipo.")
     sub = parser.add_subparsers(dest="cmd")
@@ -1214,7 +1264,7 @@ def main():
     p.add_argument("--name", help="nombre del equipo")
     sub.add_parser("run", help="esperar y ejecutar trabajos")
     sub.add_parser("test", help="probar las herramientas aquí")
-    sub.add_parser("install-service", help="arrancar solo con systemd de usuario")
+    sub.add_parser("install-service", help="arrancar solo (systemd en Linux, LaunchAgent en Mac); «pair» ya lo hace")
     args = parser.parse_args()
     if args.cmd == "pair":
         return cmd_pair(args)

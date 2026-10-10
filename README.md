@@ -1040,8 +1040,9 @@ Solo funciona en el equipo donde corre la sonda. Para el teléfono o Telegram es
 
 **En Windows: un clic.** **Conectores → Tu equipo (EDDIE Prime) → Descargar instalador para Windows** y abre el archivo: instala
 Python si falta (winget), el agente, lo vincula y lo deja **en segundo plano arrancando solo** cada vez que inicias sesión, sin
-terminal ni administrador, con desinstalador en Configuración → Aplicaciones (detalles en `docs/eddie-prime-agente.md`). En el
-Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre mientras Linux está encendido.
+terminal ni administrador, con desinstalador en Configuración → Aplicaciones (detalles en `docs/eddie-prime-agente.md`). En Linux
+y Mac, `pair` deja esto mismo hecho por su cuenta justo al vincularse (systemd de usuario en Linux, LaunchAgent en Mac), sin
+ningún paso aparte. En el Chromebook, Linux se apaga al cerrar la terminal, así que el agente solo corre mientras Linux está encendido.
 
 **Qué hay en tu red**: pregúntale a Eddie «¿qué dispositivos hay conectados en mi red?» (scan_network, en el PC o el Chromebook vinculado): IP, MAC y el nombre que anuncia cada uno, solo de la red privada a la que estás conectado. Sin ataques ni escaneo de puertos; detalles en `docs/eddie-prime-agente.md`.
 
@@ -1059,9 +1060,9 @@ propia (un solo cerebro: el de Eddie) y no abre puertos. Espera un aviso sin dat
 su token. Solo ejecuta su lista blanca de herramientas, y lo que cambia algo pide confirmación.
 
 1. **Conectores → Tu equipo (EDDIE Prime) → Vincular un equipo** (sesión del dueño).
-2. En la terminal de Linux pega los tres comandos que muestra la tarjeta (descargar, `pair CÓDIGO`, `run`). Usa el
-   mismo entorno de Python que tu sonda, o `pip install psutil`.
-3. `python3 eddie_agent.py install-service` para que arranque solo; luego **Probar desde la nube**.
+2. En la terminal de Linux o Mac pega los comandos que muestra la tarjeta (descargar, `pair CÓDIGO`). Usa el
+   mismo entorno de Python que tu sonda, o `pip install psutil`. `pair` ya deja el agente arrancando solo cada vez
+   que enciendes el equipo; luego **Probar desde la nube**.
 
 No necesita variables nuevas (usa `DATABASE_URL` y las migraciones `0006_computer.sql` y `0025_computer_app_grants.sql`,
 esta última para recordar qué apps ya aprobaste). Opcional: `EDDIE_NTFY_URL` si usas tu propio servidor ntfy. Detalles,

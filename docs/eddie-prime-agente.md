@@ -159,19 +159,21 @@ bloc de notas, el explorador y Paint tienen además un alias en español listo d
 **Por qué no el Chromebook:** el agente corre en Linux (Crostini), que se apaga al cerrar la terminal y las apps de Linux; con él se
 apaga el agente. Ahí el camino fiable es la extensión «Tu navegador» (vive con Chrome).
 
-## Instalación (Linux / Chromebook, terminal de Linux)
+## Instalación (Linux / Chromebook / Mac, terminal)
 
 1. En Eddie → **Conectores → Tu equipo (EDDIE Prime)** → **Vincular un equipo** (con la sesión de Google del dueño).
-   La tarjeta muestra tres comandos con botón **Copiar**:
+   La tarjeta muestra los comandos con botón **Copiar**:
    ```bash
    curl -fsSL https://eddie-asistent.vercel.app/eddie_agent.py -o eddie_agent.py
    python3 eddie_agent.py pair CÓDIGO --app https://eddie-asistent.vercel.app
-   python3 eddie_agent.py run
    ```
    Necesita `psutil`: usa el mismo entorno virtual de tu sonda (`source venv/bin/activate`) o `pip install psutil`.
-2. Para que arranque solo al encender Linux: `python3 eddie_agent.py install-service`. Crea
-   `~/.config/systemd/user/eddie-agent.service` con el Python que uses y lo activa (`systemctl --user enable --now`).
-   Para ver el registro: `journalctl --user -u eddie-agent -f`.
+2. `pair` deja el agente arrancando solo cada vez que enciendes el equipo, sin ningún paso aparte: en Linux crea y
+   activa `~/.config/systemd/user/eddie-agent.service` (`systemctl --user enable --now`; registro con
+   `journalctl --user -u eddie-agent -f`); en Mac escribe y carga
+   `~/Library/LaunchAgents/com.eddie.agent.plist` (`launchctl bootstrap`; registro en `~/.config/eddie-agent/agent.log`).
+   Si por lo que sea no pudo (por ejemplo, un Chromebook sin systemd de usuario), avisa y basta con dejarlo corriendo
+   a mano con `python3 eddie_agent.py run`, o repetir el paso con `python3 eddie_agent.py install-service`.
 3. **Probar desde la nube** en la tarjeta, y luego por Telegram: "¿cuánta batería tiene mi Chromebook?".
 
 `python3 eddie_agent.py test` prueba las herramientas sin conectarse a nada.

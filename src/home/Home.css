@@ -215,9 +215,9 @@
 :root[data-core='amber'] { --core: #ffb020; --core-soft: #ffe0a3; --core-dim: #a06a0a; }
 
 /* ---- Eddie orb ----
-   A ring of flowing light particles drawn on one canvas (ParticleRing.jsx) around an empty dark
-   disc. Light on purpose (the first ring froze weak Chromebooks): no `filter` or shadows, ~20 fps
-   (10 in Modo ligero), paused off screen. The state colours come from --ring / --ring-soft below. */
+   A holographic sphere (Three.js, HologramOrb.jsx) clipped to the circle, lighter in Modo
+   ligero and paused off screen. Its tint comes from --ring / --ring-soft below, same as the
+   particle ring it replaced. */
 .eddie-orb {
   --ring: var(--core, var(--accent));
   --ring-soft: var(--core-soft, var(--accent-2));
@@ -239,6 +239,7 @@
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
+  overflow: hidden; /* clips the hologram sphere to the circle, like the ring canvas used to draw itself */
 }
 
 .eddie-orb__hit:focus-visible {
