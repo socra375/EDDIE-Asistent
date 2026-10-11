@@ -45,6 +45,11 @@ async function render() {
       return li;
     }),
   );
+  $('task').hidden = !state.activeTask;
+  if (state.activeTask) {
+    $('task-goal').textContent = `Eddie está haciendo: ${state.activeTask.goal}`;
+    $('task-progress').textContent = `Paso ${state.activeTask.actionCount} de ${state.activeTask.maxActions} como máximo`;
+  }
 }
 
 $('refresh').addEventListener('click', async () => {
@@ -57,6 +62,12 @@ $('refresh').addEventListener('click', async () => {
 
 $('unlink').addEventListener('click', async () => {
   await ask({ type: 'unlink' });
+  await render();
+});
+
+$('stop-task').addEventListener('click', async () => {
+  $('stop-task').disabled = true;
+  await ask({ type: 'stop-task' });
   await render();
 });
 
