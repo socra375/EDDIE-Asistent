@@ -20,11 +20,13 @@ function resolveRgb(host, varName, fallback) {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : fallback;
 }
 
+const THINKING_COLOR = [157, 0, 255]; // violet: "working something out" — processing, or loading a core image
+
 // Jarvis-style mood palette: the user's own colour (the core-colour picker in
 // Configuración → Interfaz HUD) at rest, violet while it works something out, red-orange
 // on a warning or error.
 function paletteFor(state, user) {
-  if (state === 'processing') return [157, 0, 255];
+  if (state === 'processing') return THINKING_COLOR;
   if (state === 'error') return [255, 51, 0];
   return user;
 }
@@ -56,10 +58,12 @@ const WARNING_PERIOD = 0.9; // seconds between shockwaves while in a warning/err
 // tilt. Colour and motion both react to `state`: the user's own core colour (and a calm
 // pulse) at rest, violet with a fast inward collapse while "thinking", red-orange with
 // recurring shockwaves on a warning or error. Everything the render loop touches each
-// frame is allocated once, up front, to keep this at 60 fps.
+// frame is allocated once, up front, to keep this at 60 fps. `window.actualizarImagenNucleo(url)`
+// projects a web image into the core (preloaded off-screen, faded in over the glow, with
+// an automatic fallback to the plain energy core on any load error).
 export default function HologramOrb({ state }) {
   const wrapRef = useRef(null);
-  const live = useRef({ state, refreshColor: () => {}, request: () => {}, triggerShock: () => {} });
+  const live = useRef({ state, refreshColor: () => {}, request: () => {}, triggerShock: () => {}, setCoreImage: () => {} });
 
   useEffect(() => {
     const prev = live.current.state;
@@ -68,6 +72,18 @@ export default function HologramOrb({ state }) {
     if (state !== prev && (state === 'listening' || state === 'processing') && prev !== 'listening' && prev !== 'processing') live.current.triggerShock();
     live.current.request();
   }, [state]);
+
+  // `actualizarImagenNucleo(url)`: a public, global hook so a future web-image-search
+  // result can be projected into the core (Stark-style), from anywhere — not just from
+  // this component. Only one orb is ever mounted at a time, so a simple global is enough;
+  // it is restored (not just deleted) on unmount in case something else ever defines it.
+  useEffect(() => {
+    const previous = window.actualizarImagenNucleo;
+    window.actualizarImagenNucleo = (url) => live.current.setCoreImage(url);
+    return () => {
+      window.actualizarImagenNucleo = previous;
+    };
+  }, []);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -141,6 +157,39 @@ export default function HologramOrb({ state }) {
       nextShock = (nextShock + 1) % SHOCK_SLOTS;
     };
 
+    // ---- the core image (actualizarImagenNucleo): precargada off-screen so the 60fps
+    // loop never stalls, faded out (while pulsing violet, "thinking") during the load and
+    // faded back in once it lands; any failure — a broken URL, a CORS-blocked host — just
+    // restores the plain energy core, so the orb is never left blank or broken. ----
+    let coreImage = null;
+    let imageLoading = false;
+    let imageAlpha = 0;
+    let loadToken = 0;
+    s.setCoreImage = (url) => {
+      loadToken += 1;
+      const myToken = loadToken;
+      imageLoading = true;
+      request();
+      const img = new Image();
+      // No crossOrigin: a typical web-search image result carries no CORS header, and
+      // this orb only ever draws the image (no getImageData/toDataURL), so a "tainted"
+      // canvas is harmless here — asking for crossOrigin would just make more images fail
+      // to load at all.
+      img.onload = () => {
+        if (myToken !== loadToken) return; // superseded by a newer call
+        coreImage = img;
+        imageLoading = false;
+        request();
+      };
+      img.onerror = () => {
+        if (myToken !== loadToken) return;
+        coreImage = null;
+        imageLoading = false;
+        request();
+      };
+      img.src = url;
+    };
+
     // ---- mouse parallax: a soft eased tilt, not a drag — the circle is a button, not a
     // thing to spin by hand. ----
     let targetTiltY = 0;
@@ -178,7 +227,7 @@ export default function HologramOrb({ state }) {
       ctx.fillStyle = BLACK;
       ctx.fillRect(0, 0, w, h);
 
-      const target = paletteFor(s.state, userRgb);
+      const target = imageLoading ? THINKING_COLOR : paletteFor(s.state, userRgb);
       colorNow[0] += (target[0] - colorNow[0]) * 0.06;
       colorNow[1] += (target[1] - colorNow[1]) * 0.06;
       colorNow[2] += (target[2] - colorNow[2]) * 0.06;
@@ -272,6 +321,26 @@ export default function HologramOrb({ state }) {
       ctx.fill();
       ctx.shadowBlur = 0;
 
+      // A projected core image (actualizarImagenNucleo), cover-fit and clipped to the
+      // core's own circle, cross-fading over the energy glow as imageAlpha eases in.
+      if (coreImage && imageAlpha > 0.01) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = imageAlpha;
+        ctx.beginPath();
+        ctx.arc(cx, cy, coreR, 0, TWO_PI);
+        ctx.clip();
+        const iw = coreImage.naturalWidth || coreImage.width || 1;
+        const ih = coreImage.naturalHeight || coreImage.height || 1;
+        const side = coreR * 2;
+        const coverScale = Math.max(side / iw, side / ih);
+        const dw = iw * coverScale;
+        const dh = ih * coverScale;
+        ctx.drawImage(coreImage, cx - dw / 2, cy - dh / 2, dw, dh);
+        ctx.restore();
+        ctx.globalCompositeOperation = 'lighter';
+      }
+
       // The activation/warning pulse: a ring expanding outward from the core, fading out.
       for (let i = 0; i < SHOCK_SLOTS; i += 1) {
         const sh = shocks[i];
@@ -290,16 +359,18 @@ export default function HologramOrb({ state }) {
       running = false;
       const calm = isCalm();
       const animating = !calm && visible && !document.hidden;
+      const imageTarget = !imageLoading && coreImage ? 1 : 0;
       if (animating) {
         const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
         last = now;
         time += dt;
-        const motion = motionFor(s.state);
+        const motion = motionFor(imageLoading ? 'processing' : s.state);
         spinY += dt * 0.5 * motion.spin;
         spinZ += dt * 0.32 * motion.spin;
         tiltY += (targetTiltY - tiltY) * 0.08;
         tiltZ += (targetTiltZ - tiltZ) * 0.08;
         radiusFactor += (motion.radius - radiusFactor) * 0.05;
+        imageAlpha += (imageTarget - imageAlpha) * 0.06;
         for (let i = 0; i < SHOCK_SLOTS; i += 1) if (shocks[i].t < SHOCK_LIFE) shocks[i].t += dt;
         if (s.state === 'error') {
           warningClock += dt;
@@ -310,6 +381,7 @@ export default function HologramOrb({ state }) {
         } else warningClock = 0;
       } else {
         last = 0;
+        imageAlpha = imageTarget; // reduced motion / hidden: snap, no fade to get stuck mid-way
       }
       draw();
       if (animating) request();
@@ -348,6 +420,7 @@ export default function HologramOrb({ state }) {
       wrap.removeEventListener('mouseleave', onLeave);
       s.request = () => {};
       s.triggerShock = () => {};
+      s.setCoreImage = () => {};
       running = true;
       canvas.remove();
     };
