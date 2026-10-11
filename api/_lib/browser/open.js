@@ -7,7 +7,7 @@
 import { enqueue, linkByUser } from './store.js';
 import { safeHttpsUrl } from './urls.js';
 
-export const EXTENSION_VERSION = '1.0.0';
+export const EXTENSION_VERSION = '1.1.0';
 
 async function linkOf(context) {
   try {

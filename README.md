@@ -951,12 +951,20 @@ un negocio o un precio. Toca un punto o un brazo para ver lo guardado (notas, va
 ## Tu navegador: Eddie trabaja desde Chrome (extensión)
 
 Eddie corre en una pestaña y una página web no puede abrir otras por su cuenta (el navegador lo bloquea). La extensión **«Eddie en tu
-navegador»** (`extension/`) le da esa mano: abre pestañas, y nada más.
+navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confirmas, controla una de ellas por ti.
 
 - **Qué hace**: abre **tus reuniones del calendario a su hora** (Meet, Zoom, Teams, Webex… con el tiempo de antelación que elijas,
   aunque la pestaña de Eddie esté cerrada; abre la sala, no entra a la llamada por ti), abre **lo que Eddie crea** (documentos,
   hojas y presentaciones) y los enlaces de Google, reuniones o YouTube que le pidas (`open_in_browser`), sin pop-ups bloqueados ni
   botones que pulsar. Cualquier otro sitio web (`open_website`) pide tu confirmación en una tarjeta.
+- **Tarea en una pestaña (`browser_task`)**: para algo que Eddie no puede hacer por API (crear un diseño en Canva, por ejemplo), pídele
+  que lo haga él mismo: con tu confirmación **una sola vez por tarea** (no por cada clic), abre una pestaña, mira una captura, decide
+  un clic/tecla/texto, lo hace, mira otra vez — así hasta que termina, se traba o tú lo paras. Todo pasa por el protocolo de
+  depuración de Chrome (`chrome.debugger`: `Page.captureScreenshot`, `Input.*`), nunca un script dentro de la página, y **solo en esa
+  pestaña**: nunca toca otra. Si la pantalla pide una contraseña, un pago o un dato personal, Eddie se detiene y te lo dice en vez de
+  escribirlo. Puedes pararla en cualquier momento desde el ícono de la extensión (botón **Detener**, que muestra el paso actual), y
+  Eddie te avisa (notificación) cuando termina, se traba o tú le preguntas `browser_task_status`. Límites: 25 pasos o 4 minutos como
+  máximo por tarea (lo que llegue primero). Tabla nueva: `browser_tasks` (`db/migrations/0027_browser_tasks.sql`).
 - **Instalar** (Chrome, Edge, Brave… en el Chromebook o el PC): en **Conectores → Tu navegador** descarga la extensión
   (`/eddie-extension.zip`, se genera en cada `npm run build`), extráela (en el Chromebook, clic derecho → **Extraer todo**; los archivos van sueltos en el zip, así que
   queda una sola carpeta `eddie-extension` con `manifest.json` dentro), abre `chrome://extensions`, activa **Modo de desarrollador**,
@@ -968,14 +976,15 @@ navegador»** (`extension/`) le da esa mano: abre pestañas, y nada más.
   teléfono o Telegram, la extensión viene a buscarlo cada 30 s (las páginas que nadie recoge en 2 min se descartan). Las reuniones
   las lee del Calendario cada 10 min y pone una alarma por cada una. Tablas nuevas: `browser_links`, `browser_pair_codes` y
   `browser_commands` (`db/migrations/0019_browser.sql`). No añade funciones a Vercel: va por `/api/connectors/browser/*`.
-- **Privacidad y seguridad**: solo pide los permisos `alarms` y `storage`; no lee páginas ni las direcciones de tus pestañas. Guarda su
-  clave solo en la extensión (en la base de datos queda su hash). Solo abre direcciones `https` públicas, sin contraseña ni IP ni
-  nombres internos (la misma regla en el servidor y en la extensión). Eddie abre directo solo Google (documentos, calendario,
-  reuniones), YouTube, servicios de reunión y la propia Eddie; lo demás pide confirmación. Un evento solo abre su reunión si el enlace
-  es de un servicio de reunión conocido: quien te invita no puede mandarte a otra web.
+- **Privacidad y seguridad**: pide los permisos `alarms`, `storage` y `debugger`; fuera de una tarea confirmada no lee páginas ni las
+  direcciones de tus pestañas. Guarda su clave solo en la extensión (en la base de datos queda su hash). Solo abre direcciones `https`
+  públicas, sin contraseña ni IP ni nombres internos (la misma regla en el servidor y en la extensión). Eddie abre directo solo Google
+  (documentos, calendario, reuniones), YouTube, servicios de reunión y la propia Eddie; lo demás pide confirmación. Un evento solo
+  abre su reunión si el enlace es de un servicio de reunión conocido: quien te invita no puede mandarte a otra web.
 - **Límites**: el navegador tiene que estar abierto (nada se abre si está cerrado; una reunión que empezó hace menos de 15 min
-  se abre al arrancarlo). No controla páginas ni escribe en ellas: para trabajar en un documento, Eddie lo abre y lo edita por la
-  API de Google. Chrome puede pedir confirmar las extensiones sin empaquetar al arrancar.
+  se abre al arrancarlo). Fuera de una tarea confirmada, no controla páginas ni escribe en ellas: para trabajar en un documento,
+  Eddie lo abre y lo edita por la API de Google. Chrome puede pedir confirmar las extensiones sin empaquetar al arrancar, y al
+  actualizar la extensión por el permiso `debugger` nuevo, Chrome vuelve a pedir que aceptes los permisos.
 - **Otra dirección de Eddie**: el manifest trae `https://eddie-asistent.vercel.app`; con otra, cambia `host_permissions` y
   `externally_connectable` en `extension/manifest.json` antes de generar el zip (o vincula con un código desde el ícono de la
   extensión). Al subir la versión, cambia `version` en el manifest y `EXTENSION_VERSION` en `api/_lib/browser/open.js` (una

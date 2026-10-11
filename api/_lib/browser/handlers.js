@@ -8,6 +8,10 @@ import { requireUser } from '../session.js';
 import { upcomingMeetings } from './meetings.js';
 import { consumePairCode, createLink, createPairCode, deleteLink, enqueue, linkByToken, linkByUser, takeCommands, updateHello, updatePrefs, wasTaken } from './store.js';
 import { safeHttpsUrl } from './urls.js';
+import { decideNextAction } from './agentStep.js';
+import { getTask, pendingTaskFor, recordStep, TASK_MAX_MINUTES } from './tasks.js';
+import { sanitizeImages } from '../images.js';
+import { sendPush } from '../push/send.js';
 
 const CODE_RE = /^[A-Z2-9]{8}$/;
 const TEST_WAIT_MS = 45_000;
@@ -41,7 +45,10 @@ async function agentRoute(action, { method, headers, body }) {
     await updateHello(link.userId, { name: body?.name ? cleanText(body.name, 60, null) : null, version: cleanVersion(body?.version) });
     return { status: 200, json: { ok: true, prefs: link.prefs } };
   }
-  if (action === 'next') return { status: 200, json: { commands: await takeCommands(link.userId), prefs: link.prefs, now: new Date().toISOString() } };
+  if (action === 'next') {
+    return { status: 200, json: { commands: await takeCommands(link.userId), task: await pendingTaskFor(link.userId), prefs: link.prefs, now: new Date().toISOString() } };
+  }
+  if (action === 'task-step') return taskStepRoute(link.userId, body);
   if (action === 'agenda') {
     // Nothing to ask Google for when the user turned the meetings off.
     if (!link.prefs.autoMeetings) return { status: 200, json: { meetings: [], prefs: link.prefs, now: new Date().toISOString() } };
@@ -49,6 +56,67 @@ async function agentRoute(action, { method, headers, body }) {
     return { status: 200, json: { meetings, reason, prefs: link.prefs, now: new Date().toISOString() } };
   }
   return { status: 404, json: { error: 'Esa acción de la extensión no existe.' } };
+}
+
+const TASK_STATUS_WORD = { done: 'Tarea terminada', stopped: 'Eddie se detuvo', blocked: 'Eddie se detuvo por seguridad', error: 'Eddie tuvo un problema' };
+
+async function notifyTaskFinished(userId, task, finalStatus, reason) {
+  await sendPush(userId, { title: TASK_STATUS_WORD[finalStatus] || 'Eddie terminó', body: reason || task.goal, url: '/', tag: 'browser-task' }).catch(() => {});
+}
+
+// One screenshot from the extension → one decided action, or 'stop' once the
+// task is over (done, blocked, the user asked to stop, or a safety limit —
+// actions or time — was hit). The extension executes whatever this returns;
+// nothing here ever touches the tab itself.
+async function taskStepRoute(userId, body) {
+  const task = await getTask(String(body?.taskId || ''));
+  if (!task || task.userId !== userId) return { status: 404, json: { error: 'Esa tarea no existe.' } };
+  if (task.status !== 'running') return { status: 200, json: { action: 'stop' } };
+
+  const minutesUp = (Date.now() - new Date(task.startedAt).getTime()) / 60000;
+  if (task.stopRequested) {
+    await recordStep(task.id, { finish: 'stopped', result: 'El usuario la detuvo.' });
+    await notifyTaskFinished(userId, task, 'stopped', 'El usuario la detuvo.');
+    return { status: 200, json: { action: 'stop' } };
+  }
+  if (task.actionCount >= task.maxActions) {
+    await recordStep(task.id, { finish: 'stopped', result: 'Se alcanzó el límite de acciones.' });
+    await notifyTaskFinished(userId, task, 'stopped', 'Se alcanzó el límite de acciones.');
+    return { status: 200, json: { action: 'stop' } };
+  }
+  if (minutesUp > TASK_MAX_MINUTES) {
+    await recordStep(task.id, { finish: 'stopped', result: 'Se acabó el tiempo permitido.' });
+    await notifyTaskFinished(userId, task, 'stopped', 'Se acabó el tiempo permitido.');
+    return { status: 200, json: { action: 'stop' } };
+  }
+
+  let image;
+  try {
+    image = sanitizeImages([{ mimeType: 'image/png', data: String(body?.image || '') }])[0];
+  } catch (err) {
+    return { status: 400, json: { error: err.message } };
+  }
+  const width = Number.isFinite(Number(body?.width)) ? Math.round(Number(body.width)) : 0;
+  const height = Number.isFinite(Number(body?.height)) ? Math.round(Number(body.height)) : 0;
+  const history = Array.isArray(body?.history) ? body.history.map((h) => String(h).slice(0, 120)).slice(-6) : [];
+
+  let decision;
+  try {
+    decision = await decideNextAction(image, { goal: task.goal, history, width, height });
+  } catch (err) {
+    await recordStep(task.id, { finish: 'error', result: err.message });
+    await notifyTaskFinished(userId, task, 'error', err.message);
+    return { status: err.status || 502, json: { error: err.message } };
+  }
+
+  if (decision.action === 'done' || decision.action === 'blocked') {
+    const finalStatus = decision.action === 'done' ? 'done' : 'blocked';
+    await recordStep(task.id, { finish: finalStatus, result: decision.reason });
+    await notifyTaskFinished(userId, task, finalStatus, decision.reason);
+  } else {
+    await recordStep(task.id, {});
+  }
+  return { status: 200, json: decision };
 }
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

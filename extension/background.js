@@ -1,7 +1,7 @@
 // Eddie en tu navegador — the part that runs all the time.
 //
-// What it does, and nothing else: it opens tabs. It never reads a page, a
-// tab's address or anything the user types.
+// Mostly, it just opens tabs: it never reads a page, a tab's address or
+// anything the user types.
 //   1. Every half minute it asks Eddie's server for the pages Eddie wants
 //      opened (a document it just made, a link the user asked for).
 //   2. Every ten minutes it asks for the meetings in the user's calendar,
@@ -11,6 +11,14 @@
 //      for the half minute, no pop-up blocker), and link the browser.
 // Each page opens once: a page is identified by the id Eddie gave it, and a
 // meeting by its id and start, both remembered for a few days.
+//
+// The one exception: a "browser task" (see runTaskLoop below) the user
+// explicitly confirmed in Eddie's chat. Only for that one tab, only for as
+// long as the task runs, Eddie does look (a screenshot) and does act (a
+// click, a key, some typed text) — through the Chrome DevTools protocol
+// (`chrome.debugger`), never a content script, so it never reads page data
+// outside of what a screenshot shows. The user can stop it any time from
+// this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
@@ -80,13 +88,13 @@ function openMeeting(m) {
 
 // ---- Talking to Eddie ----
 
-async function api(path) {
+async function api(path, body = {}) {
   const { server = DEFAULT_SERVER, token } = await read(['server', 'token']);
   if (!token) throw new Error('not-linked');
   const res = await fetch(`${server}/api/connectors/browser/agent/${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify(body),
   });
   if (res.status === 401) {
     await unlink();
@@ -115,11 +123,146 @@ async function poll() {
     const data = await api('next');
     const changed = await keepPrefs(data.prefs);
     for (const command of data.commands || []) await openPage(command.url, { id: command.id });
+    if (data.task) await maybeStartTask(data.task);
     await setStatus('');
     if (changed) await refreshAgenda();
   } catch (err) {
     if (err.message !== 'not-linked' && err.message !== 'unlinked') await setStatus(err.message);
   }
+}
+
+// ---- Browser tasks: look at one tab (a screenshot), decide one action, act,
+// look again — until the task says it's done, hits a safety limit, or the
+// user stops it from the popup. Everything goes through chrome.debugger
+// (the Chrome DevTools protocol): no content script, nothing read from the
+// page beyond what a screenshot shows. ----
+
+const TASK_STEP_DELAY_MS = 900;
+const CLIENT_MAX_ACTIONS = 30;
+const KEY_DEFS = {
+  Enter: { keyCode: 13, code: 'Enter', key: 'Enter', text: '\r' },
+  Tab: { keyCode: 9, code: 'Tab', key: 'Tab' },
+  Escape: { keyCode: 27, code: 'Escape', key: 'Escape' },
+  Backspace: { keyCode: 8, code: 'Backspace', key: 'Backspace' },
+};
+
+let runningTaskId = null; // guards against starting the same task twice in one worker lifetime
+
+function waitForLoad(tabId) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const listener = (id, info) => {
+      if (id === tabId && info.status === 'complete') finish();
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(finish, 15000);
+  });
+}
+
+// The PNG's own pixel size (not the CSS viewport size): lets a click land
+// where the model meant it, whatever the page's zoom or device pixel ratio.
+async function imageDims(base64) {
+  try {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  } catch {
+    return null;
+  }
+}
+
+// chrome.debugger's Input.* coordinates are CSS pixels; the model answers in
+// the screenshot's own pixel grid. `scale` converts one to the other.
+async function performAction(tabId, action, scale) {
+  const target = { tabId };
+  if (action.action === 'click') {
+    const x = (action.x || 0) / scale;
+    const y = (action.y || 0) / scale;
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+  } else if (action.action === 'type') {
+    await chrome.debugger.sendCommand(target, 'Input.insertText', { text: action.text });
+  } else if (action.action === 'key') {
+    const def = KEY_DEFS[action.key];
+    if (!def) return;
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', { type: 'keyDown', windowsVirtualKeyCode: def.keyCode, code: def.code, key: def.key, text: def.text });
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: def.keyCode, code: def.code, key: def.key });
+  } else if (action.action === 'scroll') {
+    const x = (action.x || 0) / scale;
+    const y = (action.y || 0) / scale;
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: action.deltaY || 0 });
+  }
+}
+
+async function runTaskLoop(task, tabId) {
+  let attached = false;
+  const history = [];
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+    attached = true;
+    for (let i = 0; i < CLIENT_MAX_ACTIONS; i += 1) {
+      const { stopTaskId } = await read('stopTaskId');
+      if (stopTaskId === task.id) break;
+      if (!(await chrome.tabs.get(tabId).catch(() => null))) break; // the tab got closed
+      let shot;
+      let metrics;
+      try {
+        [shot, metrics] = await Promise.all([
+          chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', { format: 'png' }),
+          chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics'),
+        ]);
+      } catch {
+        break; // the user closed the "being debugged" bar, or the tab navigated away mid-capture
+      }
+      const dims = await imageDims(shot.data);
+      const cssWidth = metrics?.cssVisualViewport?.clientWidth || metrics?.visualViewport?.clientWidth || dims?.width || 1;
+      const scale = dims ? dims.width / cssWidth : 1;
+      let resp;
+      try {
+        resp = await api('task-step', { taskId: task.id, image: shot.data, width: dims?.width || 0, height: dims?.height || 0, history });
+      } catch {
+        break; // offline, or the server said no — either way, stop quietly
+      }
+      if (!resp || resp.error || resp.action === 'stop') break;
+      await write({ activeTask: { id: task.id, goal: task.goal, actionCount: i + 1, maxActions: CLIENT_MAX_ACTIONS } });
+      history.push(`${resp.action}${resp.reason ? `: ${resp.reason}` : ''}`);
+      if (history.length > 6) history.shift();
+      if (resp.action === 'done' || resp.action === 'blocked') break;
+      await performAction(tabId, resp, scale || 1);
+      await new Promise((resolve) => setTimeout(resolve, TASK_STEP_DELAY_MS));
+    }
+  } finally {
+    if (attached) await chrome.debugger.detach({ tabId }).catch(() => {});
+    await write({ activeTask: null, stopTaskId: null });
+  }
+}
+
+async function maybeStartTask(task) {
+  if (!task || runningTaskId === task.id) return;
+  const { activeTask } = await read('activeTask');
+  if (activeTask?.id === task.id) return; // a previous worker instance already claimed it
+  runningTaskId = task.id;
+  await write({ activeTask: { id: task.id, goal: task.goal, actionCount: 0, maxActions: CLIENT_MAX_ACTIONS }, stopTaskId: null });
+  const url = openableUrl(task.startUrl);
+  if (!url) {
+    await write({ activeTask: null });
+    runningTaskId = null;
+    return;
+  }
+  const tab = await chrome.tabs.create({ url, active: true });
+  if (tab?.windowId != null) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  await waitForLoad(tab.id);
+  runTaskLoop(task, tab.id).finally(() => {
+    if (runningTaskId === task.id) runningTaskId = null;
+  });
 }
 
 async function refreshAgenda() {
@@ -224,7 +367,7 @@ async function pair({ server, code, name }) {
 }
 
 async function state() {
-  const s = await read(['server', 'token', 'linkName', 'prefs', 'lastOk', 'lastError', 'meetings']);
+  const s = await read(['server', 'token', 'linkName', 'prefs', 'lastOk', 'lastError', 'meetings', 'activeTask']);
   const now = Date.now();
   return {
     ok: true,
@@ -236,6 +379,7 @@ async function state() {
     lastOk: s.lastOk || null,
     lastError: s.lastError || '',
     meetings: (s.meetings || []).filter((m) => Date.parse(m.endsAt) > now).slice(0, 3).map((m) => ({ title: m.title, startsAt: m.startsAt, provider: m.provider })),
+    activeTask: s.activeTask || null,
   };
 }
 
@@ -259,6 +403,12 @@ async function handle(message, fromPage) {
       await poll();
       await refreshAgenda();
       return state();
+    case 'stop-task': {
+      if (fromPage) return { ok: false };
+      const { activeTask } = await read('activeTask');
+      if (activeTask) await write({ stopTaskId: activeTask.id });
+      return { ok: true };
+    }
     default:
       return { ok: false, error: 'unknown' };
   }

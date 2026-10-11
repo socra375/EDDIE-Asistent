@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Eddie en tu navegador",
-  "version": "1.0.0",
-  "description": "Deja que Eddie abra tus reuniones a su hora, tus documentos y las páginas que le pidas, en este navegador.",
+  "version": "1.1.0",
+  "description": "Deja que Eddie abra tus reuniones a su hora, tus documentos y las páginas que le pidas, y (con tu confirmación) controle una pestaña para cumplir una tarea en una web, en este navegador.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAick4crhp8Bmc1reDIDYkqFtAS14Fvy+gNgb4xEH9YAcpsg1EHLW2IOYWfj5DWLvCpV8ceFzqGv229wADQkhHNFWH+LXL0XmlA7jlX8kPHxJ4uy1gyeUe3vhT+RquZld3JO8oAKaZ8i/YCTpdBqu91yH8WkdL7EmWne446obo90jRL38+QXpeKGpy0T/KhUmpu25IVWGWe0gXGEz3h8BcMfFQeoacm672+dec31PcUlm4c5MRxCze+7ytoqiHhOEILycmqlqgSr7Ry21BRaoPVR9Qq1oNQdGwwhoHmcd4ESOQssgAmO0ZUGXk1Kgid69n0rxvWu881dzSbCj1jf4V5QIDAQAB",
   "minimum_chrome_version": "116",
   "icons": {
@@ -20,7 +20,8 @@
   },
   "permissions": [
     "alarms",
-    "storage"
+    "storage",
+    "debugger"
   ],
   "host_permissions": [
     "https://eddie-asistent.vercel.app/*"
