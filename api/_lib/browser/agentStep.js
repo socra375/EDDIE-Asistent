@@ -24,7 +24,7 @@ function stepError(message, status, code = 'STEP_ERROR') {
   return err;
 }
 
-function promptFor(goal, history, width, height) {
+function promptFor(goal, history, width, height, messagingSafe) {
   const recent = history.slice(-MAX_HISTORY);
   return `Eres el piloto de una tarea de navegador para el asistente Eddie: controlas UNA pestaña, paso a paso, para cumplir el objetivo del usuario.
 Objetivo: "${goal}"
@@ -39,7 +39,12 @@ Decide EXACTAMENTE una acción, la mínima para avanzar. Devuelve SOLO un JSON c
 - deltaY: cuánto desplazar verticalmente en píxeles, positivo hacia abajo (solo para scroll)
 - reason: una frase muy corta en español de qué haces y por qué
 
-Usa "done" solo cuando el objetivo ya se ve cumplido en la imagen. Usa "blocked" (y explica el motivo en reason, sin inventar datos) si la pantalla pide una contraseña, iniciar sesión, datos de pago o cualquier dato personal del usuario: nunca hagas clic ni escribas ahí, para eso el usuario tiene que hacerlo él mismo.`;
+Usa "done" solo cuando el objetivo ya se ve cumplido en la imagen. Usa "blocked" (y explica el motivo en reason, sin inventar datos) si la pantalla pide una contraseña, iniciar sesión, datos de pago o cualquier dato personal del usuario: nunca hagas clic ni escribas ahí, para eso el usuario tiene que hacerlo él mismo.${
+    messagingSafe
+      ? `
+Esta página es una red social o app de mensajería (Instagram, WhatsApp, Messenger…). Puedes leer lo que hay en pantalla y escribir (type) una respuesta en el cuadro de mensaje, pero NUNCA la envíes tú: no hagas clic en ningún botón de enviar ni pulses la tecla Enter dentro del campo de mensaje. En cuanto termines de escribir la respuesta, responde "done" (en reason, copia la respuesta que escribiste) para que el usuario la revise y la envíe él mismo. Si el objetivo pide vigilar la conversación o contestar mensajes de forma continua o automática, responde "blocked" explicando que esto solo redacta una respuesta por tarea confirmada.`
+      : ''
+  }`;
 }
 
 const RESPONSE_SCHEMA = {
@@ -183,10 +188,20 @@ async function callClaudeStep(image, prompt, { apiKey, model }) {
   return parseSceneText(text);
 }
 
+// The last drafted reply in the history the extension sent back, so a reply
+// Eddie is stopped from sending (see decideNextAction below) can still tell
+// the user what it wrote instead of just "I stopped".
+function lastDraftedReply(history) {
+  const entry = [...history].reverse().find((h) => /^type:\s*"/.test(h));
+  if (!entry) return null;
+  const text = entry.replace(/^type:\s*"/, '').replace(/"$/, '');
+  return text || null;
+}
+
 // One screenshot + the goal → one normalized action. Tries, in order, the
 // providers that are set up: Gemini, Groq (free, vision), Claude.
-export async function decideNextAction(image, { goal, history = [], width, height }, env = process.env) {
-  const prompt = promptFor(goal, history, width || 0, height || 0);
+export async function decideNextAction(image, { goal, history = [], width, height, messagingSafe = false }, env = process.env) {
+  const prompt = promptFor(goal, history, width || 0, height || 0, messagingSafe);
   const providers = [];
   if (env.GEMINI_API_KEY) providers.push({ id: 'gemini', apiKey: env.GEMINI_API_KEY, model: env.GEMINI_VISION_MODEL || DEFAULT_GEMINI_MODEL, call: callGeminiStep });
   if (env.GROQ_API_KEY) providers.push({ id: 'groq', apiKey: env.GROQ_API_KEY, model: env.GROQ_VISION_MODEL || DEFAULT_GROQ_MODEL, call: callGroqStep });
@@ -196,7 +211,20 @@ export async function decideNextAction(image, { goal, history = [], width, heigh
   for (const [i, provider] of providers.entries()) {
     try {
       const raw = await provider.call(image, prompt, { apiKey: provider.apiKey, model: provider.model });
-      return { ...normalizeAction(raw), provider: provider.id, model: provider.model };
+      const decision = { ...normalizeAction(raw), provider: provider.id, model: provider.model };
+      // Belt and suspenders: even if the model ignores the instruction above,
+      // Eddie itself never submits a message on a messaging site — pressing
+      // Enter in a compose box is how almost every one of them sends.
+      if (messagingSafe && decision.action === 'key' && decision.key === 'Enter') {
+        const drafted = lastDraftedReply(history);
+        return {
+          provider: decision.provider,
+          model: decision.model,
+          action: 'done',
+          reason: drafted ? `Escribí esta respuesta y la dejé sin enviar para que la revises: "${drafted}"` : 'Escribí una respuesta y la dejé sin enviar para que la revises y la envíes tú mismo.',
+        };
+      }
+      return decision;
     } catch (err) {
       const next = i < providers.length - 1;
       const retryable = err.code === 'RATE_LIMITED' || err.code === 'UPSTREAM' || err.name === 'TimeoutError' || err.name === 'TypeError';

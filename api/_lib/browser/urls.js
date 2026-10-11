@@ -83,3 +83,29 @@ export function meetingProvider(value) {
   const host = new URL(url).hostname.toLowerCase();
   return Object.keys(MEETING_DOMAINS).find((name) => MEETING_DOMAINS[name].some((d) => inDomain(host, d))) || null;
 }
+
+// Redes sociales y mensajería: ahí una tarea de navegador (browser_task) solo
+// redacta UNA respuesta y nunca la envía — lo hace el propio usuario. Evita
+// que se mande un mensaje real a otra persona sin que lo revise, y evita el
+// riesgo de que la cuenta se marque como automatizada (va contra sus
+// condiciones de uso). Ver api/_lib/browser/agentStep.js.
+const MESSAGING_DOMAINS = [
+  'instagram.com',
+  'whatsapp.com',
+  'messenger.com',
+  'facebook.com',
+  'twitter.com',
+  'x.com',
+  'telegram.org',
+  'linkedin.com',
+  'tiktok.com',
+  'snapchat.com',
+  'discord.com',
+];
+
+export function isMessagingUrl(value) {
+  const url = safeHttpsUrl(value);
+  if (!url) return false;
+  const host = new URL(url).hostname.toLowerCase();
+  return MESSAGING_DOMAINS.some((d) => inDomain(host, d));
+}

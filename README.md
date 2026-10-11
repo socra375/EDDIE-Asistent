@@ -965,6 +965,12 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   escribirlo. Puedes pararla en cualquier momento desde el ícono de la extensión (botón **Detener**, que muestra el paso actual), y
   Eddie te avisa (notificación) cuando termina, se traba o tú le preguntas `browser_task_status`. Límites: 25 pasos o 4 minutos como
   máximo por tarea (lo que llegue primero). Tabla nueva: `browser_tasks` (`db/migrations/0027_browser_tasks.sql`).
+- **Redes sociales y mensajería (Instagram, WhatsApp Web, Messenger, X…)**: ahí Eddie solo **redacta** una respuesta y la deja sin
+  enviar — nunca pulsa el botón de enviar ni la tecla Enter en el campo de mensaje (`isMessagingUrl` en `api/_lib/browser/urls.js`
+  marca esos dominios; si el modelo de visión lo intenta igual, el servidor lo cambia por "terminado" antes de que llegue a la
+  extensión). Tú revisas lo que escribió y lo envías si quieres. Tampoco acepta una tarea que pida vigilar una conversación o
+  contestar mensajes de forma continua o automática (se rechaza al pedir la confirmación, explicando por qué): usar la cuenta así
+  incumple las condiciones de esos servicios y nadie revisaría lo que se manda. Pide una respuesta a la vez.
 - **Instalar** (Chrome, Edge, Brave… en el Chromebook o el PC): en **Conectores → Tu navegador** descarga la extensión
   (`/eddie-extension.zip`, se genera en cada `npm run build`), extráela (en el Chromebook, clic derecho → **Extraer todo**; los archivos van sueltos en el zip, así que
   queda una sola carpeta `eddie-extension` con `manifest.json` dentro), abre `chrome://extensions`, activa **Modo de desarrollador**,
