@@ -6,7 +6,7 @@
 // through the confirmation card. See api/_lib/browser/ and extension/.
 import { hasLink, linkByUser } from '../../browser/store.js';
 import { EXTENSION_VERSION, requestOpen } from '../../browser/open.js';
-import { isTrustedUrl, safeHttpsUrl } from '../../browser/urls.js';
+import { isMessagingUrl, isTrustedUrl, safeHttpsUrl } from '../../browser/urls.js';
 import { createTask, latestTaskFor, requestStop } from '../../browser/tasks.js';
 
 const TASK_STATUS_WORD = { running: 'en curso', done: 'terminada', stopped: 'detenida', blocked: 'detenida por seguridad', error: 'con un error' };
@@ -43,11 +43,23 @@ function prepareWebsite(args) {
   };
 }
 
+// Vigilar una conversación o contestar mensajes "solo" no es una tarea de una
+// sola confirmación: se rechaza antes de mostrar la tarjeta, en vez de dejar
+// que el usuario confirme algo que no vamos a hacer.
+const MONITOR_INTENT_RE = /\bcada\s|\bsiempre que\b|\btodos los mensajes\b|autom[aá]tic|vigil|monitor|en segundo plano|continuamente|24\/7|sin preguntar|apenas (llegue|reciba)/i;
+
 function prepareBrowserTask(args) {
   const goal = String(args.goal || '').replace(/\s+/g, ' ').trim().slice(0, 300);
   const url = safeHttpsUrl(String(args.start_url || '').trim());
   if (!goal) return { error: 'Dime qué debe hacer Eddie en esa pestaña, en pocas palabras.' };
   if (!url) return { error: 'Dame la dirección web completa (https://) donde Eddie debe empezar.' };
+  const messaging = isMessagingUrl(url);
+  if (messaging && MONITOR_INTENT_RE.test(goal)) {
+    return {
+      error:
+        'En redes sociales y mensajería, Eddie solo redacta una respuesta por tarea confirmada — nunca vigila conversaciones ni contesta mensajes de forma continua o automática. Pídemelo de a un mensaje a la vez.',
+    };
+  }
   return {
     args: { goal, start_url: url },
     preview: {
@@ -57,6 +69,7 @@ function prepareBrowserTask(args) {
       fields: [
         { key: 'start_url', label: 'Empieza en', value: url },
         { key: 'goal', label: 'Qué va a hacer', value: goal },
+        ...(messaging ? [{ key: 'note', label: 'Importante', value: 'Solo redacta la respuesta; nunca la envía — tú decides si la mandas.' }] : []),
       ],
     },
   };
@@ -67,10 +80,13 @@ async function runBrowserTask(args, context) {
   if (!user) return { error: 'No hay una sesión de usuario.' };
   if (!(await hasLink(user.id))) return { error: 'Tu navegador no está vinculado. Ve a Conectores → Tu navegador.' };
   const task = await createTask(user.id, { goal: args.goal, startUrl: args.start_url });
+  const messaging = isMessagingUrl(args.start_url);
   return {
     taskId: task.id,
     summary: `Eddie va a abrir ${hostOf(args.start_url)} e intentar: ${args.goal}. Te aviso cuando termine o si necesita que tú sigas.`,
-    note: 'Se abre sola una pestaña nueva y Eddie hace clics y escribe por su cuenta un momento, viendo solo esa pestaña (nunca contraseñas, pagos ni datos personales). El usuario puede detenerla en cualquier momento desde el ícono de la extensión.',
+    note: messaging
+      ? 'Se abre sola una pestaña nueva; Eddie lee la pantalla y escribe por su cuenta, pero en redes sociales y mensajería solo redacta la respuesta y la deja sin enviar — la revisas y la mandas tú. Nunca contraseñas, pagos ni datos personales. El usuario puede detenerla en cualquier momento desde el ícono de la extensión.'
+      : 'Se abre sola una pestaña nueva y Eddie hace clics y escribe por su cuenta un momento, viendo solo esa pestaña (nunca contraseñas, pagos ni datos personales). El usuario puede detenerla en cualquier momento desde el ícono de la extensión.',
   };
 }
 
@@ -104,7 +120,7 @@ export default {
     isConnected: (user) => hasLink(user.id),
   },
   requiredEnv: ['DATABASE_URL'],
-  note: 'Abrir páginas: la extensión solo abre pestañas, no lee lo que tienes abierto. Controlar una pestaña (browser_task) es distinto: el usuario confirma una vez, y mientras esa tarea dura Eddie sí ve una captura de esa pestaña y hace clics/escribe en ella — nunca fuera de esa pestaña, nunca en campos de contraseña o pago.',
+  note: 'Abrir páginas: la extensión solo abre pestañas, no lee lo que tienes abierto. Controlar una pestaña (browser_task) es distinto: el usuario confirma una vez, y mientras esa tarea dura Eddie sí ve una captura de esa pestaña y hace clics/escribe en ella — nunca fuera de esa pestaña, nunca en campos de contraseña o pago. En redes sociales y mensajería solo redacta la respuesta y nunca la envía: siempre la manda el usuario.',
   details: async (user) => {
     const link = user ? await linkByUser(user.id) : null;
     if (!link) return { latestVersion: EXTENSION_VERSION };
@@ -161,7 +177,7 @@ export default {
       declaration: {
         name: 'browser_task',
         description:
-          'Deja que Eddie controle una pestaña del navegador del usuario (hacer clics, escribir) para cumplir una tarea concreta en una página web, por ejemplo crear un diseño en Canva. Pide confirmación una sola vez para toda la tarea, no para cada clic. Nunca la uses para iniciar sesión, pagar o escribir datos personales del usuario: para eso, dile que lo haga él mismo.',
+          'Deja que Eddie controle una pestaña del navegador del usuario (hacer clics, escribir) para cumplir una tarea concreta en una página web, por ejemplo crear un diseño en Canva. Pide confirmación una sola vez para toda la tarea, no para cada clic. Nunca la uses para iniciar sesión, pagar o escribir datos personales del usuario: para eso, dile que lo haga él mismo. En redes sociales o mensajería (Instagram, WhatsApp Web, Messenger, X…) solo redacta UNA respuesta por tarea y la deja sin enviar para que el usuario la revise y la mande él mismo; nunca la uses para vigilar una conversación o contestar mensajes de forma continua o automática — eso va contra las condiciones de esos servicios y nadie revisaría lo que se manda.',
         parameters: {
           type: 'OBJECT',
           properties: {

@@ -7,7 +7,7 @@
 import { requireUser } from '../session.js';
 import { upcomingMeetings } from './meetings.js';
 import { consumePairCode, createLink, createPairCode, deleteLink, enqueue, linkByToken, linkByUser, takeCommands, updateHello, updatePrefs, wasTaken } from './store.js';
-import { safeHttpsUrl } from './urls.js';
+import { isMessagingUrl, safeHttpsUrl } from './urls.js';
 import { decideNextAction } from './agentStep.js';
 import { getTask, pendingTaskFor, recordStep, TASK_MAX_MINUTES } from './tasks.js';
 import { sanitizeImages } from '../images.js';
@@ -102,7 +102,7 @@ async function taskStepRoute(userId, body) {
 
   let decision;
   try {
-    decision = await decideNextAction(image, { goal: task.goal, history, width, height });
+    decision = await decideNextAction(image, { goal: task.goal, history, width, height, messagingSafe: isMessagingUrl(task.startUrl) });
   } catch (err) {
     await recordStep(task.id, { finish: 'error', result: err.message });
     await notifyTaskFinished(userId, task, 'error', err.message);

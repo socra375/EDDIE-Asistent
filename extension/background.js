@@ -233,7 +233,9 @@ async function runTaskLoop(task, tabId) {
       }
       if (!resp || resp.error || resp.action === 'stop') break;
       await write({ activeTask: { id: task.id, goal: task.goal, actionCount: i + 1, maxActions: CLIENT_MAX_ACTIONS } });
-      history.push(`${resp.action}${resp.reason ? `: ${resp.reason}` : ''}`);
+      // For "type", the exact typed text (not just the model's reason) is kept so
+      // the server can quote it later if it has to stop before a message is sent.
+      history.push(resp.action === 'type' && resp.text ? `type: "${resp.text}"` : `${resp.action}${resp.reason ? `: ${resp.reason}` : ''}`);
       if (history.length > 6) history.shift();
       if (resp.action === 'done' || resp.action === 'blocked') break;
       await performAction(tabId, resp, scale || 1);
