@@ -17,6 +17,7 @@ import ConnectorsPanel from './connectors/ConnectorsPanel';
 import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
 import GalleryPanel from './gallery/GalleryPanel';
+import ContactsPanel from './contacts/ContactsPanel';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import { NotesProvider } from './context/NotesContext';
@@ -278,6 +279,7 @@ function AppShell() {
           {activeModule === 'notes' && <NotesPanel />}
           {activeModule === 'memory' && <MemoryPanel />}
           {activeModule === 'gallery' && <GalleryPanel />}
+          {activeModule === 'contacts' && <ContactsPanel />}
           {activeModule === 'construction3d' && (
             <Suspense fallback={null}>
               <Construction3DPanel />

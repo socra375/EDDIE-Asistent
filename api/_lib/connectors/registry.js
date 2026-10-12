@@ -29,6 +29,7 @@ import conversations from './conversations/index.js';
 import knowledge from './knowledge/index.js';
 import media from './media/index.js';
 import whatsapp from './whatsapp/index.js';
+import contacts from './contacts/index.js';
 import business from './business/index.js';
 import browser from './browser/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
@@ -36,7 +37,7 @@ import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, routines, memory, conversations, knowledge, websearch, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, business, browser, telegram, devices, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, routines, memory, conversations, knowledge, websearch, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, contacts, business, browser, telegram, devices, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);

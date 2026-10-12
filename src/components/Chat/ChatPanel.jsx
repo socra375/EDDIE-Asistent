@@ -13,6 +13,7 @@ import RichText from '../Shared/RichText';
 import MessageActions from './MessageActions';
 import ConfirmCard from './ConfirmCard';
 import StepTrace from './StepTrace';
+import { copyText } from '../../services/messageActions';
 import './Chat.css';
 
 const PROVIDER_NAMES = { gemini: 'Gemini', claude: 'Claude', groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', probe: 'Sonda local' };
@@ -374,6 +375,31 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                       <a className="btn" href={draft.url} target="_blank" rel="noopener noreferrer">
                         Abrir en WhatsApp{draft.label ? ` · ${draft.label}` : ''}
                       </a>
+                    </figure>
+                  ))}
+                </div>
+              )}
+              {m.drafts?.length > 0 && (
+                <div className="bubble__wa" aria-label="Mensajes listos para enviar">
+                  {m.drafts.map((draft) => (
+                    <figure key={draft.url} className="bubble__wa-draft">
+                      <blockquote>{draft.text}</blockquote>
+                      {draft.channel === 'sms' ? (
+                        <a className="btn" href={draft.url}>
+                          Abrir en SMS{draft.label ? ` · ${draft.label}` : ''}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={async () => {
+                            await copyText(draft.text);
+                            window.open(draft.url, '_blank', 'noopener,noreferrer');
+                          }}
+                        >
+                          Copiar y abrir Instagram{draft.label ? ` · ${draft.label}` : ''}
+                        </button>
+                      )}
                     </figure>
                   ))}
                 </div>

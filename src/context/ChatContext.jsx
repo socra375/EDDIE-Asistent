@@ -20,6 +20,7 @@ import { applyBrowserActions } from '../services/browserActions';
 import { initBridge } from '../services/browserBridge';
 import { applyMediaActions } from '../services/mediaActions';
 import { applyWhatsappActions } from '../services/whatsappActions';
+import { applyMessageActions } from '../services/messageActions';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
@@ -530,6 +531,8 @@ export function ChatProvider({ children }) {
         if (result.actions?.length) {
           const drafts = applyWhatsappActions(result.actions);
           if (drafts.length) assistantMessage.whatsapp = drafts;
+          const others = applyMessageActions(result.actions);
+          if (others.length) assistantMessage.drafts = others;
         }
         // Things Eddie saved to (or removed from) the memory while answering.
         if (result.actions?.length) {

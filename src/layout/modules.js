@@ -10,6 +10,7 @@ export const MODULES = [
   { id: 'notes', label: 'Notas', icon: 'note', color: '#ffe066' },
   { id: 'memory', label: 'Memoria', icon: 'memory', color: '#ff7ad9' },
   { id: 'gallery', label: 'Galería', icon: 'image', color: '#7ad9ff' },
+  { id: 'contacts', label: 'Contactos', icon: 'contacts', color: '#5be0c3' },
   { id: 'construction3d', label: 'Construction 3D', icon: 'cube', color: '#ff9f43' },
   { id: 'connectors', label: 'Conectores', icon: 'plug', color: '#ffb020' },
 ];
