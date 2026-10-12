@@ -1,8 +1,8 @@
 // /api/connectors/construction3d — the 3D brain, for the Construction 3D screen:
 //   GET  construction3d                 the user's projects, the limits and what is in use
-//   POST construction3d/upload { name, bytes }   makes the row and a short-lived URL to PUT the .glb to
+//   POST construction3d/upload { name, bytes }   makes the row and a short-lived URL to PUT the model to (.glb, .stl or .obj)
 //   POST construction3d/complete { id } checks what arrived (size, "glTF" header) and publishes it
-//   GET  construction3d/url?id=…        a short-lived URL to read the .glb (only the owner's)
+//   GET  construction3d/url?id=…        a short-lived URL to read the model (only the owner's) and its format
 //   POST construction3d/update { id, name?, status?, notes? }
 //   POST construction3d/delete { id }
 // The file never passes through this server (Vercel caps a request near 4.5 MB):
@@ -12,10 +12,10 @@ import { requireUser } from '../session.js';
 import { allowedOrigins } from '../requestGuard.js';
 import { limiterFor } from '../rateLimit.js';
 import { deleteObject, ensureBucketCors, headObject, missingS3Env, presign, readHead } from './s3.js';
+import { WHAT_TO_EXPORT, contentTypeOf, formatOf, looksLikeModel } from './format.js';
 import { MAX_MODEL_BYTES, MAX_PROJECTS, MAX_TOTAL_BYTES, STATUSES, createProject, deleteProject, getProject, listProjects, markReady, projectUsage, takeStaleUploads, updateProject } from './store.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
-const CONTENT_TYPE = 'model/gltf-binary';
 const URL_SECONDS = 600;
 
 const missingEnv = () => [...(process.env.DATABASE_URL ? [] : ['DATABASE_URL']), ...missingS3Env()];
@@ -45,6 +45,8 @@ async function dropObjects(keys) {
 
 async function upload(user, body, headers) {
   if (!limiterFor('construction3d-upload', 20)(`u:${user.id}`).ok) return bad(429, 'Demasiadas subidas seguidas. Espera un momento.');
+  const format = formatOf(body?.name);
+  if (!format) return bad(400, 'Sube un archivo .glb, .stl o .obj.');
   const bytes = Number(body?.bytes);
   if (!Number.isInteger(bytes) || bytes < 20) return bad(400, 'No pude saber el tamaño del archivo.');
   if (bytes > MAX_MODEL_BYTES) return bad(413, `Ese modelo pesa demasiado: el máximo es ${Math.round(MAX_MODEL_BYTES / 1048576)} MB.`);
@@ -54,19 +56,15 @@ async function upload(user, body, headers) {
   if (usage.bytes + bytes > MAX_TOTAL_BYTES) return bad(409, 'El cerebro 3D está lleno. Borra algún proyecto para hacer espacio.');
   // Best effort: when it fails the upload below fails with a clear browser error, and the user is told why.
   const corsOk = await ensureBucketCors(pageOrigin(headers)).catch(() => false);
-  const name = clean(body?.name, 80).replace(/\.glb$/i, '') || 'Proyecto sin nombre';
-  const key = `u/${user.id}/${randomUUID()}.glb`;
+  const name = clean(body?.name, 80).replace(/\.(glb|stl|obj)$/i, '') || 'Proyecto sin nombre';
+  const key = `u/${user.id}/${randomUUID()}.${format}`;
+  const contentType = contentTypeOf(format);
   const project = await createProject(user.id, { name, bytes, key });
   return {
     status: 200,
     headers: noStore,
-    json: { id: project.id, name: project.name, uploadUrl: presign('PUT', key, { expires: URL_SECONDS, headers: { 'content-type': CONTENT_TYPE } }), headers: { 'Content-Type': CONTENT_TYPE }, corsOk },
+    json: { id: project.id, name: project.name, uploadUrl: presign('PUT', key, { expires: URL_SECONDS, headers: { 'content-type': contentType } }), headers: { 'Content-Type': contentType }, corsOk },
   };
-}
-
-// A binary glTF starts with "glTF", version 2, and its own total length.
-function isGlb(head, bytes) {
-  return head.length >= 12 && head.toString('latin1', 0, 4) === 'glTF' && head.readUInt32LE(4) === 2 && head.readUInt32LE(8) === bytes;
 }
 
 async function complete(user, body) {
@@ -82,7 +80,8 @@ async function complete(user, body) {
   const stored = await headObject(project.key);
   if (!stored) return reject(409, 'El archivo no llegó completo al almacenamiento. Inténtalo de nuevo.');
   if (stored.bytes > MAX_MODEL_BYTES) return reject(413, 'Ese modelo pesa demasiado.');
-  if (!isGlb(await readHead(project.key, 12), stored.bytes)) return reject(422, 'Ese archivo no es un modelo .glb válido. Exporta desde Blender con «glTF Binary (.glb)».');
+  const format = formatOf(project.key);
+  if (!looksLikeModel(format, await readHead(project.key, 4096), stored.bytes)) return reject(422, `Ese archivo no es un modelo ${format.toUpperCase()} válido. ${WHAT_TO_EXPORT[format]}`);
   return { status: 200, json: { item: await markReady(user.id, project.id, stored.bytes), limits: await limits(user.id) } };
 }
 
@@ -103,7 +102,7 @@ export async function handleConstruction3dRoute({ method, path = [], cookies = {
     if (!UUID.test(String(query.id || ''))) return bad(400, 'Indica el proyecto.');
     const project = await getProject(user.id, query.id);
     if (!project?.ready) return bad(404, 'Ese proyecto ya no existe.');
-    return { status: 200, headers: noStore, json: { url: presign('GET', project.key, { expires: URL_SECONDS }), expiresIn: URL_SECONDS } };
+    return { status: 200, headers: noStore, json: { url: presign('GET', project.key, { expires: URL_SECONDS }), format: formatOf(project.key), expiresIn: URL_SECONDS } };
   }
   if (sub === 'update' && method === 'POST') {
     if (!UUID.test(String(body?.id || ''))) return bad(400, 'Indica el proyecto.');

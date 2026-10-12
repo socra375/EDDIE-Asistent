@@ -17,7 +17,7 @@ const fmtDate = (t) => new Date(t).toLocaleDateString('es', { day: 'numeric', mo
 // Construction 3D: the 3D brain. The neural core in the middle with one
 // satellite per project around it, the figures of the brain on the left, the
 // project list on the right. Choosing a project opens it in the holographic
-// viewer. Models are .glb files kept in the private bucket (api/_lib/construction3d/).
+// viewer. Models (.glb, .stl or .obj) are kept in the private bucket (api/_lib/construction3d/).
 export default function Construction3DPanel() {
   const { user, login } = useAuth();
   const [state, setState] = useState({ status: 'loading', items: [], limits: null, configured: true, missing: [] });
@@ -73,7 +73,7 @@ export default function Construction3DPanel() {
 
   const send = async (file) => {
     if (!file || upload) return;
-    if (!/\.glb$/i.test(file.name)) return setMessage({ tone: 'bad', text: 'Sube un archivo .glb (en Blender: Exportar → glTF 2.0 → «glTF Binary (.glb)»).' });
+    if (!/\.(glb|stl|obj)$/i.test(file.name)) return setMessage({ tone: 'bad', text: 'Sube un modelo .glb, .stl u .obj (desde Blender: Exportar, y elige glTF Binary, STL o Wavefront).' });
     if (file.size > maxModel) return setMessage({ tone: 'bad', text: `Ese modelo pesa ${fmtBytes(file.size)}; el máximo es ${fmtBytes(maxModel)}.` });
     setMessage({ tone: '', text: '' });
     setUpload({ name: file.name, progress: 0 });
@@ -203,7 +203,7 @@ export default function Construction3DPanel() {
               </li>
             ))}
             {user && state.status === 'ready' && state.configured && visible.length === 0 && (
-              <li className="c3d-empty">{state.items.length ? 'Ningún proyecto con este estado.' : 'Aún no hay proyectos. Sube tu primer modelo .glb.'}</li>
+              <li className="c3d-empty">{state.items.length ? 'Ningún proyecto con este estado.' : 'Aún no hay proyectos. Sube tu primer modelo (.glb, .stl o .obj).'}</li>
             )}
           </ul>
         </aside>
@@ -220,9 +220,9 @@ export default function Construction3DPanel() {
             </div>
           ) : (
             <>
-              <input ref={fileInput} type="file" accept=".glb,model/gltf-binary" hidden onChange={(e) => { send(e.target.files?.[0]); e.target.value = ''; }} />
+              <input ref={fileInput} type="file" accept=".glb,.stl,.obj,model/gltf-binary,model/stl" hidden onChange={(e) => { send(e.target.files?.[0]); e.target.value = ''; }} />
               <button type="button" className="btn btn-primary c3d-upload-btn" disabled={Boolean(upload) || state.status === 'loading'} onClick={() => fileInput.current?.click()}>
-                {upload ? 'Subiendo…' : 'Subir modelo .glb'}
+                {upload ? 'Subiendo…' : 'Subir modelo'}
               </button>
               <span className="c3d-hint">o suelta el archivo aquí · hasta {fmtBytes(maxModel)}</span>
             </>

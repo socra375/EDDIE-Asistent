@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { projectUrl } from '../services/construction3d';
 
@@ -66,7 +68,19 @@ async function download(url, onProgress) {
   return all.buffer;
 }
 
-const parse = (buffer) => new Promise((resolve, reject) => new GLTFLoader().parse(buffer, '', resolve, reject));
+const parseGlb = (buffer) => new Promise((resolve, reject) => new GLTFLoader().parse(buffer, '', resolve, reject));
+
+// Whatever the format, the model comes back as one object to hold and frame.
+async function loadModel(format, buffer) {
+  if (format === 'stl') {
+    const group = new THREE.Group();
+    const material = new THREE.MeshStandardMaterial({ color: 0xaab4c0, metalness: 0.2, roughness: 0.5 });
+    group.add(new THREE.Mesh(new STLLoader().parse(buffer), material));
+    return group;
+  }
+  if (format === 'obj') return new OBJLoader().parse(new TextDecoder().decode(buffer));
+  return (await parseGlb(buffer)).scene;
+}
 
 export default function ModelViewer({ projectId, mode }) {
   const hostRef = useRef(null);
@@ -133,11 +147,10 @@ export default function ModelViewer({ projectId, mode }) {
 
     (async () => {
       try {
-        const { url } = await projectUrl(projectId);
+        const { url, format } = await projectUrl(projectId);
         const buffer = await download(url, (progress) => alive && setView((v) => ({ ...v, progress })));
-        const gltf = await parse(buffer);
+        const model = await loadModel(format, buffer);
         if (!alive) return;
-        const model = gltf.scene;
         const shell = new THREE.ShaderMaterial({ uniforms: shellUniforms, vertexShader: SHELL_VERTEX, fragmentShader: SHELL_FRAGMENT, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
         const edgeMaterial = new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
         const hidden = new THREE.MeshBasicMaterial({ visible: false });
