@@ -67,8 +67,8 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
 - **Borrar**: la herramienta `delete_image` siempre pide tarjeta de confirmación (y la Galería pide un segundo clic). Nada se borra solo: con la galería llena
   se pide al usuario que elimine.
 - **Costes y abuso**: tope por 24 horas (`DAILY_IMAGE_LIMIT`), tope de 60 imágenes / 150 MB por usuario, y cada creación desde la Galería cuenta en el cupo diario.
-- **Privacidad del respaldo**: con `MEDIA_FALLBACK` activo (por defecto), si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
-  (sin clave ni cuenta). Para evitarlo: `MEDIA_FALLBACK=off`.
+- **Privacidad del respaldo**: `MEDIA_FALLBACK` está apagado por defecto. Solo con `MEDIA_FALLBACK=on`, si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
+  (sin clave ni cuenta).
 - **Imágenes buscadas (7 oct 2026)**: se descargan en el servidor (nunca se enlazan desde fuera) con la misma defensa que el lector de páginas: solo
   http(s) a direcciones públicas, cada redirección se vuelve a resolver y comprobar, sin credenciales, con tiempo y tamaño máximos; el tipo se decide por
   los primeros bytes (PNG, JPEG, WebP) y se guarda con autor, licencia y página. Las URL que devuelven las fuentes no se confían: pasan por esa descarga.

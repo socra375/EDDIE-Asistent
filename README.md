@@ -844,7 +844,7 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **Con qué**: el modelo de imágenes de **Gemini** con tu misma `GEMINI_API_KEY` (cupo gratis diario; el cupo real lo fija Google y cambia,
   mídelo con tu clave). Modelo: `gemini-2.5-flash-image` o `GEMINI_IMAGE_MODEL`; si el modelo desaparece, Eddie elige otro de imágenes que tu clave
   pueda usar. **Respaldo**: si Gemini se queda sin cupo o falla, una imagen *nueva* (no una edición) puede salir de **Pollinations**
-  (gratis, sin clave; el texto de la descripción sale hacia ese servicio; `MEDIA_FALLBACK=off` lo desactiva) y Eddie lo dice.
+  (gratis, sin clave) **solo si pones `MEDIA_FALLBACK=on`**: por defecto está apagado, porque esas imágenes salen más débiles, ignoran detalles del pedido y llevan su propia marca de agua. Si Gemini falla, Eddie te lo dice en vez de cambiar de servicio en silencio.
   Nunca se usa el respaldo cuando Gemini rechaza el contenido.
 - **Dónde se guardan**: en tu base de datos de Neon (`media_items`, migración `0016_media.sql`), sin servicio extra: hasta **60 imágenes o 150 MB**
   (si se llena, Eddie te pide eliminar alguna; nunca borra solo). Cada imagen se sirve solo a su dueño con sesión iniciada.
