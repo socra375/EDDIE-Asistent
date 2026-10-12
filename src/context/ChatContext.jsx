@@ -21,6 +21,7 @@ import { initBridge } from '../services/browserBridge';
 import { applyMediaActions } from '../services/mediaActions';
 import { applyWhatsappActions } from '../services/whatsappActions';
 import { applyMessageActions } from '../services/messageActions';
+import { callBridge } from '../services/callState';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
@@ -445,7 +446,8 @@ export function ChatProvider({ children }) {
         query: trimmed,
         tasks: getTasks(),
         disabledConnectors: settings.disabledConnectors || [],
-        spoken: Boolean(settings.voice?.autoRead),
+        spoken: Boolean(settings.voice?.autoRead) || callBridge.isActive(),
+        call: callBridge.isActive(),
       });
 
       // Filled in as soon as the first chunk arrives, so the bubble appears

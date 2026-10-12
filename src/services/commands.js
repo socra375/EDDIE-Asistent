@@ -14,7 +14,7 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Lower case, no accents, only letters/numbers/spaces; the wake word and the
 // polite words around the command removed.
-function core(text, word = DEFAULT_WAKE_WORD) {
+export function core(text, word = DEFAULT_WAKE_WORD) {
   let t = String(text || '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

@@ -8,6 +8,7 @@ import { cleanSensitivity } from '../services/clap';
 import { cleanSilenceMs } from '../services/endpoint';
 import { DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, cleanFollowUpSeconds } from '../services/wakeWord';
 import { useNotes } from './notesState';
+import { useCallActive } from '../services/callState';
 import { WakeWordContext } from './wakeWordState';
 
 const STT_LANG_MAP = { es: 'es-ES', en: 'en-US', fr: 'fr-FR', de: 'de-DE', it: 'it-IT', pt: 'pt-PT' };
@@ -52,7 +53,8 @@ export function WakeWordProvider({ children }) {
   const silenceMs = cleanSilenceMs((Number(settings.voice?.silence) || 1.5) * 1000);
   const autoRead = settings.voice.autoRead;
   // Dictating notes keeps the microphone: the word listener waits.
-  const busy = listening || transcribing || speaking || dictating || status === 'processing' || status === 'responding';
+  const inCall = useCallActive(); // a call owns the microphone
+  const busy = inCall || listening || transcribing || speaking || dictating || status === 'processing' || status === 'responding';
 
   // Latest values for timers and intervals, which outlive a render.
   const live = useRef({});

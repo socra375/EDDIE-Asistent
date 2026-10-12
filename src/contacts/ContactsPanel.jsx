@@ -4,6 +4,7 @@ import Icon from '../layout/Icon';
 import { canPickContacts, deleteContact, listContacts, pickContacts, saveContact } from '../services/contacts';
 import { instagramLink, matchContacts, normalizePhone, smsLink, whatsappLink } from '../services/contactsCore';
 import { copyText } from '../services/messageActions';
+import { startCall } from '../services/callState';
 import './Contacts.css';
 
 const EMPTY = { id: null, name: '', phone: '', instagram: '', email: '', notes: '', self: false };
@@ -151,6 +152,9 @@ export default function ContactsPanel() {
           <input className="input" type="search" placeholder="Buscar por nombre, nota o Instagram…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar un contacto" />
           <button type="button" className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setMessage({ tone: '', text: '' }); }} disabled={busy}>
             <Icon name="plus" size={16} /> Añadir
+          </button>
+          <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
+            <Icon name="phone" size={16} /> Llamar a Eddie
           </button>
           {canPickContacts() && (
             <button type="button" className="btn" onClick={importFromPhone} disabled={busy}>

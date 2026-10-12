@@ -114,10 +114,13 @@ function describeTasks(tasks) {
 
 // Added while Eddie reads his answers aloud: written to be heard, so the
 // voice sounds like a person talking and not like a document being read.
+const CALL_STYLE =
+  'Estás en una llamada de voz con el usuario, en tiempo real: contesta en una o dos frases cortas, directo al grano, sin listas ni formato. Si no entendiste bien lo que dijo (puede haber ruido), pide que lo repita en pocas palabras en vez de adivinar.';
+
 const SPOKEN_STYLE =
   'Esta respuesta se va a leer en voz alta. Habla como una persona en una conversación: frases cortas y naturales (normalmente de 1 a 3), empieza directo sin fórmulas de asistente como «Claro, con gusto», usa conectores cotidianos («vale», «mira», «bueno») con mesura, sin listas, tablas, emojis ni símbolos raros, y escribe las cantidades como se dicen. Si piden código o un texto largo, entrégalo completo; lo que se oiga debe ser corto: resume lo esencial y ofrece seguir.';
 
-export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [], spoken = false }) {
+export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [], spoken = false, call = false }) {
   const modeConfig = MODES[mode] || MODES[DEFAULT_MODE];
   const languageName = LANGUAGE_NAMES[language] || language;
 
@@ -133,6 +136,7 @@ export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory
   ];
 
   if (spoken) parts.push(SPOKEN_STYLE);
+  if (call) parts.push(CALL_STYLE);
   if (memoryLines) {
     parts.push(`Lo que sabes del usuario, incluido lo que te dio en documentos (.md) y en conversaciones. Si lo que pregunta se contesta con esto, contéstalo con estos datos exactos y di que lo sabes por lo que te dio («según tu documento…», «como me contaste…»); si no viene al caso, no lo menciones:\n${memoryLines}`);
   }

@@ -76,6 +76,12 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   resultados con esos títulos. Límite propio: `DAILY_IMAGE_SEARCH_LIMIT`. La licencia de lo encontrado en la web general no está verificada y se avisa.
 - **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
 
+## Llamar a Eddie (12 oct 2026)
+
+- **Micrófono**: solo se abre tras un toque en «Llamar a Eddie» (o «Contestar») y se cierra al colgar, al cerrar la pantalla o al silenciar. La palabra clave y los aplausos se pausan durante la llamada.
+- **Sin identificar voces**: Eddie no sabe quién habla; en el modo «atender al cliente» contesta a lo que oiga, y por eso lo activas tú con una orden y solo responde con datos que encuentra (no inventa).
+- **Qué sale del dispositivo**: lo transcrito va a Eddie como cualquier mensaje del chat (y el audio a Groq/Whisper solo si ese motor está configurado). Las notas dictadas se quedan en este dispositivo (Notas).
+
 ## Contactos (12 oct 2026)
 
 - **Datos personales de terceros**: la agenda guarda nombres, teléfonos, Instagram y correos. Solo el servidor toca la tabla `contacts`; todas las rutas de `/api/connectors/contacts`
