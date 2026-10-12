@@ -153,3 +153,25 @@
 .contacts .btn {
   text-decoration: none;
 }
+.contacts-app {
+  min-height: 100dvh;
+  background: #020b10;
+  color: #d6fbff;
+  font-family: system-ui, sans-serif;
+}
+.contacts-app__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  border-bottom: 1px solid rgba(63, 232, 255, 0.25);
+  font-size: 18px;
+}
+.contacts-app__links {
+  display: flex;
+  gap: 8px;
+}
+.contacts-app__hint {
+  padding: 8px 16px 0;
+}
