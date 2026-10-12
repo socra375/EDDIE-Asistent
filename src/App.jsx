@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
@@ -33,6 +33,9 @@ import DeviceBridge from './devices/DeviceBridge';
 import RemoteViewer from './devices/RemoteViewer';
 import { isLite, PERF_CHANGED_EVENT, readGuard, watchFrameRate, writeGuard } from './services/performance';
 import './layout/Layout.css';
+
+// Three.js is heavy and only this screen needs it, so it loads when the screen opens.
+const Construction3DPanel = lazy(() => import('./construction3d/Construction3DPanel'));
 
 const FILLERS = ['Un momento, lo reviso.', 'Déjame ver.', 'Dame un segundo.', 'Ahora mismo lo miro.'];
 const FILLER_AFTER_MS = 1500;
@@ -265,7 +268,7 @@ function AppShell() {
       {chatListOpen && <div className="chatlist-backdrop" onClick={() => setChatListOpen(false)} aria-hidden="true" />}
       <div className="app-main">
         {activeModule !== 'home' && <Header section={moduleLabel(activeModule)} />}
-        <main className={`app-content ${activeModule === 'home' ? 'app-content--bare' : ''}`}>
+        <main className={`app-content ${activeModule === 'home' || activeModule === 'construction3d' ? 'app-content--bare' : ''}`}>
           {activeModule === 'home' && <HomePanel onOpenTasks={() => setActiveModule('tasks')} focusOrb={launch.action === 'hablar'} />}
           {activeModule === 'today' && (
             <TodayPanel onOpenTasks={() => setActiveModule('tasks')} onOpenConnectors={() => setActiveModule('connectors')} onOpenChat={openChat} />
@@ -275,6 +278,11 @@ function AppShell() {
           {activeModule === 'notes' && <NotesPanel />}
           {activeModule === 'memory' && <MemoryPanel />}
           {activeModule === 'gallery' && <GalleryPanel />}
+          {activeModule === 'construction3d' && (
+            <Suspense fallback={null}>
+              <Construction3DPanel />
+            </Suspense>
+          )}
           {activeModule === 'connectors' && <ConnectorsPanel notice={connectReturn} />}
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
