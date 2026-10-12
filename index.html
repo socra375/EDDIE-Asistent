@@ -20,6 +20,9 @@
       if (/^\/contactos(\/|$)/.test(location.pathname)) {
         document.querySelector('link[rel="manifest"]').href = '/contactos.webmanifest';
         document.title = 'Contactos · Eddie';
+        document.querySelector('link[rel="icon"]').href = '/contactos-icon-192.png';
+        document.querySelector('link[rel="icon"]').type = 'image/png';
+        document.querySelector('link[rel="apple-touch-icon"]').href = '/contactos-apple-touch.png';
       }
     </script>
   </head>

@@ -162,6 +162,7 @@
 .contacts-app__bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   padding: max(12px, env(safe-area-inset-top)) 16px 12px;
@@ -170,8 +171,17 @@
 }
 .contacts-app__links {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .contacts-app__hint {
   padding: 8px 16px 0;
+}
+.contacts-app__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.contacts-app__brand img {
+  border-radius: 6px;
 }

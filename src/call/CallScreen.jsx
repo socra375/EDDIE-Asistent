@@ -21,7 +21,7 @@ const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(
 // over again. Nothing here identifies who is speaking: the microphone's own
 // echo and noise cancelling is all that filters the sound around.
 // `incoming` shows «Eddie te llama» with Contestar / Rechazar (Eddie calling the user).
-export default function CallScreen({ incoming = false, onClose }) {
+export default function CallScreen({ incoming = false, logo, onClose }) {
   const { status, sendMessage, lastReply } = useChat();
   const { settings } = useSettings();
   const { createNote, updateNote } = useNotes();
@@ -164,7 +164,9 @@ export default function CallScreen({ incoming = false, onClose }) {
   return createPortal(
     <div className="call" role="dialog" aria-modal="true" aria-label="Llamada con Eddie">
       <div className="call__top">
-        <div className={`call__avatar ${speaking ? 'call__avatar--speaking' : ''} ${phase === 'ringing' ? 'call__avatar--ring' : ''}`} aria-hidden="true">E</div>
+        <div className={`call__avatar ${speaking ? 'call__avatar--speaking' : ''} ${phase === 'ringing' ? 'call__avatar--ring' : ''} ${logo ? 'call__avatar--logo' : ''}`} aria-hidden="true">
+          {logo ? <img src={logo} alt="" /> : 'E'}
+        </div>
         <h2>Eddie</h2>
         <p className="call__state" role="status">
           {phase === 'ringing' ? 'Eddie te llama…' : phase === 'ready' ? 'Listo para llamar' : `${fmtTime(seconds)} · ${state}`}
