@@ -67,8 +67,8 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
 - **Borrar**: la herramienta `delete_image` siempre pide tarjeta de confirmación (y la Galería pide un segundo clic). Nada se borra solo: con la galería llena
   se pide al usuario que elimine.
 - **Costes y abuso**: tope por 24 horas (`DAILY_IMAGE_LIMIT`), tope de 60 imágenes / 150 MB por usuario, y cada creación desde la Galería cuenta en el cupo diario.
-- **Privacidad del respaldo**: con `MEDIA_FALLBACK` activo (por defecto), si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
-  (sin clave ni cuenta). Para evitarlo: `MEDIA_FALLBACK=off`.
+- **Privacidad del respaldo**: `MEDIA_FALLBACK` está apagado por defecto. Solo con `MEDIA_FALLBACK=on`, si Gemini no tiene cupo, la descripción de una imagen nueva se envía a Pollinations
+  (sin clave ni cuenta).
 - **Imágenes buscadas (7 oct 2026)**: se descargan en el servidor (nunca se enlazan desde fuera) con la misma defensa que el lector de páginas: solo
   http(s) a direcciones públicas, cada redirección se vuelve a resolver y comprobar, sin credenciales, con tiempo y tamaño máximos; el tipo se decide por
   los primeros bytes (PNG, JPEG, WebP) y se guarda con autor, licencia y página. Las URL que devuelven las fuentes no se confían: pasan por esa descarga.
@@ -83,7 +83,7 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   (`NEON_S3_*`) solo existen en el servidor.
 - **Quién ve qué**: todas las rutas de `/api/connectors/construction3d` exigen sesión y filtran por usuario; pedir la URL, cambiar o borrar un proyecto ajeno
   responde «ya no existe». Las claves de objeto son `u/<usuario>/<uuid>.glb`: el nombre del archivo nunca forma parte de la clave.
-- **Lo que llega se comprueba**: tras subir, el servidor mira con HEAD el tamaño real y lee los primeros 12 bytes (firma `glTF`, versión 2 y longitud igual al tamaño).
+- **Lo que llega se comprueba**: tras subir, el servidor mira con HEAD el tamaño real y lee los primeros 4 KB para confirmar el formato (`glTF` versión 2 con su longitud; un STL binario por su recuento de triángulos o un STL/OBJ de texto por su contenido).
   Si no cuadra, borra el objeto y la fila. Un archivo subido a medias se limpia en la siguiente subida, pasada una hora.
 - **Abuso y costes**: máximo de 100 proyectos, 4 GB por usuario y 200 MB por modelo (se valida al pedir la URL y otra vez al confirmar), y 20 solicitudes de subida por
   minuto por usuario.

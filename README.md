@@ -844,7 +844,7 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **Con qué**: el modelo de imágenes de **Gemini** con tu misma `GEMINI_API_KEY` (cupo gratis diario; el cupo real lo fija Google y cambia,
   mídelo con tu clave). Modelo: `gemini-2.5-flash-image` o `GEMINI_IMAGE_MODEL`; si el modelo desaparece, Eddie elige otro de imágenes que tu clave
   pueda usar. **Respaldo**: si Gemini se queda sin cupo o falla, una imagen *nueva* (no una edición) puede salir de **Pollinations**
-  (gratis, sin clave; el texto de la descripción sale hacia ese servicio; `MEDIA_FALLBACK=off` lo desactiva) y Eddie lo dice.
+  (gratis, sin clave) **solo si pones `MEDIA_FALLBACK=on`**: por defecto está apagado, porque esas imágenes salen más débiles, ignoran detalles del pedido y llevan su propia marca de agua. Si Gemini falla, Eddie te lo dice en vez de cambiar de servicio en silencio.
   Nunca se usa el respaldo cuando Gemini rechaza el contenido.
 - **Dónde se guardan**: en tu base de datos de Neon (`media_items`, migración `0016_media.sql`), sin servicio extra: hasta **60 imágenes o 150 MB**
   (si se llena, Eddie te pide eliminar alguna; nunca borra solo). Cada imagen se sirve solo a su dueño con sesión iniciada.
@@ -1045,8 +1045,7 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   `NEON_S3_REGION`. Se obtienen en Neon: bucket privado + una credencial con `storage:read` y `storage:write` (la clave de acceso es el `token_id` y el secreto el
   `s3_secret_access_key`, que solo se muestra al crearla); el endpoint es el de la rama (Console → Connect → Storage). El CORS del bucket lo configura Eddie solo en
   la primera subida (permite GET, PUT y HEAD desde la dirección de la app). Sin las variables la pantalla lo dice y lista las que faltan.
-- **Formato**: solo `.glb` (glTF binario con todo dentro). En Blender: Archivo → Exportar → glTF 2.0 → «glTF Binary (.glb)». Se comprueba tras subirlo (tamaño y
-  cabecera `glTF` versión 2); lo que no lo sea se borra. Los modelos comprimidos con Draco o Meshopt aún no se abren (expórtalos sin comprimir) y no se reproducen
+- **Formatos**: `.glb` (glTF binario, con todo dentro), `.stl` (binario o ASCII) y `.obj` (un solo archivo, sin `.mtl` ni texturas aparte; se ve con el material neutro del visor). En Blender: Archivo → Exportar → glTF 2.0 → «glTF Binary (.glb)», o Stl (.stl), o Wavefront (.obj). Se comprueba tras subirlo que los primeros bytes correspondan al formato y que el tamaño cuadre; lo que no lo sea se borra. Los modelos comprimidos con Draco o Meshopt aún no se abren (expórtalos sin comprimir) y no se reproducen
   animaciones: se ve la pose del modelo.
 - **Three.js** solo se descarga al abrir esta pantalla (trozo aparte; el orbe de Inicio sigue en Canvas 2D). Respeta el Modo ligero y «reducir movimiento».
 - **Más adelante**: que Eddie cree y edite modelos en Blender a través de EDDIE Prime (`source = 'blender'` ya está previsto en la tabla) y que el chat pueda listar y

@@ -1,12 +1,13 @@
 // Creating and editing pictures. Gemini's image model does both with the same
 // call (a text instruction, plus the picture to change when editing). When
 // Gemini is out of quota or down, a new picture (not an edit) can still come
-// from Pollinations, a free service with no key; set MEDIA_FALLBACK=off to
-// never use it (the prompt would leave for a third party).
+// from Pollinations, a free service with no key, but only when MEDIA_FALLBACK=on:
+// its pictures come out weaker, ignore details of the request and carry its own
+// watermark, so by default a Gemini failure is reported instead.
 //
 //   GEMINI_IMAGE_MODEL   model id (default gemini-2.5-flash-image; if it is
 //                        gone Eddie picks the first image model the key can use)
-//   MEDIA_FALLBACK       "off" disables Pollinations
+//   MEDIA_FALLBACK       "on" allows Pollinations when Gemini fails (off by default)
 //
 // Everything that comes back is checked: a real PNG/JPEG/WebP, not too big.
 export const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
@@ -169,7 +170,7 @@ export async function makeImage({ prompt, aspect, source = null, env = process.e
   try {
     return await gemini({ prompt, aspect, source, env });
   } catch (err) {
-    if (source || !(err instanceof MediaError) || !FALLBACK_CODES.has(err.code) || String(env.MEDIA_FALLBACK || '').toLowerCase() === 'off') throw err;
+    if (source || !(err instanceof MediaError) || !FALLBACK_CODES.has(err.code) || String(env.MEDIA_FALLBACK || '').toLowerCase() !== 'on') throw err;
     try {
       return await fallback({ prompt, aspect });
     } catch {
