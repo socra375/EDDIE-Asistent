@@ -18,6 +18,8 @@ import TodayPanel from './today/TodayPanel';
 import MemoryPanel from './memory/MemoryPanel';
 import GalleryPanel from './gallery/GalleryPanel';
 import ContactsPanel from './contacts/ContactsPanel';
+import CallScreen from './call/CallScreen';
+import { CALL_EVENT, useCallActive } from './services/callState';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
 import { NotesProvider } from './context/NotesContext';
@@ -49,7 +51,8 @@ function AutoReadBridge() {
   const { messages, status, lastReply, liveSteps } = useChat();
   const { speakWithSettings, streamWithSettings } = useVoice();
   const { settings } = useSettings();
-  const autoRead = settings.voice.autoRead;
+  const inCall = useCallActive();
+  const autoRead = settings.voice.autoRead || inCall; // in a call Eddie always answers out loud
   const streamRef = useRef(null); // { id, controller }
   // A short "un momento" said while tools run (see below); the answer waits
   // for it to end instead of cutting it off.
@@ -183,6 +186,13 @@ function AppShell() {
   const [connectReturn] = useState(readConnectReturn);
   // Where the installed app's shortcuts (and links like /?modulo=tareas) open.
   const [launch] = useState(readLaunch);
+  // The call screen: opened by startCall() (Contactos, the app shortcut, Eddie calling).
+  const [call, setCall] = useState(() => (launch.action === 'llamada' ? { incoming: false } : null));
+  useEffect(() => {
+    const onCall = (e) => setCall((current) => current || { incoming: Boolean(e.detail?.incoming) });
+    window.addEventListener(CALL_EVENT, onCall);
+    return () => window.removeEventListener(CALL_EVENT, onCall);
+  }, []);
   const [activeModule, setActiveModule] = useState(() => (connectReturn ? 'connectors' : launch.module || 'home'));
 
   useEffect(() => {
@@ -289,6 +299,7 @@ function AppShell() {
           {activeModule === 'settings' && <SettingsPanel onOpenConversation={() => setActiveModule('chat')} />}
         </main>
       </div>
+      {call && <CallScreen incoming={call.incoming} onClose={() => setCall(null)} />}
       <YouTubePlayer />
       <AutoReadBridge />
       <PerfBridge />

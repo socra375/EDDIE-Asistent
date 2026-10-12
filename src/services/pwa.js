@@ -85,6 +85,6 @@ export function readLaunch(search = typeof window !== 'undefined' ? window.locat
   const params = new URLSearchParams(search);
   const wanted = (params.get('modulo') || '').toLowerCase();
   const module = MODULES.includes(wanted) ? wanted : ALIASES[wanted] || null;
-  const action = ['hablar', 'vigilancia'].includes(params.get('accion')) ? params.get('accion') : null;
+  const action = ['hablar', 'vigilancia', 'llamada'].includes(params.get('accion')) ? params.get('accion') : null;
   return { module, action };
 }
