@@ -76,6 +76,21 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   resultados con esos títulos. Límite propio: `DAILY_IMAGE_SEARCH_LIMIT`. La licencia de lo encontrado en la web general no está verificada y se avisa.
 - **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
 
+## Construction 3D (12 oct 2026)
+
+- **Bucket privado, nada público**: los modelos viven en un bucket privado de Neon Object Storage. Solo se leen o escriben con URLs firmadas (SigV4 por parámetros de
+  consulta) de 10 minutos que genera el servidor para un objeto y un método concretos; la subida firma además el `Content-Type`. Las claves del bucket
+  (`NEON_S3_*`) solo existen en el servidor.
+- **Quién ve qué**: todas las rutas de `/api/connectors/construction3d` exigen sesión y filtran por usuario; pedir la URL, cambiar o borrar un proyecto ajeno
+  responde «ya no existe». Las claves de objeto son `u/<usuario>/<uuid>.glb`: el nombre del archivo nunca forma parte de la clave.
+- **Lo que llega se comprueba**: tras subir, el servidor mira con HEAD el tamaño real y lee los primeros 12 bytes (firma `glTF`, versión 2 y longitud igual al tamaño).
+  Si no cuadra, borra el objeto y la fila. Un archivo subido a medias se limpia en la siguiente subida, pasada una hora.
+- **Abuso y costes**: máximo de 100 proyectos, 4 GB por usuario y 200 MB por modelo (se valida al pedir la URL y otra vez al confirmar), y 20 solicitudes de subida por
+  minuto por usuario.
+- **CORS del bucket**: el servidor añade solo la dirección de la propia app (GET, PUT y HEAD); si el bucket ya tiene reglas las conserva. Nunca `*`.
+- **Riesgo que queda**: el visor interpreta un `.glb` del propio usuario en su navegador (three.js); un archivo malicioso solo afectaría a su propia pestaña. Las
+  URLs firmadas valen 10 minutos: quien las obtenga en ese tiempo puede leer ese archivo.
+
 ## Candado de la cámara (3 oct 2026)
 
 **Estado: apagado por ahora** (pedido del dueño); se reactiva con `CAMERA_LOCK=on`. Con el candado apagado, cualquiera con sesión

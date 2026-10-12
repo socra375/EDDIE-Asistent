@@ -78,8 +78,8 @@ export function useInstallState() {
 
 // Shortcuts of the installed app and links like /?modulo=tareas: where to open.
 // Read once, then the address is cleaned.
-const MODULES = ['home', 'today', 'chat', 'tasks', 'notes', 'memory', 'gallery', 'connectors', 'settings'];
-const ALIASES = { inicio: 'home', hoy: 'today', tareas: 'tasks', notas: 'notes', memoria: 'memory', galeria: 'gallery', galería: 'gallery', conectores: 'connectors', configuracion: 'settings', configuración: 'settings' };
+const MODULES = ['home', 'today', 'chat', 'tasks', 'notes', 'memory', 'gallery', 'construction3d', 'connectors', 'settings'];
+const ALIASES = { inicio: 'home', hoy: 'today', tareas: 'tasks', notas: 'notes', memoria: 'memory', galeria: 'gallery', galería: 'gallery', construccion3d: 'construction3d', construcción3d: 'construction3d', '3d': 'construction3d', conectores: 'connectors', configuracion: 'settings', configuración: 'settings' };
 
 export function readLaunch(search = typeof window !== 'undefined' ? window.location.search : '') {
   const params = new URLSearchParams(search);

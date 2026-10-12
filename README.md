@@ -48,6 +48,7 @@ Chat / Historial (localStorage), leído en voz alta si "Voz" está activado en C
 | Tareas | Lista de tareas con prioridad, fecha de entrega, recordatorio de la más próxima y, con sesión iniciada, sincronización entre dispositivos + botón para agregarlas a Google Calendar. Eddie conoce tus pendientes al responder |
 | Notas | Una **hoja en blanco** que Eddie va escribiendo mientras hablas: el micrófono se queda abierto (dictado continuo) durante el tiempo que elijas (5, 10, 15, 30 min, 1 h, o cualquier valor de 1 a 180 min) con cuenta atrás, «+5 min» y «Detener»; ves el texto aparecer (y la frase a medias) en la hoja. Por voz: **«Eddie, toma notas durante 10 minutos»** (también «media hora», «una hora y media»; sin tiempo usa el elegido) abre Notas con una hoja nueva; **«fin de la nota»** o «termina la nota» la cierra. Puntuación hablada («coma», «punto», «punto y aparte», «nueva línea»…), título opcional, edición a mano, copiar y descargar `.txt`. Se guardan en este dispositivo |
 | Memoria | Todo lo que Eddie recuerda de ti vive en un **orbe**: una esfera de puntos donde cada recuerdo (perfil, preferencias, proyectos, decisiones, conocimientos, contexto temporal) y cada conversación recordada es un punto con otros pequeños alrededor y líneas a sus vecinos; al pasar el mouse dice qué recuerdo es, al hacer clic lo fija (con *Olvidar*, y *Editar* en los proyectos) y se arrastra para girarla; los nuevos aparecen creciendo; la leyenda aísla una categoría; con Modo ligero o «reducir movimiento» no gira sola. Debajo, **Agregar memoria** para escribir cosas que se guardan en el orbe (nunca contraseñas ni tarjetas). Eddie también guarda lo que le cuentas sin que se lo pidas (y te avisa) y usa solo lo que viene al caso en cada respuesta. Al final, plegado, *Ajustes de la memoria, palabra clave y aplausos*: permitir que Eddie recuerde, borrar toda la memoria, recordar conversaciones y su borrado, y la **palabra clave de activación** (por defecto "Eddie"): dila y Eddie te escucha sin tocar nada |
+| Construction 3D | El **cerebro 3D**: un núcleo neural holográfico (un cerebro de puntos y sinapsis con pulsos de datos, anillos ámbar y una pantalla de cifras: capacidad, índice de objetos, estado del sistema) con un satélite por proyecto que orbita alrededor. Subes modelos `.glb`, los marcas **En proceso** o **Terminado** y los abres en un visor holográfico (aristas cian, casco con brillo de borde y barrido de líneas, o vista «Original») desde cualquier dispositivo con tu sesión. Ver la sección *Construction 3D* |
 | Conectores | Qué servicios puede usar Eddie y en qué estado están (listo, conectado, por conectar, falta configurar, próximamente). Cada conector se enciende o apaga: al apagarlo, sus herramientas dejan de ofrecerse en el chat. Se ve como una **órbita**: el reactor de Eddie al centro y cada conector como un icono en dos anillos que giran al entrar, van apareciendo y se detienen (tocar un icono abre su tarjeta); el botón *Lista* muestra las tarjetas de siempre y se recuerda. Con Modo ligero o «reducir movimiento» no gira |
 | Configuración | Con menú a la izquierda (01 Voz y audio, 02 Motor de IA, 03 Interfaz HUD, 04 Cuenta, 05 Dispositivos, 06 Privacidad), tarjetas en dos columnas, interruptores y deslizadores; en Voz: leer respuestas, **activar con la palabra clave**, **volumen** (20–100 %) y **velocidad** (0,8–1,2; ElevenLabs la aplica en el servidor, la voz del navegador en su propio ritmo); en Interfaz HUD: **color del núcleo** del orbe (cian, azul, verde, ámbar). Los cambios se guardan al instante y hay «Restablecer ajustes». Contiene: proveedor y modelo de IA, idioma, tema, lectura de respuestas en voz alta (on/off), historial de conversaciones (ver/abrir/eliminar), memoria (activar/borrar), cuenta de Google (iniciar/cerrar sesión, eliminar cuenta) |
 
@@ -1029,6 +1030,28 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Sin probar contra los servicios reales**: Pexels, Openverse, Wikimedia y Tavily se implementaron según su documentación y se probaron con
   respuestas simuladas; revísalo con tus claves y fíjate sobre todo en el cupo sin clave de Openverse.
 
+## Construction 3D: el cerebro 3D (modelos `.glb`)
+
+- **Qué es**: una pantalla nueva (icono de cubo, o `/?modulo=construccion3d`) con un **núcleo neural holográfico** sobre fondo negro y un satélite por proyecto
+  orbitando (cian = terminado, ámbar = en proceso). A la izquierda las cifras del cerebro (capacidad, almacenado, índice de objetos, estado del sistema); a la
+  derecha la lista de **activos 3D** con filtro. Tocar un satélite o un elemento de la lista abre el proyecto en el **visor**: modo *Holograma* (aristas cian,
+  casco translúcido con brillo de borde, barrido de líneas y anillos ámbar en la base) o *Original*; se gira arrastrando y se acerca con la rueda o pellizcando.
+  Se puede renombrar, cambiar de estado, escribir notas y borrar (con segundo clic). En el móvil las cifras pasan a una barra y la lista a un cajón.
+- **Dónde se guardan**: en **Neon Object Storage** (el almacenamiento de archivos de tu mismo proyecto de Neon; plan gratis: 5 GB, objetos de hasta 5 GiB), en un bucket
+  **privado** `eddie-3d`. Postgres solo guarda los datos del proyecto (`construction_projects`, `db/migrations/0028_construction3d.sql`). El archivo **no pasa por
+  el servidor** de Eddie (Vercel limita una petición a ~4,5 MB): el navegador lo sube y lo lee directo con URLs firmadas de 10 minutos que genera el servidor
+  (`api/_lib/construction3d/s3.js`, firma SigV4 sin dependencias). Topes: 100 proyectos, 4 GB en total y 200 MB por modelo; nada se borra solo.
+- **Configurar** (una vez): en Vercel, `NEON_S3_ENDPOINT`, `NEON_S3_ACCESS_KEY_ID`, `NEON_S3_SECRET_ACCESS_KEY`, `NEON_S3_BUCKET` y, si no es `us-east-1`,
+  `NEON_S3_REGION`. Se obtienen en Neon: bucket privado + una credencial con `storage:read` y `storage:write` (la clave de acceso es el `token_id` y el secreto el
+  `s3_secret_access_key`, que solo se muestra al crearla); el endpoint es el de la rama (Console → Connect → Storage). El CORS del bucket lo configura Eddie solo en
+  la primera subida (permite GET, PUT y HEAD desde la dirección de la app). Sin las variables la pantalla lo dice y lista las que faltan.
+- **Formato**: solo `.glb` (glTF binario con todo dentro). En Blender: Archivo → Exportar → glTF 2.0 → «glTF Binary (.glb)». Se comprueba tras subirlo (tamaño y
+  cabecera `glTF` versión 2); lo que no lo sea se borra. Los modelos comprimidos con Draco o Meshopt aún no se abren (expórtalos sin comprimir) y no se reproducen
+  animaciones: se ve la pose del modelo.
+- **Three.js** solo se descarga al abrir esta pantalla (trozo aparte; el orbe de Inicio sigue en Canvas 2D). Respeta el Modo ligero y «reducir movimiento».
+- **Más adelante**: que Eddie cree y edite modelos en Blender a través de EDDIE Prime (`source = 'blender'` ya está previsto en la tabla) y que el chat pueda listar y
+  abrir proyectos 3D.
+
 ## Sonda local (tu Chromebook)
 
 La **Sonda Local** (EDDIE Prime) es un pequeño servidor en Python que corre en tu equipo y puede mirar el disco, la
@@ -1254,6 +1277,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   tasks.js               GET/POST sin id, PATCH/DELETE con id (un solo archivo + reescritura en vercel.json)
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
+  _lib/construction3d/   Cerebro 3D: URLs firmadas del bucket (s3.js), proyectos (store.js) y rutas (handlers.js)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
   _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
   _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser
