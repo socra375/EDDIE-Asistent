@@ -5,7 +5,7 @@ import { canPickContacts, deleteContact, listContacts, pickContacts, saveContact
 import { instagramLink, matchContacts, normalizePhone, smsLink, toVcf, whatsappLink } from '../services/contactsCore';
 import { copyText } from '../services/messageActions';
 import { startCall } from '../services/callState';
-import { rememberContactsReturn } from '../services/contactsApp';
+import { CONTACTS_PATH, rememberContactsReturn } from '../services/contactsApp';
 import './Contacts.css';
 
 const EMPTY = { id: null, name: '', phone: '', instagram: '', email: '', notes: '', self: false };
@@ -166,11 +166,9 @@ export default function ContactsPanel({ standalone = false }) {
           <button type="button" className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setMessage({ tone: '', text: '' }); }} disabled={busy}>
             <Icon name="plus" size={16} /> Añadir
           </button>
-          {!standalone && (
-            <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
-              <Icon name="phone" size={16} /> Llamar a Eddie
-            </button>
-          )}
+          <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
+            <Icon name="phone" size={16} /> Llamar a Eddie
+          </button>
           {canPickContacts() && (
             <button type="button" className="btn" onClick={importFromPhone} disabled={busy}>
               Importar del teléfono
@@ -182,8 +180,8 @@ export default function ContactsPanel({ standalone = false }) {
             Exportar contactos (.vcf)
           </button>
           {!standalone && (
-            <a className="btn" href="/?app=contactos" target="_blank" rel="noopener noreferrer">
-              Descargar como app aparte
+            <a className="btn" href={CONTACTS_PATH} target="_blank" rel="noopener noreferrer">
+              Abrir como web aparte (instalable)
             </a>
           )}
         </div>

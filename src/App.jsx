@@ -49,7 +49,7 @@ const FILLER_MAX_MS = 6000;
 // Reads Eddie's answers aloud when the voice is on. An answer that streams in
 // is spoken sentence by sentence while it is still being written; anything
 // that arrives whole (small talk, the probe, an error) is read in one go.
-function AutoReadBridge() {
+export function AutoReadBridge() {
   const { messages, status, lastReply, liveSteps } = useChat();
   const { speakWithSettings, streamWithSettings } = useVoice();
   const { settings } = useSettings();
@@ -313,10 +313,20 @@ function AppShell() {
 export default function App() {
   // Contactos installed as an app of its own: only the address book, none of Eddie's shell.
   if (isContactsApp()) {
+    // The same providers as Eddie, so calls work here too, but none of Eddie's screens.
     return (
       <SettingsProvider>
         <AuthProvider>
-          <ContactsApp />
+          <LocationProvider>
+            <VoiceProvider>
+              <ChatProvider>
+                <NotesProvider>
+                  <ContactsApp />
+                  <AutoReadBridge />
+                </NotesProvider>
+              </ChatProvider>
+            </VoiceProvider>
+          </LocationProvider>
         </AuthProvider>
       </SettingsProvider>
     );
