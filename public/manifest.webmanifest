@@ -19,6 +19,7 @@
     { "name": "Hablar con Eddie", "short_name": "Hablar", "description": "Abre Eddie listo para hablar", "url": "/?accion=hablar", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
     { "name": "Modo Vigilancia", "short_name": "Vigilancia", "description": "Enciende la cámara con visión por IA", "url": "/?accion=vigilancia", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
     { "name": "Mis tareas", "short_name": "Tareas", "description": "Abre las tareas pendientes", "url": "/?modulo=tareas", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Contactos", "short_name": "Contactos", "description": "Tu agenda: números, Instagram y mensajes listos", "url": "/?modulo=contactos", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] },
     { "name": "Hoy", "short_name": "Hoy", "description": "Agenda, correos y noticias del día", "url": "/?modulo=hoy", "icons": [{ "src": "/eddie-icon-192.png", "sizes": "192x192" }] }
   ]
 }

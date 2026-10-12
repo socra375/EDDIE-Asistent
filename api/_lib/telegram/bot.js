@@ -17,6 +17,7 @@ import { whenLabel } from '../connectors/reminders/index.js';
 import { restoreTanda, takeRequest, usageFor, usageLine } from '../usage/store.js';
 import { sendCreatedImages } from './mirror.js';
 import { safeWhatsappUrl } from '../connectors/whatsapp/index.js';
+import { isSafeMessageUrl } from '../../../src/services/messageActions.js';
 
 const NOT_LINKED =
   'Hola, soy Eddie. Este chat todavía no está vinculado a tu cuenta.\n\nAbre la app de Eddie → Conectores → Telegram → "Vincular Telegram" y pulsa el enlace que te dará.';
@@ -289,6 +290,16 @@ async function runAssistant(link, text, viaVoice, images = [], startedAt = Date.
       if (!url) continue;
       const who = action.label ? ` para ${String(action.label).slice(0, 60)}` : '';
       await sendMessage(chatId, `💬 Mensaje listo${who}:\n\n${String(action.text || '').slice(0, 1000)}`, { reply_markup: { inline_keyboard: [[{ text: '💬 Abrir en WhatsApp', url }]] } });
+    }
+
+    // SMS and Instagram drafts: Telegram buttons only open web links, so an SMS goes out as text to copy
+    // and an Instagram draft gets a button that opens the person's chat (the text is above it to copy).
+    for (const action of actions.filter((a) => a?.type === 'message_draft').slice(0, 3)) {
+      if (!isSafeMessageUrl(action.channel, String(action.url || ''))) continue;
+      const who = action.label ? ` para ${String(action.label).slice(0, 60)}` : '';
+      const body = String(action.text || '').slice(0, 1000);
+      if (action.channel === 'instagram') await sendMessage(chatId, `📸 Mensaje listo${who}:\n\n${body}`, { reply_markup: { inline_keyboard: [[{ text: '📸 Abrir el chat de Instagram', url: action.url }]] } });
+      else await sendMessage(chatId, `📱 SMS listo${who}${action.phone ? ` (+${String(action.phone).replace(/\D/g, '').slice(0, 15)})` : ''}:\n\n${body}`);
     }
 
     // Pictures Eddie made while answering go out as photos.

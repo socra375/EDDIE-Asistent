@@ -13,6 +13,7 @@ import { handleUsageRoute } from './usage/handlers.js';
 import { handleBrainRoute } from './brain/handlers.js';
 import { handleMediaRoute } from './media/handlers.js';
 import { handleConstruction3dRoute } from './construction3d/handlers.js';
+import { handleContactsRoute } from './contacts/handlers.js';
 import { handleComputerRoute } from './computer/handlers.js';
 import { handleBrowserRoute } from './browser/handlers.js';
 import { handleDriveRoute } from './drive/handlers.js';
@@ -48,6 +49,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path[0] === 'knowledge') return handleKnowledgeRoute({ method, path, cookies, query, body });
   if (path[0] === 'media') return handleMediaRoute({ method, path, cookies, query, body });
   if (path[0] === 'construction3d') return handleConstruction3dRoute({ method, path, cookies, query, headers, body });
+  if (path[0] === 'contacts') return handleContactsRoute({ method, path, cookies, body });
   if (path[0] === 'business') return handleBusinessRoute({ method, path, cookies, body });
   if (path[0] === 'brain') return handleBrainRoute({ method, path, cookies, body });
   if (path[0] === 'usage') return handleUsageRoute({ method, path, cookies, query, body });

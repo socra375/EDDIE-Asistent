@@ -76,6 +76,16 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   resultados con esos títulos. Límite propio: `DAILY_IMAGE_SEARCH_LIMIT`. La licencia de lo encontrado en la web general no está verificada y se avisa.
 - **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
 
+## Contactos (12 oct 2026)
+
+- **Datos personales de terceros**: la agenda guarda nombres, teléfonos, Instagram y correos. Solo el servidor toca la tabla `contacts`; todas las rutas de `/api/connectors/contacts`
+  exigen sesión y filtran por usuario, y borran con cascada si se elimina la cuenta. Tope de 500 contactos; los campos se limpian (sin control ni `<>`) y se acotan.
+- **Eddie no envía nada**: `prepare_message` solo deja un borrador con un botón; el envío lo pulsa la persona en WhatsApp, SMS o Instagram. Los enlaces se validan por canal
+  (`wa.me/<dígitos>`, `sms:+<dígitos>`, `ig.me/m/<usuario>`) en el servidor, en la app y en Telegram, así que una acción manipulada no puede apuntar a otro sitio.
+- **Borrar y confundir personas**: borrar siempre pide confirmación; guardar solo cambia al contacto con exactamente ese nombre («Ana» no pisa a «Ana Pérez»), y si un nombre encaja
+  con varios Eddie pregunta cuál en vez de elegir.
+- **Importar del teléfono**: el selector de contactos del navegador (Android) solo entrega lo que la persona elige cada vez.
+
 ## Construction 3D (12 oct 2026)
 
 - **Bucket privado, nada público**: los modelos viven en un bucket privado de Neon Object Storage. Solo se leen o escriben con URLs firmadas (SigV4 por parámetros de

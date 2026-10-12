@@ -6,26 +6,12 @@
 // What it cannot do: read the user's chats. To answer a message, the user pastes
 // the text or a screenshot into the chat and Eddie writes the reply options.
 import { clip } from '../http.js';
+import { normalizePhone } from '../../../../src/services/contactsCore.js';
+
+export { normalizePhone }; // the rules live next to the Contactos screen, which needs them too
 
 const MAX_TEXT = 1000; // characters of the message (a link that is too long stops working)
 const MAX_URL = 3500;
-const MIN_DIGITS = 8;
-const MAX_DIGITS = 15; // E.164
-
-// Dominican Republic area codes (the user's own country: 10 digits that start with these are +1 numbers).
-const DR_AREA = /^(809|829|849)\d{7}$/;
-
-// "+1 (809) 555-1234", "00 34 600 000 000", "8095551234" → digits with the country code, or null.
-export function normalizePhone(raw) {
-  let digits = String(raw ?? '').replace(/[^\d+]/g, '');
-  if (!digits) return null;
-  const explicit = digits.startsWith('+') || digits.startsWith('00');
-  digits = digits.replace(/^\+/, '').replace(/\+/g, '').replace(/^00/, '');
-  if (!explicit && DR_AREA.test(digits)) digits = `1${digits}`;
-  if (digits.length < MIN_DIGITS || digits.length > MAX_DIGITS || digits.startsWith('0')) return null;
-  return digits;
-}
-
 // Only a plain wa.me address may become a button (Telegram and the app both check this).
 export function safeWhatsappUrl(value) {
   const url = String(value || '');
@@ -61,7 +47,7 @@ export default {
   route: /whats?\s?app|wasap|guasap|\bwa\.me|m[aá]ndale|escr[ií]bele|resp[oó]ndele|cont[eé]stale|resp[oó]nd(e|er)\s+(a\s+)?(este|ese|el|ella|[eé]l)?\s*mensaje|redacta(le)? (un )?mensaje|mensaje (para|a) /i,
   auth: null,
   requiredEnv: [],
-  note: 'Sin claves ni cuentas ni coste: usa enlaces wa.me. El mensaje nunca se envía solo; WhatsApp se abre con el texto listo y tú pulsas enviar. Para escribirle a un contacto por su nombre, Eddie busca su número en tu memoria (guárdalo con «recuerda que el número de Ana es +1 809 …»).',
+  note: 'Sin claves ni cuentas ni coste: usa enlaces wa.me. El mensaje nunca se envía solo; WhatsApp se abre con el texto listo y tú pulsas enviar. Para escribirle a alguien por su nombre, Eddie busca su número en Contactos (o en tu memoria).',
   tools: [
     {
       label: 'Preparar un mensaje de WhatsApp',
@@ -72,7 +58,7 @@ export default {
       declaration: {
         name: 'prepare_whatsapp',
         description:
-          'Deja LISTO un mensaje de WhatsApp: el usuario verá el texto y un botón que abre WhatsApp con el chat y el mensaje ya escritos; NUNCA se envía solo, él pulsa enviar. Úsala cuando pida «mándale un WhatsApp a…», «escríbele a… por WhatsApp», «responde a este mensaje». Redacta el texto completo, en el tono de sus preferencias, listo para enviar. Si nombra a un contacto, busca su número en la memoria (recall); si no lo tienes, pide el número con código de país o prepáralo sin número (WhatsApp deja elegir el contacto). Para dar varias opciones de respuesta, llámala una vez por opción (máximo 3).',
+          'Deja LISTO un mensaje de WhatsApp: el usuario verá el texto y un botón que abre WhatsApp con el chat y el mensaje ya escritos; NUNCA se envía solo, él pulsa enviar. Úsala cuando pida «mándale un WhatsApp a…», «escríbele a… por WhatsApp», «responde a este mensaje». Redacta el texto completo, en el tono de sus preferencias, listo para enviar. Si nombra a una persona de sus Contactos, usa mejor prepare_message (busca el número solo). Si nombra a alguien que no está en Contactos, busca su número en la memoria (recall); si no lo tienes, pide el número con código de país o prepáralo sin número (WhatsApp deja elegir el contacto). Para dar varias opciones de respuesta, llámala una vez por opción (máximo 3).',
         parameters: {
           type: 'OBJECT',
           properties: {
