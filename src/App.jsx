@@ -19,6 +19,8 @@ import MemoryPanel from './memory/MemoryPanel';
 import GalleryPanel from './gallery/GalleryPanel';
 import ContactsPanel from './contacts/ContactsPanel';
 import CallScreen from './call/CallScreen';
+import ContactsApp from './contacts/ContactsApp';
+import { isContactsApp, resumeContactsAfterLogin } from './services/contactsApp';
 import { CALL_EVENT, useCallActive } from './services/callState';
 import YouTubePlayer from './player/YouTubePlayer';
 import { WakeWordProvider } from './context/WakeWordContext';
@@ -309,6 +311,17 @@ function AppShell() {
 }
 
 export default function App() {
+  // Contactos installed as an app of its own: only the address book, none of Eddie's shell.
+  if (isContactsApp()) {
+    return (
+      <SettingsProvider>
+        <AuthProvider>
+          <ContactsApp />
+        </AuthProvider>
+      </SettingsProvider>
+    );
+  }
+  resumeContactsAfterLogin();
   return (
     <SettingsProvider>
       <AuthProvider>

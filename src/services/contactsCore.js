@@ -75,3 +75,23 @@ export function normalizePhone(raw) {
 export const whatsappLink = (phone, text) => `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 export const smsLink = (phone, text) => `sms:+${phone}${text ? `?&body=${encodeURIComponent(text)}` : ''}`;
 export const instagramLink = (user) => `https://ig.me/m/${encodeURIComponent(user)}`;
+
+// A .vcf file (vCard 3.0) any phone or address book can import.
+const vcard = (text) => String(text ?? '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, (c) => `\\${c}`);
+export function toVcf(contacts) {
+  return contacts
+    .map((c) =>
+      [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${vcard(c.name)}`,
+        `N:${vcard(c.name)};;;;`,
+        ...(c.phone ? [`TEL;TYPE=CELL:${vcard(c.phone)}`] : []),
+        ...(c.email ? [`EMAIL:${vcard(c.email)}`] : []),
+        ...(c.instagram ? [`URL:https://instagram.com/${c.instagram}`] : []),
+        ...(c.notes ? [`NOTE:${vcard(c.notes)}`] : []),
+        'END:VCARD',
+      ].join('\r\n'),
+    )
+    .join('\r\n') + '\r\n';
+}

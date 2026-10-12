@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../layout/Icon';
 import { canPickContacts, deleteContact, listContacts, pickContacts, saveContact } from '../services/contacts';
-import { instagramLink, matchContacts, normalizePhone, smsLink, whatsappLink } from '../services/contactsCore';
+import { instagramLink, matchContacts, normalizePhone, smsLink, toVcf, whatsappLink } from '../services/contactsCore';
 import { copyText } from '../services/messageActions';
 import { startCall } from '../services/callState';
+import { rememberContactsReturn } from '../services/contactsApp';
 import './Contacts.css';
 
 const EMPTY = { id: null, name: '', phone: '', instagram: '', email: '', notes: '', self: false };
@@ -14,7 +15,19 @@ const EMPTY = { id: null, name: '', phone: '', instagram: '', email: '', notes: 
 // WhatsApp, SMS or Instagram open with the message ready and you press send.
 // Eddie reads the same list when you ask for a number or say «crea un mensaje
 // para Ana» (api/_lib/connectors/contacts).
-export default function ContactsPanel() {
+// A .vcf with every contact, for the phone's own address book or any other app.
+function downloadVcf(items) {
+  const url = URL.createObjectURL(new Blob([toVcf(items)], { type: 'text/vcard;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'contactos-eddie.vcf';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export default function ContactsPanel({ standalone = false }) {
   const { user, login } = useAuth();
   const [state, setState] = useState({ status: 'loading', items: [], configured: true });
   const [query, setQuery] = useState('');
@@ -125,7 +138,7 @@ export default function ContactsPanel() {
         <div className="glass-panel contacts__card">
           <h3>Contactos</h3>
           <p className="contacts__note">Inicia sesión con Google para guardar tus contactos y que Eddie los use en tus mensajes.</p>
-          <button type="button" className="btn btn-primary" onClick={login}>
+          <button type="button" className="btn btn-primary" onClick={() => { if (standalone) rememberContactsReturn(); login(); }}>
             Iniciar sesión con Google
           </button>
         </div>
@@ -153,13 +166,25 @@ export default function ContactsPanel() {
           <button type="button" className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setMessage({ tone: '', text: '' }); }} disabled={busy}>
             <Icon name="plus" size={16} /> Añadir
           </button>
-          <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
-            <Icon name="phone" size={16} /> Llamar a Eddie
-          </button>
+          {!standalone && (
+            <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
+              <Icon name="phone" size={16} /> Llamar a Eddie
+            </button>
+          )}
           {canPickContacts() && (
             <button type="button" className="btn" onClick={importFromPhone} disabled={busy}>
               Importar del teléfono
             </button>
+          )}
+        </div>
+        <div className="contacts__row">
+          <button type="button" className="btn" onClick={() => downloadVcf(state.items)} disabled={!state.items.length}>
+            Exportar contactos (.vcf)
+          </button>
+          {!standalone && (
+            <a className="btn" href="/?app=contactos" target="_blank" rel="noopener noreferrer">
+              Descargar como app aparte
+            </a>
           )}
         </div>
         {message.text && <p className={`contacts__msg contacts__msg--${message.tone}`} role="status">{message.text}</p>}
