@@ -16,8 +16,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet" />
     <title>Eddie · Asistente personal</title>
     <script>
-      // Contactos as an app of its own (/?app=contactos): its own manifest, so the browser offers to install it separately from Eddie.
-      if (/[?&]app=contactos(&|$)/.test(location.search)) {
+      // Contactos y llamadas as a web of its own (/contactos/): its own manifest and scope, so the browser installs it separately from Eddie.
+      if (/^\/contactos(\/|$)/.test(location.pathname)) {
         document.querySelector('link[rel="manifest"]').href = '/contactos.webmanifest';
         document.title = 'Contactos · Eddie';
       }

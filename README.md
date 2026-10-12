@@ -1042,9 +1042,12 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   así que el botón **copia el texto y abre el chat** (`ig.me/m/usuario`) para que lo pegues. En Telegram el SMS sale como texto y Instagram con un botón al chat.
 - **Nunca se envía solo**: Eddie solo prepara el borrador; tú pulsas enviar en la aplicación. Los enlaces se validan antes de mostrarse (solo `wa.me`, `sms:` con número e `ig.me`).
 - **Importar del teléfono**: solo Chrome para Android permite elegir contactos de la agenda (Contact Picker); en iPhone se añaden a mano o se le dicen a Eddie.
-- **Fuera de Eddie**: **«Descargar como app aparte»** abre `/?app=contactos`, la misma agenda sin el resto de Eddie y con su propio manifiesto (`public/contactos.webmanifest`,
-  nombre «Contactos · Eddie»). Ahí el botón **Instalar app** la instala en el teléfono o el ordenador como una app distinta (en iPhone: Compartir → «Añadir a pantalla de inicio»). Misma cuenta
-  y mismos datos; si hay que iniciar sesión, Google vuelve a Contactos. **«Exportar contactos (.vcf)»** baja una tarjeta vCard que importa cualquier agenda. Usa el icono de Eddie (sin icono propio todavía).
+- **Web propia**: **`/contactos/`** (botón «Abrir como web aparte (instalable)») es una web aparte con **Contactos y la llamada a Eddie**, sin el resto de Eddie. Tiene su propio
+  manifiesto (`public/contactos.webmanifest`: nombre «Contactos y llamadas · Eddie», id y alcance `/contactos/`), así que en Chrome se instala como una app distinta de Eddie
+  (menú ⋮ → «Instalar app», o el botón **Instalar**; en iPhone: Compartir → «Añadir a pantalla de inicio»). Misma cuenta, mismos contactos y mismos ajustes (comparte el mismo sitio y
+  sesión); si hay que iniciar sesión, Google vuelve a `/contactos/`. Lleva su propio botón **Llamar a Eddie**. Los enlaces antiguos `/?app=contactos` redirigen ahí. Una web con
+  dominio propio (otro proyecto de Vercel) no la separé: tendría otra sesión y haría falta registrar su dirección en Google.
+- **Exportar contactos (.vcf)**: baja una tarjeta vCard que importa cualquier agenda del teléfono.
 - **Instalar en el teléfono**: el atajo «Contactos» de la app de Eddie abre directamente esta pantalla.
 - **Pendiente (siguientes fases)**: pantalla de llamada en la app con transcripción en vivo y «Eddie te llama» con una notificación de llamada entrante.
 
