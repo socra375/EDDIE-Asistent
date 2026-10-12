@@ -1045,7 +1045,7 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Web propia**: **`/contactos/`** (botón «Abrir como web aparte (instalable)») es una web aparte con **Contactos y la llamada a Eddie**, sin el resto de Eddie. Tiene su propio
   manifiesto (`public/contactos.webmanifest`: nombre «Contactos y llamadas · Eddie», id y alcance `/contactos/`), así que en Chrome se instala como una app distinta de Eddie
   (menú ⋮ → «Instalar app», o el botón **Instalar**; en iPhone: Compartir → «Añadir a pantalla de inicio»). Misma cuenta, mismos contactos y mismos ajustes (comparte el mismo sitio y
-  sesión); si hay que iniciar sesión, Google vuelve a `/contactos/`. Lleva su propio botón **Llamar a Eddie**. Los enlaces antiguos `/?app=contactos` redirigen ahí. Una web con
+  sesión); si hay que iniciar sesión, Google vuelve a `/contactos/`. Lleva su propio botón **Llamar a Eddie** y su propio logo (teléfono con anillo: icono de la app, de la pestaña y de la pantalla de llamada; `public/contactos-icon-*.png`). Los enlaces antiguos `/?app=contactos` redirigen ahí. Una web con
   dominio propio (otro proyecto de Vercel) no la separé: tendría otra sesión y haría falta registrar su dirección en Google.
 - **Exportar contactos (.vcf)**: baja una tarjeta vCard que importa cualquier agenda del teléfono.
 - **Instalar en el teléfono**: el atajo «Contactos» de la app de Eddie abre directamente esta pantalla.

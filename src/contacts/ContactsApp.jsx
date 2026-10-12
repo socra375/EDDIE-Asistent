@@ -3,6 +3,7 @@ import CallScreen from '../call/CallScreen';
 import { CALL_EVENT, startCall } from '../services/callState';
 import { promptInstall, useInstallState } from '../services/pwa';
 import ContactsPanel from './ContactsPanel';
+import logo from './call-logo.png';
 import './Contacts.css';
 
 // Contactos y llamadas as a web of its own (/contactos/, installable from its own manifest,
@@ -28,7 +29,10 @@ export default function ContactsApp() {
   return (
     <main className="contacts-app">
       <header className="contacts-app__bar">
-        <strong>Contactos</strong>
+        <strong className="contacts-app__brand">
+          <img src={logo} alt="" width="28" height="28" />
+          Contactos
+        </strong>
         <span className="contacts-app__links">
           <button type="button" className="btn btn-primary" onClick={() => startCall()}>
             Llamar a Eddie
@@ -47,7 +51,7 @@ export default function ContactsApp() {
         </p>
       )}
       <ContactsPanel standalone />
-      {call && <CallScreen incoming={call.incoming} onClose={() => setCall(null)} />}
+      {call && <CallScreen logo={logo} incoming={call.incoming} onClose={() => setCall(null)} />}
     </main>
   );
 }

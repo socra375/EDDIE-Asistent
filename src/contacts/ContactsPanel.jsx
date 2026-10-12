@@ -166,9 +166,11 @@ export default function ContactsPanel({ standalone = false }) {
           <button type="button" className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setMessage({ tone: '', text: '' }); }} disabled={busy}>
             <Icon name="plus" size={16} /> Añadir
           </button>
-          <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
-            <Icon name="phone" size={16} /> Llamar a Eddie
-          </button>
+          {!standalone && (
+            <button type="button" className="btn" onClick={() => startCall()} disabled={busy}>
+              <Icon name="phone" size={16} /> Llamar a Eddie
+            </button>
+          )}
           {canPickContacts() && (
             <button type="button" className="btn" onClick={importFromPhone} disabled={busy}>
               Importar del teléfono

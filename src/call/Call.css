@@ -138,3 +138,15 @@
 .call__btn--hang { background: #c62828; border-color: #ff6b6b; color: #fff; }
 .call__btn--hang svg { transform: rotate(135deg); }
 .call__btn--answer { background: #1b8f4a; border-color: #4dffa6; color: #fff; }
+.call__avatar--logo {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.call__avatar--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.5); /* the logo's ring fills the round frame */
+}
