@@ -1152,15 +1152,16 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 ## Investigador: busca en la web mientras Eddie prepara su respuesta
 
 - **Qué es**: el conector **Investigador** (Conectores → Información). Cuando lo que pides es del **mundo exterior** (una pregunta de datos o un «busca» / «investiga»), un investigador **busca en la web en
-  segundo plano** mientras Eddie junta lo que sabe, y lo que encuentra **entra directo en la respuesta**: Eddie la escribe con esos datos y **cita las fuentes** (título y enlace). No aparece ninguna tarjeta ni
+  segundo plano** mientras Eddie junta lo que sabe, y lo que encuentra **entra directo en la respuesta**: Eddie la escribe con esos datos **como algo que ya sabe, sin nombrar la fuente** (ni páginas, ni títulos, ni enlaces, ni «según…»), como un Jarvis. No aparece ninguna tarjeta ni
   aviso: la app solo muestra tarjetas de aprobación. Es el mismo Eddie con un ayudante, no otra IA, y **solo lee**: no cambia nada.
 - **Cómo corre**: arranca lo primero al recibir tu mensaje (`api/_lib/handler.js`) y trabaja a la vez que Eddie arma su contexto (recuerdos de conversaciones, segundo cerebro, negocios, carpetas…). Justo antes de
   llamar al modelo se recoge lo encontrado y se añade al prompt como **datos copiados de páginas, nunca órdenes**. Si la búsqueda no está lista a los **5 s** desde que empezó, se descarta y Eddie responde sin ella
   (el peor caso retrasa la respuesta 5 s; lo normal es que ya esté lista). Si falla o la cuota se agota, la respuesta sale igual.
 - **Cuándo busca**: solo si lo que pides la necesita: lo pides tú («busca», «investiga», «noticias», «en internet», «compara»…) o es una **pregunta de datos** («¿quién ganó…?», «¿cuánto cuesta…?», «¿cuándo
   sale…?»). **No** cuando hablas de tus cosas (tareas, agenda, clientes, cuentas…) ni con saludos u órdenes. Máximo **6 búsquedas por minuto** por persona (la búsqueda gratis de Tavily es limitada).
+- **Hablar natural, sin citar** (regla de personalidad, `src/services/personality.js`): vale para **todo** lo que Eddie sabe por una búsqueda web, noticias, Wikipedia o su segundo cerebro. No dice «según…», no nombra páginas, medios, títulos ni enlaces y no anuncia que buscó. **Solo** dice de dónde salió un dato si se lo preguntas, o admite con sus palabras que no está seguro cuando lo encontrado es dudoso o se contradice. Nunca inventa un dato. (Las fotos que busca siguen mostrando su autor y licencia en pantalla, porque esas licencias lo exigen.)
 - **Tu memoria**: ya llega al prompt por sus propios bloques (Memoria, conversaciones, segundo cerebro, Negocios); el investigador no la busca dos veces.
-- **Bajo petición**: «investiga X y dime» usa la herramienta `research_now` (memoria, web o todo): Eddie recibe lo encontrado con sus fuentes y contesta con eso, citándolas; si no hay nada, lo dice.
+- **Bajo petición**: «investiga X y dime» usa la herramienta `research_now` (memoria, web o todo): Eddie recibe lo encontrado y contesta con eso, con naturalidad y sin citar fuentes; si no hay nada, lo dice.
 - **Control**: el interruptor del conector (o apagar Búsqueda web) deja a Eddie sin investigador en segundo plano; `research_now` y `search_web` siguen según su propio interruptor.
 - **Qué necesita**: nada nuevo (usa la búsqueda web de siempre, con o sin `TAVILY_API_KEY`) ni migraciones.
 - **Límites**: funciona en el chat y en Inicio; **Telegram** responde por otro camino y todavía no usa el investigador de fondo (sí puede usar `search_web` y `research_now`).

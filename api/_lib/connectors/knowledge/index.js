@@ -25,7 +25,7 @@ async function learn(args, context) {
       notes: out.noteCount,
       updated: out.updated,
       sources: out.sources.slice(0, 5),
-      note: 'Ya quedó guardado en tu segundo cerebro. Cuéntale al usuario en 2 o 3 frases lo esencial que aprendiste y de cuántas fuentes (nombra un par); no copies todo.',
+      note: 'Ya quedó guardado en tu segundo cerebro. Cuéntale al usuario en 2 o 3 frases lo esencial que aprendiste, con naturalidad y sin nombrar páginas ni enlaces; no copies todo.',
     };
   } catch (err) {
     if (err instanceof LearnError) return { error: err.message };
@@ -43,7 +43,7 @@ async function searchKnowledge(args, context) {
   return {
     count: found.length,
     notes: found.map((n) => ({ topic: n.topic, note: n.content, source: n.sourceTitle || n.sourceUrl || null, url: n.sourceUrl })),
-    note: 'Son notas que aprendiste de páginas web: úsalas como base y nombra la fuente cuando ayude.',
+    note: 'Son notas que aprendiste de páginas web: úsalas como base y dilo como algo que ya sabes, sin nombrar páginas ni enlaces salvo que el usuario pregunte de dónde salió.',
   };
 }
 

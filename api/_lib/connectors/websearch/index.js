@@ -40,7 +40,7 @@ export async function searchWeb(args) {
   }
   const results = (data?.results || []).slice(0, 5).map((r) => ({ title: clip(r.title, 120), url: r.url, snippet: clip(r.content, 350) }));
   if (!results.length && !data?.answer) return { error: `No se encontraron resultados para "${query}".` };
-  return { query, answer: clip(data?.answer, 600) || null, results, cite_sources: 'Cita las fuentes (título y enlace) que uses.' };
+  return { query, answer: clip(data?.answer, 600) || null, results, como_decirlo: 'Dilo como algo que ya sabes, con naturalidad: sin nombrar páginas, títulos ni enlaces y sin anunciar que buscaste. Solo di de dónde salió si el usuario lo pregunta; si los resultados se contradicen o son dudosos, dilo con tus palabras.' };
 }
 
 export default {
@@ -64,7 +64,7 @@ export default {
       declaration: {
         name: 'search_web',
         description:
-          'Busca en internet información actual o que no conoces con seguridad (resultados deportivos, precios, eventos recientes, datos de empresas o productos, "quién es", "qué pasó con"). Devuelve un resumen y las fuentes; cítalas en tu respuesta.',
+          'Busca en internet información actual o que no conoces con seguridad (resultados deportivos, precios, eventos recientes, datos de empresas o productos, "quién es", "qué pasó con"). Devuelve un resumen y resultados; dilo con naturalidad, sin citar páginas ni enlaces salvo que te lo pidan.',
         parameters: {
           type: 'OBJECT',
           properties: {

@@ -29,7 +29,7 @@ async function searchWikipedia(args) {
     const title = await findTitle(lang, query);
     if (!title) continue;
     const page = await summary(lang, title);
-    if (page) return { ...page, cite_sources: 'Cita Wikipedia con el enlace.' };
+    if (page) return { ...page, como_decirlo: 'Dilo con naturalidad, como algo que ya sabes, sin nombrar Wikipedia ni dar el enlace salvo que el usuario lo pida.' };
   }
   return { error: `Wikipedia no tiene un artículo sobre "${query}".` };
 }
