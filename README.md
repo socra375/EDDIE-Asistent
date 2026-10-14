@@ -1131,6 +1131,24 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Dónde está**: tabla `ledger_entries` (migración `0032_ledger.sql`; aplícala en tu base), reglas puras en `src/services/ledger.js`, base de datos en `api/_lib/ledger/store.js` y conector en
   `api/_lib/connectors/ledger/`. Todavía no tiene pantalla propia: se maneja por el chat, la voz o Telegram.
 
+## Recepción: el agente recepcionista
+
+- **Qué es**: el conector **Recepción** (Conectores → Agenda). Eddie hace de recepcionista **para ti**: conoce tu horario de atención, te dice **cuándo hay lugar** en tu agenda, **agenda citas** en tu Google
+  Calendar y **anota los recados** de quien te busca para que no se pierdan. Es el mismo Eddie con herramientas de recepción, no otra IA.
+- **No contesta a tus clientes por su cuenta**: trabaja para ti. Tú le dices «Ana quiere una cita el jueves» o «me llamó Pedro, quiere cotizar un logo»; el mensaje de confirmación para el cliente es un
+  **borrador** que preparas con Contactos (`prepare_message`) y envías tú. (Una recepción abierta al público —una página donde el cliente escribe directo— expondría tus datos y hoy no existe.)
+- **Herramientas**: `reception_set_hours` (tu horario por días: «lun-vie 9 a 17 con descanso de 12 a 13», «sábado 9 a 12», cerrar días, duración de cada cita), `reception_availability` («¿hay lugar el
+  jueves?»: rangos libres por día, hasta 7 días), `reception_book` (agendar, **con tarjeta de confirmación**; la hora se corrige ahí), `reception_take_message`, `reception_messages` («¿tengo recados?», urgentes
+  primero) y `reception_message_done` («ya llamé a Pedro»).
+- **Cómo decide si hay lugar**: horario de atención **menos lo que ya hay en tu Google Calendar** (se leen todos los eventos del día, no solo los primeros; los eventos de todo el día, como cumpleaños, no
+  bloquean). Una cita tiene que caber entera dentro del horario, no caer en el descanso, no chocar con nada ni ser en el pasado. Al agendar se **vuelve a comprobar** (la agenda pudo cambiar desde que viste la
+  tarjeta) y se relee el evento del Calendario («Comprobado»). Si no cabe, dice qué horas sí hay ese día. Agendar la misma hora dos veces es imposible: la segunda choca con la primera.
+- **Recados**: se guardan en tu cuenta (quién, qué quiere, teléfono, si es urgente); anotar el mismo dos veces seguidas lo guarda una sola vez; el **resumen de la mañana** de Telegram suma «📞 Recados sin
+  atender» con los primeros tres. Solo ves los tuyos. Tope de 200 sin atender.
+- **Qué necesita**: el permiso del Calendario de Google (el mismo que ya usa Eddie al iniciar sesión) y decirle tu horario la primera vez; sin horario, Eddie no inventa uno: te lo pregunta.
+- **Dónde está**: tablas `reception_settings` y `reception_messages` (migración `0033_reception.sql`; aplícala en tu base), reglas puras en `src/services/reception.js`, base de datos en
+  `api/_lib/reception/store.js` y conector en `api/_lib/connectors/reception/`. Todavía sin pantalla propia: se maneja por el chat, la voz o Telegram.
+
 ## Contactos: la agenda de Eddie
 
 - **Qué es**: la pantalla **Contactos** (también `/?modulo=contactos` y un atajo de la app instalada) guarda personas con nombre, teléfono, Instagram, correo y notas, más
@@ -1410,11 +1428,12 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
   _lib/ledger/           Cuentas del negocio: ingresos, gastos y cobros pendientes (store.js); las reglas puras están en src/services/ledger.js
+  _lib/reception/        Recepción: horario de atención y recados (store.js); las reglas puras están en src/services/reception.js
   _lib/contacts/         Contactos: agenda del usuario (store.js) y sus rutas (handlers.js); las reglas compartidas con la pantalla están en src/services/contactsCore.js
   _lib/construction3d/   Cerebro 3D: URLs firmadas del bucket (s3.js), proyectos (store.js) y rutas (handlers.js)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
   _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing, ledger
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing, ledger, reception
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)

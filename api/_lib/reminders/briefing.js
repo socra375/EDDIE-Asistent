@@ -8,6 +8,7 @@ import { loadUserContext } from '../telegram/serverActions.js';
 import { addDays, localParts } from '../connectors/dates.js';
 import { listPendingReminders } from './store.js';
 import { listEntries } from '../ledger/store.js';
+import { listMessages } from '../reception/store.js';
 import { dueLines } from '../../../src/services/ledger.js';
 
 const MAX_EVENTS = 8;
@@ -47,7 +48,7 @@ function taskLine(t, today) {
 // Pure: turns the collected data into the message. `data` has calendar, mail
 // and news sections as collectToday returns them; tasks and reminders are
 // plain lists.
-export function formatBriefing({ name, timezone, now = new Date(), calendar, mail, news, tasks = [], reminders = [], ledger = [] }) {
+export function formatBriefing({ name, timezone, now = new Date(), calendar, mail, news, tasks = [], reminders = [], ledger = [], messages = [] }) {
   const today = localParts(now.toISOString(), timezone).date;
   const tomorrow = addDays(today, 1);
   const first = String(name || '').trim().split(/\s+/)[0];
@@ -87,6 +88,15 @@ export function formatBriefing({ name, timezone, now = new Date(), calendar, mai
   const money = dueLines(ledger, today);
   if (money.length) lines.push('', '💰 Cobros y pagos', ...money);
 
+  // Messages taken for the user while he was away
+  if (messages.length) {
+    const open = messages.filter((m) => !m.handled);
+    if (open.length) {
+      const line = (m) => `• ${m.from}${m.urgent ? ' (urgente)' : ''}: ${m.message.length > 80 ? `${m.message.slice(0, 79)}…` : m.message}${m.phone ? ` — ${m.phone}` : ''}`;
+      lines.push('', `📞 Recados sin atender (${open.length})`, ...open.slice(0, 3).map(line), ...(open.length > 3 ? [`• …y ${open.length - 3} más`] : []));
+    }
+  }
+
   // Mail
   if (mail?.status === 'ok') {
     const emails = mail.emails || [];
@@ -113,11 +123,12 @@ export function formatBriefing({ name, timezone, now = new Date(), calendar, mai
 export async function buildBriefing(link, now = new Date()) {
   const ctx = await loadUserContext(link.userId);
   const off = sanitizeConnectorIds(ctx.settings.disabledConnectors);
-  const [data, reminders, ledger] = await Promise.all([
+  const [data, reminders, ledger, messages] = await Promise.all([
     collectToday({ timezone: link.timezone, disabled: off, getUser: async () => link.user }),
     off.includes('reminders') ? [] : listPendingReminders(link.userId),
     // The books are optional: a failure here (or the connector switched off) never costs the user their summary.
     off.includes('ledger') ? [] : listEntries(link.userId).catch(() => []),
+    off.includes('reception') ? [] : listMessages(link.userId, { handled: false, limit: 20 }).catch(() => []),
   ]);
-  return formatBriefing({ name: link.user?.name, timezone: link.timezone, now, calendar: data.calendar, mail: data.mail, news: data.news, tasks: ctx.tasks, reminders, ledger });
+  return formatBriefing({ name: link.user?.name, timezone: link.timezone, now, calendar: data.calendar, mail: data.mail, news: data.news, tasks: ctx.tasks, reminders, ledger, messages });
 }
