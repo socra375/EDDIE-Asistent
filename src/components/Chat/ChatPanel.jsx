@@ -13,6 +13,7 @@ import RichText from '../Shared/RichText';
 import MessageActions from './MessageActions';
 import ConfirmCard from './ConfirmCard';
 import StepTrace from './StepTrace';
+import ResearchCard from './ResearchCard';
 import { copyText } from '../../services/messageActions';
 import './Chat.css';
 
@@ -333,6 +334,7 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                 )}
               </span>
               {m.role === 'assistant' && <StepTrace steps={m.steps} />}
+              {m.role === 'assistant' && <ResearchCard card={m.research} />}
               {m.images?.length > 0 && (
                 <div className="bubble__images" aria-label="Imágenes adjuntas">
                   {m.images.map((img, i) => (

@@ -473,6 +473,10 @@ export function ChatProvider({ children }) {
         return i === -1 ? [...list, step] : list.map((s, j) => (j === i ? { ...s, ...step } : s));
       };
       setLiveSteps([]);
+      // The research agent's card (memory and web searched while the answer is written), attached to the bubble.
+      let research = null;
+      // While the researcher is still searching and no word of the answer has arrived, the waiting bubble says so.
+      const liveList = () => (research?.status === 'running' ? [...steps, { id: 'research', tool: 'research', label: 'Investigador', activity: research.note || 'Buscando en tu memoria y en la web…', status: 'running' }] : steps);
 
       try {
         const result = await sendChatMessage({
@@ -492,7 +496,12 @@ export function ChatProvider({ children }) {
           onStep: (step) => {
             steps = mergeSteps(steps, step);
             if (responseStarted) setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, steps } : m)));
-            else setLiveSteps(steps);
+            else setLiveSteps(liveList());
+          },
+          onResearch: (card) => {
+            research = card;
+            if (responseStarted) setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, research } : m)));
+            else setLiveSteps(liveList());
           },
           onChunk: (fullTextSoFar) => {
             if (!responseStarted) {
@@ -502,7 +511,7 @@ export function ChatProvider({ children }) {
               setStatus('responding');
               setMessages((prev) => [
                 ...prev,
-                { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...(steps.length ? { steps } : {}), ...replyMeta },
+                { id: assistantId, role: 'assistant', content: fullTextSoFar, timestamp: Date.now(), ...(steps.length ? { steps } : {}), ...(research ? { research } : {}), ...replyMeta },
               ]);
             } else {
               setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullTextSoFar } : m)));
@@ -516,6 +525,9 @@ export function ChatProvider({ children }) {
         // The server's list is the final word on the receipt.
         const finalSteps = result.steps?.length ? result.steps : steps;
         if (finalSteps.length) assistantMessage.steps = finalSteps;
+        // What the researcher found while the answer was written (the server's final card wins; a "running" one never stays).
+        const finalResearch = result.research || (research?.status === 'running' ? null : research);
+        if (finalResearch) assistantMessage.research = finalResearch;
         // Actions waiting for the user's OK, shown as cards under the reply.
         if (result.confirmations?.length) {
           assistantMessage.confirmations = result.confirmations.map((c) => ({ ...c, state: 'pending' }));
