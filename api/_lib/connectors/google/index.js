@@ -116,7 +116,7 @@ async function listEvents(args, context) {
     timeMax: zonedInstant(addDays(lastDay, 1), '00:00', tz),
     singleEvents: 'true',
     orderBy: 'startTime',
-    maxResults: String(MAX_EVENTS),
+    maxResults: String(Math.min(Math.max(Number(args.max) || MAX_EVENTS, 1), 250)),
   });
   if (args.query) params.set('q', clip(args.query, 100));
   const data = await calendar(token, `?${params}`);
@@ -271,6 +271,10 @@ const DATE_TIME = {
   start_time: { type: 'STRING', description: 'Hora de inicio HH:MM en 24 h (p. ej. "15:30"). Sin hora = evento de todo el día.' },
   end_time: { type: 'STRING', description: 'Hora de fin HH:MM en 24 h (opcional).' },
 };
+
+// The same calendar work for other connectors (Recepción): errors come back as { error }, like for the model.
+// `max` (up to 250) lets a caller that checks for free time see every event, not just the first 25.
+export const calendarApi = { list: guarded(listEvents), create: guarded(createEvent) };
 
 export default {
   id: 'google',
