@@ -3,7 +3,7 @@ import { callProvider } from './providers.js';
 import { queryFrom, recallBlock } from './episodes/recall.js';
 import { knowledgeBlock } from './knowledge/recall.js';
 import { businessBlock } from './business/context.js';
-import { withResearch } from './research/background.js';
+import { startResearch } from './research/background.js';
 import { driveBlock } from './drive/context.js';
 import { parseLearnCommand } from '../../src/services/commands.js';
 import { limitImages, sanitizeImages } from './images.js';
@@ -120,18 +120,18 @@ export function sanitizeContext(context) {
 }
 
 // `cookies` identify the signed-in user for account tools (Gmail); the
-// session is only looked up if such a tool runs. `onResearch(card)` lets the
-// research agent report from the side while the answer is written (see
-// research/background.js); without it nobody searches in the background.
-export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, getUser: sharedGetUser, onResearch } = {}) {
+// session is only looked up if such a tool runs.
+export async function handleChatRequest(body, onChunk, onStep, { cookies = {}, getUser: sharedGetUser } = {}) {
   const request = sanitizeRequest(body);
   // (chatStream.js already looked the user up for the allowance: reuse it.)
   const getUser = sharedGetUser || lazySessionUser(cookies);
-  return withResearch({ request, getUser, onResearch, run: () => answer(request, body, getUser, onChunk, onStep) });
+  return answer(request, body, getUser, onChunk, onStep);
 }
 
 // The answer itself: the background the prompt gets from Eddie's memories, then the model.
 async function answer(request, body, getUser, onChunk, onStep) {
+  // The research agent starts first and works while the rest of the prompt is put together (see research/background.js).
+  const researching = startResearch({ request, getUser });
   // Background for the answer, never allowed to make it fail or wait long:
   // notes from past conversations and what Eddie learned by researching (the
   // second brain) that fit what was just said. Each is skipped when the user
@@ -169,6 +169,8 @@ async function answer(request, body, getUser, onChunk, onStep) {
   // A picture attached to the latest message, for the image tools (edit what the user just sent).
   const lastMessage = request.messages.at(-1);
   const attachedImage = lastMessage?.role === 'user' ? lastMessage.images?.[0] || null : null;
+  const searched = await researching;
+  if (searched) system = `${system}\n\n${searched}`;
   return callProvider({ ...request, system, context: { ...request.context, getUser, attachedImage, toTelegram: body?.mirror === true }, onChunk, onStep });
 }
 

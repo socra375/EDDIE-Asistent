@@ -3,8 +3,6 @@
 // point at a backend deployed elsewhere; it defaults to a relative path,
 // which is what you want when frontend and API share the same Vercel deploy.
 
-import { sanitizeCard } from './research.js';
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export class EddieApiError extends Error {}
@@ -15,12 +13,10 @@ export class EddieApiError extends Error {}
 // onStep(step) fires each time a tool call starts or changes state — the
 // "receipt" of what Eddie is doing ({ id, tool, label, activity, status,
 // summary, verified, detail }); the same id arrives again as it finishes.
-// onResearch(card) fires when the research agent — searching memory and the web while the answer is
-// written — has something to show (a "running" card first, then the final one); the card is cleaned here.
 // `mirror` lets Eddie send results (reports, drafts, pictures) to the user's Telegram.
 // While Eddie thinks the server sends small {type:"ping"} events (ignored here)
 // so the connection is never taken for dead.
-export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, mirror = false, onChunk, onStep, onResearch }) {
+export async function sendChatMessage({ provider, model, system, messages, context, disabledConnectors, mirror = false, onChunk, onStep }) {
   let res;
   try {
     res = await fetch(`${API_BASE}/api/chat`, {
@@ -97,13 +93,9 @@ export async function sendChatMessage({ provider, model, system, messages, conte
           actions: event.actions || [],
           confirmations: event.confirmations || [],
           steps: event.steps || [],
-          research: sanitizeCard(event.research),
         };
       } else if (event.type === 'step') {
         onStep?.({ ...event, type: undefined });
-      } else if (event.type === 'research') {
-        const card = sanitizeCard(event);
-        if (card) onResearch?.(card);
       } else if (event.type === 'error') {
         throw new EddieApiError(event.message);
       }

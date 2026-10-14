@@ -17,10 +17,6 @@
 //                                     — a tool call started or ended (same id
 //                                       each time); the final list comes again
 //                                       in `done`
-//   {"type":"research","id":"r1","status":"running"|"done"|"timeout","query":...,"memory":[...],"web":{...},"note":...}
-//                                   — the research agent's card, searched in the background
-//                                       while the answer is written (see research/background.js);
-//                                       the final one comes again in `done.research`
 //   {"type":"error","message":"..."} — failed after the stream had already
 //                                       started (see below)
 //
@@ -92,16 +88,13 @@ export async function runChatStream(req, res) {
         write({ type: 'chunk', text });
       },
       (step) => write({ type: 'step', ...step }),
-      // The research agent's card is opt-in (`research: true` in the request): the app shows only approval cards, so
-      // it does not ask, and nobody searches in the background for a card that would not be shown.
-      { cookies, getUser, ...(req.body?.research === true ? { onResearch: (card) => write({ type: 'research', ...card }) } : {}) },
+      { cookies, getUser },
     );
     ensureStream();
     const done = { type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom };
     if (result.actions?.length) done.actions = result.actions;
     if (result.confirmations?.length) done.confirmations = result.confirmations;
     if (result.steps?.length) done.steps = result.steps;
-    if (result.research) done.research = result.research;
     write(done);
     clearInterval(beat);
     // The pictures Eddie made go to the user's Telegram (when the app asked and a chat is linked).
