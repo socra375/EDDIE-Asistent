@@ -7,6 +7,8 @@ import { sanitizeConnectorIds } from '../handler.js';
 import { loadUserContext } from '../telegram/serverActions.js';
 import { addDays, localParts } from '../connectors/dates.js';
 import { listPendingReminders } from './store.js';
+import { listEntries } from '../ledger/store.js';
+import { dueLines } from '../../../src/services/ledger.js';
 
 const MAX_EVENTS = 8;
 const MAX_TASKS = 6;
@@ -45,7 +47,7 @@ function taskLine(t, today) {
 // Pure: turns the collected data into the message. `data` has calendar, mail
 // and news sections as collectToday returns them; tasks and reminders are
 // plain lists.
-export function formatBriefing({ name, timezone, now = new Date(), calendar, mail, news, tasks = [], reminders = [] }) {
+export function formatBriefing({ name, timezone, now = new Date(), calendar, mail, news, tasks = [], reminders = [], ledger = [] }) {
   const today = localParts(now.toISOString(), timezone).date;
   const tomorrow = addDays(today, 1);
   const first = String(name || '').trim().split(/\s+/)[0];
@@ -81,6 +83,10 @@ export function formatBriefing({ name, timezone, now = new Date(), calendar, mai
     if (pending.length > MAX_TASKS) lines.push(`• …y ${pending.length - MAX_TASKS} más`);
   }
 
+  // Money: what is owed to the user (late or due today) and what is to pay today
+  const money = dueLines(ledger, today);
+  if (money.length) lines.push('', '💰 Cobros y pagos', ...money);
+
   // Mail
   if (mail?.status === 'ok') {
     const emails = mail.emails || [];
@@ -107,9 +113,11 @@ export function formatBriefing({ name, timezone, now = new Date(), calendar, mai
 export async function buildBriefing(link, now = new Date()) {
   const ctx = await loadUserContext(link.userId);
   const off = sanitizeConnectorIds(ctx.settings.disabledConnectors);
-  const [data, reminders] = await Promise.all([
+  const [data, reminders, ledger] = await Promise.all([
     collectToday({ timezone: link.timezone, disabled: off, getUser: async () => link.user }),
     off.includes('reminders') ? [] : listPendingReminders(link.userId),
+    // The books are optional: a failure here (or the connector switched off) never costs the user their summary.
+    off.includes('ledger') ? [] : listEntries(link.userId).catch(() => []),
   ]);
-  return formatBriefing({ name: link.user?.name, timezone: link.timezone, now, calendar: data.calendar, mail: data.mail, news: data.news, tasks: ctx.tasks, reminders });
+  return formatBriefing({ name: link.user?.name, timezone: link.timezone, now, calendar: data.calendar, mail: data.mail, news: data.news, tasks: ctx.tasks, reminders, ledger });
 }
