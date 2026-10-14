@@ -6,7 +6,8 @@ import { clip, fetchJson } from '../http.js';
 
 const TAVILY_URL = 'https://api.tavily.com/search';
 
-async function searchWeb(args) {
+// Also used by the research agent (api/_lib/research), which searches in the background while Eddie answers.
+export async function searchWeb(args) {
   const query = clip(args.query, 300);
   if (!query) return { error: 'La búsqueda está vacía.' };
   const key = process.env.TAVILY_API_KEY;

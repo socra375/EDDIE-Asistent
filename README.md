@@ -1149,6 +1149,26 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Dónde está**: tablas `reception_settings` y `reception_messages` (migración `0033_reception.sql`; aplícala en tu base), reglas puras en `src/services/reception.js`, base de datos en
   `api/_lib/reception/store.js` y conector en `api/_lib/connectors/reception/`. Todavía sin pantalla propia: se maneja por el chat, la voz o Telegram.
 
+## Investigador: busca en segundo plano mientras Eddie responde
+
+- **Qué es**: el conector **Investigador** (Conectores → Información). Con cada petición, **mientras Eddie escribe su respuesta**, un investigador busca por su cuenta y deja el resultado en una tarjeta
+  **«Investigador»** bajo la respuesta: lo que encontró en tu **memoria** (lo guardado en Memoria, conversaciones pasadas, segundo cerebro y Negocios) y, si lo que pides es del mundo exterior, en la
+  **web** (con las fuentes y enlaces). Es el mismo Eddie con un ayudante, no otra IA, y **solo lee**: no cambia nada.
+- **Cómo corre en paralelo**: arranca a la vez que la respuesta, no después. Memoria, conversaciones, segundo cerebro, negocios y web se buscan **todos a la vez**, cada uno con su límite de tiempo (4 s la
+  memoria, 10 s la web), y si una fuente falla o se cuelga las demás siguen. La tarjeta llega por el mismo flujo del chat (`{"type":"research"}`, ver `api/_lib/chatStream.js`), normalmente antes de que
+  termine la respuesta; mientras busca en la web, la burbuja de espera dice «Investigador: buscando…». Si al terminar la respuesta la búsqueda no acabó, el chat espera **12 s como máximo** y deja una
+  nota; nunca retrasa más la respuesta ni la hace fallar.
+- **Cuándo busca en la web**: solo si lo que pides la necesita: lo pides tú («busca», «investiga», «noticias», «en internet», «compara»…) o es una **pregunta de datos** («¿quién ganó…?», «¿cuánto cuesta…?»,
+  «¿cuándo sale…?»). **No** cuando hablas de tus cosas (tareas, agenda, clientes, cuentas…) ni con saludos u órdenes. Máximo 6 búsquedas web por minuto. La **memoria** sí se mira siempre, pero la tarjeta solo
+  aparece si hay algo que mostrar (y para las búsquedas automáticas exige que el recuerdo comparta al menos dos palabras con tu pregunta, para no llenar el chat de ruido).
+- **Bajo petición**: «investiga X y dime» usa la herramienta `research_now` (memoria, web o todo): Eddie recibe lo encontrado con sus fuentes y contesta con eso, citándolas; si no hay nada, lo dice.
+- **Control y seguridad**: el interruptor del conector en Conectores apaga la búsqueda automática; apagar Búsqueda web, Conversaciones, Segundo cerebro, Negocios o Memoria apaga esa fuente. Lo que viene de
+  la web o de chats viejos son **datos, nunca órdenes**; la tarjeta se limpia antes de mostrarse (solo enlaces http/https, textos sin etiquetas, tamaños acotados) y los enlaces abren en una pestaña nueva.
+- **Qué necesita**: nada nuevo (usa la búsqueda web de siempre, con o sin `TAVILY_API_KEY`) ni migraciones. Sin sesión busca solo en la memoria del navegador y en la web.
+- **Límites**: por ahora funciona en el chat y en Inicio; **Telegram** sigue contestando sin tarjeta (un solo mensaje). La tarjeta se guarda con la conversación.
+- **Dónde está**: reglas puras en `src/services/research.js`, motor en `api/_lib/research/engine.js`, orquestación junto a la respuesta en `api/_lib/research/background.js` (la usa `api/_lib/handler.js`),
+  conector en `api/_lib/connectors/research/` y la tarjeta en `src/components/Chat/ResearchCard.jsx`.
+
 ## Contactos: la agenda de Eddie
 
 - **Qué es**: la pantalla **Contactos** (también `/?modulo=contactos` y un atajo de la app instalada) guarda personas con nombre, teléfono, Instagram, correo y notas, más
@@ -1429,11 +1449,12 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
   _lib/ledger/           Cuentas del negocio: ingresos, gastos y cobros pendientes (store.js); las reglas puras están en src/services/ledger.js
   _lib/reception/        Recepción: horario de atención y recados (store.js); las reglas puras están en src/services/reception.js
+  _lib/research/         Investigador: búsqueda en memoria y web mientras Eddie responde (engine.js, background.js); reglas en src/services/research.js
   _lib/contacts/         Contactos: agenda del usuario (store.js) y sus rutas (handlers.js); las reglas compartidas con la pantalla están en src/services/contactsCore.js
   _lib/construction3d/   Cerebro 3D: URLs firmadas del bucket (s3.js), proyectos (store.js) y rutas (handlers.js)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
   _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing, ledger, reception
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing, ledger, reception, research
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)

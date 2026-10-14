@@ -35,12 +35,13 @@ import browser from './browser/index.js';
 import marketing from './marketing/index.js';
 import ledger from './ledger/index.js';
 import reception from './reception/index.js';
+import research from './research/index.js';
 import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
 
-export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, routines, memory, conversations, knowledge, websearch, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, contacts, business, ledger, reception, browser, marketing, telegram, devices, computer, probe];
+export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, routines, memory, conversations, knowledge, websearch, research, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, contacts, business, ledger, reception, browser, marketing, telegram, devices, computer, probe];
 
 function missingEnv(connector, env) {
   return (connector.requiredEnv || []).filter((name) => !env[name]);
@@ -239,7 +240,8 @@ export function createToolset({ disabled = [], context = {}, env = process.env, 
   const actions = [];
   const confirmations = [];
   const steps = [];
-  const toolContext = { ...context, emit: (action) => actions.push(action) };
+  // `disabled`: what the user switched off, for a tool that reaches into other connectors' sources (the researcher).
+  const toolContext = { ...context, disabled, emit: (action) => actions.push(action) };
   return {
     offered: connectors.map((c) => c.id),
     declarations: tools.map((t) => t.declaration),
