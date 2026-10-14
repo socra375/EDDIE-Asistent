@@ -1113,6 +1113,24 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   Música: usa solo la que tengas o tenga licencia; una canción comercial puede bloquear tu video al publicarlo.
 - **Dónde está**: agente `public/eddie_agent.py` (herramientas `video_info`, `edit_video`, `video_status`) y conector `api/_lib/connectors/marketing/`. No necesita variables ni migraciones nuevas.
 
+## Cuentas del negocio: el agente administrador y contador
+
+- **Qué es**: el conector **Cuentas del negocio** (Conectores → Asistente). Eddie lleva las cuentas como tu administrador y contador: **anota ingresos y gastos cuando se los cuentas** («vendí una web
+  por 250 a Ana», «pagué 80 de luz ayer»), dice **cuánto entró, salió y cuánto te deben**, avisa **quién está atrasado** y prepara un **borrador de factura o recibo**. Es el mismo Eddie con herramientas
+  de cuentas, no otra IA. Se une con los otros cerebros por el nombre del cliente: «¿cuánto me debe Ana?» y luego «escríbele a Ana» (Contactos) funcionan seguidos.
+- **Herramientas**: `ledger_add` (anotar; con `due_date` queda **pendiente**: por cobrar o por pagar), `ledger_list` (movimientos con totales; «¿qué gasté este mes?», «¿qué le vendí a Ana?»,
+  «¿quién me debe?»), `ledger_summary` (el balance de un periodo: hoy, ayer, semana, mes, mes pasado, trimestre, año o todo; en qué se gasta más; lo que te deben y lo atrasado), `ledger_update`
+  («Ana ya me pagó» marca pagado y apunta el día; también corrige montos, fechas y nombres), `ledger_delete` (con tarjeta de confirmación) e `invoice_draft` (borrador con subtotal, impuesto y total
+  calculados; **no es un comprobante fiscal**).
+- **Cómo cuenta**: por **cobrado y pagado** (base de caja): un ingreso o gasto pagado cuenta el día en que se pagó; lo pendiente cuenta como «te deben» o «debes» hasta que se marca pagado, y es
+  «atrasado» cuando pasó su vencimiento. Los totales van **por moneda** (USD, DOP… la que digas; sin inventarla) y el dinero se guarda en centavos, así que las sumas no se descuadran.
+- **Resumen de la mañana**: si hay cobros atrasados, que vencen hoy o pagos por hacer hoy, el resumen de Telegram trae el apartado **💰 Cobros y pagos**. Con una rutina automática puedes pedir más:
+  «cada lunes a las 8 dime quién me debe» (acción `agent`).
+- **Cuidados**: nunca inventa un monto, una fecha ni una moneda (si falta, pregunta); anotar lo mismo dos veces seguidas lo guarda una sola vez; un movimiento ambiguo («Ana», con dos Anas) no se toca
+  hasta que se aclare; solo ves lo tuyo. Es contabilidad básica de apoyo: **no declara impuestos, no da asesoría fiscal ni emite comprobantes**. Tope de 5000 movimientos.
+- **Dónde está**: tabla `ledger_entries` (migración `0032_ledger.sql`; aplícala en tu base), reglas puras en `src/services/ledger.js`, base de datos en `api/_lib/ledger/store.js` y conector en
+  `api/_lib/connectors/ledger/`. Todavía no tiene pantalla propia: se maneja por el chat, la voz o Telegram.
+
 ## Contactos: la agenda de Eddie
 
 - **Qué es**: la pantalla **Contactos** (también `/?modulo=contactos` y un atajo de la app instalada) guarda personas con nombre, teléfono, Instagram, correo y notas, más
@@ -1391,11 +1409,12 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   tasks.js               GET/POST sin id, PATCH/DELETE con id (un solo archivo + reescritura en vercel.json)
   settings/index.js, memory/index.js
   connectors.js          GET /api/connectors (y, más adelante, OAuth y webhooks de conectores)
+  _lib/ledger/           Cuentas del negocio: ingresos, gastos y cobros pendientes (store.js); las reglas puras están en src/services/ledger.js
   _lib/contacts/         Contactos: agenda del usuario (store.js) y sus rutas (handlers.js); las reglas compartidas con la pantalla están en src/services/contactsCore.js
   _lib/construction3d/   Cerebro 3D: URLs firmadas del bucket (s3.js), proyectos (store.js) y rutas (handlers.js)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
   _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing, ledger
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
