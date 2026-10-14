@@ -108,7 +108,13 @@ export default {
   description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto una tarea que Eddie hace solo con sus herramientas (agent), abrir páginas web (open_sites) o, al encender el PC, decir algo en voz alta (say). También cuando se enciende un PC vinculado con EDDIE Prime («cuando encienda la PC, abre YouTube y WhatsApp Web»). Varias rutinas a la misma hora corren a la vez.`,
   icon: 'clock',
   category: 'asistente',
-  route: /rutina|autom[aá]tic[oa]|cada d[ií]a a las|todos los d[ií]as a las|cuando termine|cuando acabe|cuando (encienda|prenda|arranque|inicie)|al (encender|prender|arrancar|iniciar)/i,
+  route: /rutina|autom[aá]tic[oa]|cada d[ií]a|todos los d[ií]as|cada (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|semana|ma[nñ]ana|noche)|todas las (ma[nñ]anas|noches)|cada \d+ horas|cuando termine|cuando acabe|cuando (encienda|prenda|arranque|inicie)|al (encender|prender|arrancar|iniciar)/i,
+  guide: `RUTINAS — cómo y cuándo:
+1. Crea una rutina solo cuando el usuario la pida o acepte tu oferta, y confirma con él la hora y qué debe pasar antes de crearla.
+2. Una tarea para ti (acción agent) corre sin nadie delante: no puede preguntar ni confirmar, y lo delicado (enviar, borrar, mover) no se hace. Escríbela completa y con contexto, como para alguien que no puede preguntar.
+3. «Cuando encienda la PC» y «cuando termine la descarga» necesitan un equipo con EDDIE Prime; si hay varios, pregunta cuál.
+4. Las rutinas son diarias (una hora al día) o por evento. Si piden «cada lunes» o «cada 2 horas», dilo y ofrece la diaria.
+5. Al terminar, di en una frase qué hará y a qué hora. Para quitar una, cancel_routine.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Las rutinas solo pueden hacer lo de esta lista (resumen, música, un aviso de texto o una tarea de Eddie): nada sensible se ejecuta, porque nadie confirma una tarjeta cuando corren solas; lo que necesite permiso se te avisa como pendiente.',

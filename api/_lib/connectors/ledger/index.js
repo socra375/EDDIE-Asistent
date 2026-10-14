@@ -8,8 +8,11 @@
 import { addEntry, countEntries, deleteEntry, listEntries, updateEntry } from '../../ledger/store.js';
 import {
   KINDS, MAX_ENTRIES, PERIODS, STATUSES,
-  cleanCurrency, cleanKind, cleanStatus, cleanText, draftInvoice, effectiveDate, fromCents, isOverdue, matchEntries, money, periodRange, plain, summarize, toCents,
+  cleanCurrency, cleanKind, cleanStatus, cleanText, compareTotals, draftInvoice, effectiveDate, fromCents, isOverdue, matchEntries, money, periodRange, plain, previousRange, receivablesByClient, reminderText, summarize, toCents,
 } from '../../../../src/services/ledger.js';
+import { listBusiness } from '../../business/store.js';
+import { listContacts } from '../../contacts/store.js';
+import { matchContacts } from '../../../../src/services/contactsCore.js';
 import { addDays, resolveDate, todayIn } from '../dates.js';
 import { clip } from '../http.js';
 
@@ -144,16 +147,56 @@ async function summary(args, context) {
   const entries = await listEntries(user.id);
   if (!entries.length) return { period, range, empty: true, note: 'Todavía no hay movimientos guardados. Pregúntale al usuario por sus ingresos y gastos y anótalos con ledger_add.', summary: 'Sin movimientos todavía' };
   const result = summarize(entries, { range, today });
+  // Against the period right before, so «¿cómo voy?» can say whether it is going up or down.
+  const beforeRange = previousRange(period, today);
+  const comparison = beforeRange ? compareTotals(result, summarize(entries, { range: beforeRange, today })) : [];
   const lines = result.currencies.map((c) => `${c.currency}: entró ${c.income}, salió ${c.expense}, balance ${c.net}`);
   return {
     period,
     ...result,
+    ...(beforeRange ? { previous_range: beforeRange, comparison } : {}),
     summary: lines.length ? lines.join(' · ') : 'Sin movimientos en ese periodo',
-    note: 'Ingresos y gastos cuentan lo ya pagado en ese periodo; «owedToMe» es lo que le deben al usuario hoy y «iOwe» lo que él debe. Si hay cobros atrasados (followUp), ofrécele escribirle al cliente. No es asesoría fiscal.',
+    note: 'Ingresos y gastos cuentan lo ya pagado en ese periodo; «owedToMe» es lo que le deben al usuario hoy y «iOwe» lo que él debe. Si hay cobros atrasados (followUp), ofrécele escribirle al cliente. «comparison» dice cuánto subió o bajó cada cosa frente al periodo anterior (previous_range): menciónalo en una frase, sin inventar causas. No es asesoría fiscal.',
   };
 }
 
 // One entry for the words the user used: the only match, or an error that lists the candidates.
+async function collections(args, context) {
+  const user = await getUser(context);
+  if (!user) return { error: SIGN_IN };
+  const today = todayIn(tzOf(context));
+  let groups = receivablesByClient(await listEntries(user.id), today);
+  const wanted = plain(args.client).trim();
+  if (wanted) groups = groups.filter((g) => plain(g.client).includes(wanted) || g.items.some((e) => plain(e.concept).includes(wanted)));
+  if (!groups.length) return { count: 0, summary: wanted ? 'Nadie con ese nombre te debe' : 'Nadie te debe nada', note: 'No hay cobros pendientes (de ese cliente). Dilo con claridad.' };
+  const contacts = await listContacts(user.id).catch(() => []);
+  const styles = (await listBusiness(user.id).catch(() => [])).filter((n) => n.area === 'estilo').slice(0, 2).map((n) => clip(n.summary || n.title, 120));
+  const items = groups.slice(0, 12).map((g) => {
+    const found = g.client ? matchContacts(contacts, g.client, { limit: 2 }) : [];
+    const contact = found.length === 1 ? found[0] : null;
+    return {
+      client: g.client || null,
+      total: fromCents(g.cents),
+      currency: g.currency || null,
+      overdue: g.overdue || undefined,
+      days_late: g.overdue ? g.daysLate : undefined,
+      oldest_due: g.oldestDue,
+      entries: g.items.map((e) => ({ id: e.id, concept: e.concept, amount: fromCents(e.amountCents), due_date: e.dueDate })),
+      contact: contact ? { name: contact.name, has_phone: Boolean(contact.phone) } : found.length > 1 ? { ambiguous: found.map((c) => c.name) } : null,
+      suggested_message: reminderText(g, { today }),
+    };
+  });
+  const overdue = items.filter((i) => i.overdue).length;
+  return {
+    count: groups.length,
+    overdue,
+    items,
+    ...(styles.length ? { user_tone: styles } : {}),
+    summary: `${groups.length} cobro${groups.length === 1 ? '' : 's'} pendiente${groups.length === 1 ? '' : 's'}${overdue ? `, ${overdue} atrasado${overdue === 1 ? '' : 's'}` : ''}`,
+    note: 'Cuéntaselo en pocas líneas (a quién, cuánto, cuántos días de atraso). Si quiere recordárselo a alguien, escribe el mensaje con SU tono (user_tone) a partir de suggested_message y deja el borrador con prepare_message (Contactos); el usuario lo envía, tú no. Si el contacto no existe o no tiene teléfono, dilo y ofrece guardarlo. No reclames con dureza ni inventes cargos.',
+  };
+}
+
 async function pick(user, args, today) {
   const entries = await listEntries(user.id);
   const query = args.id || args.query;
@@ -250,6 +293,16 @@ export default {
   category: 'asistente',
   route:
     /cobr|deb(e|en|o|er[eé])\b|me deben|te debe|gast[eoéa]|ingres|ventas?\b|vend[ií]|factur|recibo|pagu[eé]|pag[oó]|cuenta|balance|ganancia|gané|utilidad|contab|contador|presupuest|dinero|finanza|n[oó]mina|impuesto|cu[aá]nto (gan|gast|me deben|debo|entr|sal)|fiado|abono/i,
+  companions: ['contacts'],
+  guide: `CUENTAS DEL NEGOCIO — cómo y cuándo:
+1. En cuanto el usuario cuente un ingreso o gasto, anótalo con ledger_add sin pedírselo y dilo en una frase corta con monto y concepto. Si falta el monto, pregúntalo; nunca inventes montos, fechas ni moneda.
+2. «Me deben», «fiado», «pagará el viernes» = pendiente con due_date. «Ya me pagó» = ledger_update con status pagado (no crees otro ingreso).
+3. Si dos movimientos encajan (dos Anas), pregunta cuál; no adivines. Borrar es ledger_delete (pide tarjeta).
+4. «¿Cómo voy?», «cuánto gané o gasté» = ledger_summary; di en una frase si sube o baja frente al periodo anterior, sin inventar causas.
+5. «¿Quién me debe?» = ledger_collections. Si hay atrasados, ofrece recordárselo; si acepta, escribe el mensaje con su tono a partir del texto sugerido y déjalo como borrador con prepare_message (Contactos). El usuario lo envía, tú no.
+6. Factura o recibo: invoice_draft con los precios que dijo; recuérdale que es un borrador, no un comprobante fiscal, y ofrece anotarlo como cobro pendiente.
+7. No des asesoría fiscal ni legal: para impuestos, que lo consulte con un contador.
+8. Si suele haber atrasados, ofrece una rutina diaria («todos los días a las 8 dime si alguien se atrasó») y créala solo si acepta.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Solo con sesión iniciada. Guarda ingresos, gastos y cobros o pagos pendientes (con fecha de vencimiento), por moneda; el resumen de la mañana te avisa de los cobros atrasados. Es contabilidad básica de apoyo: no declara impuestos ni emite comprobantes fiscales. Borrar pide tu confirmación. Tope de 5000 movimientos.',
@@ -322,6 +375,19 @@ export default {
         parameters: { type: 'OBJECT', properties: { period: PERIOD_ARG } },
       },
       run: (args, context) => summary(args, context),
+    },
+    {
+      label: 'Cobros pendientes',
+      activity: 'Revisando quién te debe…',
+      risk: 'read',
+      summarize: (result) => (result?.error ? undefined : result?.summary),
+      declaration: {
+        name: 'ledger_collections',
+        description:
+          'Lista lo que le deben al usuario, por cliente y con los más atrasados primero, con su contacto de Contactos y un texto sugerido de recordatorio amable. Úsala para «¿quién me debe?», «¿a quién le cobro?» y antes de redactar un cobro. Con client mira solo a esa persona. No envía nada.',
+        parameters: { type: 'OBJECT', properties: { client: { type: 'STRING', description: 'Solo este cliente (opcional).' } } },
+      },
+      run: (args, context) => collections(args, context),
     },
     {
       label: 'Corregir o marcar pagado',

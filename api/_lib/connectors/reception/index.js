@@ -180,6 +180,28 @@ async function book(args, context) {
   };
 }
 
+// The appointments on the Calendar (the ones Eddie booked start with «Cita»), with the ids that update_event and delete_event need.
+async function appointments(args, context) {
+  const user = await getUser(context);
+  if (!user) return { error: SIGN_IN };
+  const tz = tzOf(context);
+  const from = resolveDate(args.from || 'hoy', tz);
+  if (!from) return { error: `No entendí la fecha «${args.from}». Usa AAAA-MM-DD, «hoy», «mañana» o un día de la semana.` };
+  const days = Math.min(Math.max(Math.round(Number(args.days) || 14), 1), 31);
+  const data = await calendarApi.list({ from, to: addDays(from, days - 1), max: 250, ...(args.query ? { query: args.query } : {}) }, context);
+  if (data.error) return data;
+  const all = args.all === true;
+  const events = (data.events || []).filter((e) => all || /^cita\b/i.test(e.title || ''));
+  return {
+    from,
+    to: addDays(from, days - 1),
+    count: events.length,
+    appointments: events.slice(0, 30).map((e) => ({ id: e.id, title: e.title, date: e.date, day: e.day, start: e.start || null, end: e.end || null, all_day: e.all_day || undefined })),
+    summary: events.length ? `${events.length} cita${events.length === 1 ? '' : 's'}` : 'No hay citas en esas fechas',
+    note: events.length ? 'Para mover una usa update_event y para cancelarla delete_event, con el id (piden tarjeta). Para mover, mira antes reception_availability del día nuevo.' : 'No hay citas con «Cita» en el título en ese rango. Si buscas otro tipo de evento, vuelve a llamar con all: true.',
+  };
+}
+
 async function takeMessage(args, context) {
   const user = await getUser(context);
   if (!user) return { error: SIGN_IN };
@@ -234,6 +256,15 @@ export default {
   category: 'agenda',
   route:
     /\bcitas?\b|ag[eé]nd(a|ar|e|ame|ale)\b|horario|disponib|hay (lugar|espacio|hueco)|hueco|recados?|recado|dej[oó] (dicho|un mensaje)|me (llam[oó]|busc[oó]|escribi[oó])|lo que (dej[oó]|dijo)|reserv|turno|atenci[oó]n al cliente|recepci[oó]n|recepcionista|cu[aá]ndo (puede|puedo|atiend)|quiere (una )?cita/i,
+  companions: ['contacts', 'google'],
+  guide: `RECEPCIÓN — cómo y cuándo:
+1. Sin horario guardado, pregúntalo una sola vez (días, apertura, cierre, descanso) y guárdalo con reception_set_hours; no inventes uno.
+2. Antes de proponer o prometer una hora, mira reception_availability y ofrece 2 o 3 opciones concretas, no la lista entera.
+3. Agenda con reception_book (pide tarjeta). Pregunta solo lo que falte: nombre, día y hora. Si la hora choca, ofrece las alternativas que te devuelve.
+4. Tras agendar, ofrece preparar el mensaje de confirmación para el cliente con prepare_message (Contactos); el usuario lo envía, tú no.
+5. Para mover o cancelar: reception_appointments para ver la cita y su id, luego update_event o delete_event del Calendario (piden tarjeta). Para mover, mira antes la disponibilidad del día nuevo.
+6. Cuando alguien lo buscó o dejó algo, anótalo con reception_take_message en una frase fiel, sin inventar; urgente solo si lo dijo o corre prisa. «¿Tengo recados?» = reception_messages; al atender uno, reception_message_done.
+7. Trabajas para el usuario: no contestas a sus clientes ni confirmas nada a nombre suyo sin su OK.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Las citas se agendan en tu Google Calendar (hace falta haber dado el permiso del Calendario al iniciar sesión) y siempre piden tu confirmación; el horario y los recados se guardan en tu cuenta. Eddie no habla con tus clientes ni envía nada solo: el mensaje de confirmación es un borrador que tú envías (Contactos). Solo con sesión iniciada.',
@@ -312,6 +343,27 @@ export default {
       },
       prepare: (args, context) => prepareBook(args, context),
       run: (args, context) => book(args, context),
+    },
+    {
+      label: 'Ver las citas',
+      activity: 'Mirando las citas…',
+      risk: 'read',
+      summarize: (result) => (result?.error ? undefined : result?.summary),
+      declaration: {
+        name: 'reception_appointments',
+        description:
+          'Lista las citas agendadas en el Calendario del usuario (las que empiezan con «Cita»), con sus id, a partir de un día (por defecto hoy, 14 días; hasta 31). Úsala para «¿qué citas tengo?», «¿cuándo viene Ana?» y antes de mover o cancelar una cita (update_event / delete_event con ese id).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            from: { type: 'STRING', description: 'Desde qué día: AAAA-MM-DD, «hoy», «mañana» o un día de la semana.' },
+            days: { type: 'INTEGER', description: 'Cuántos días mirar (1 a 31; por defecto 14).' },
+            query: { type: 'STRING', description: 'Nombre o palabra para filtrar (por ejemplo el cliente).' },
+            all: { type: 'BOOLEAN', description: 'true = todos los eventos, no solo los que empiezan con «Cita».' },
+          },
+        },
+      },
+      run: (args, context) => appointments(args, context),
     },
     {
       label: 'Anotar un recado',

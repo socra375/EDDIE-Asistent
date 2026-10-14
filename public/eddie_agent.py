@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -619,8 +619,8 @@ def t_check_downloads(_args, _cfg):
 
 VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
 AUDIO_EXTS = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
-VIDEO_OPS = ("trim", "join", "vertical", "caption", "music", "compress")
-VIDEO_LABELS = {"trim": "recorte", "join": "union", "vertical": "vertical", "caption": "texto", "music": "musica", "compress": "ligero"}
+VIDEO_OPS = ("trim", "join", "vertical", "caption", "music", "compress", "reel")
+VIDEO_LABELS = {"trim": "recorte", "join": "union", "vertical": "vertical", "caption": "texto", "music": "musica", "compress": "ligero", "reel": "reel"}
 MAX_VIDEO_SECS = 1800  # una entrada más larga que esto se rechaza
 VIDEO_TIMEOUT = 1800  # un trabajo que pasa de esto se corta
 VIDEO_WAIT = 8  # cuánto espera edit_video por si el trabajo es corto (Eddie espera 15 s)
@@ -810,6 +810,35 @@ def _plan_edit(op, args, cfg, workdir):
         raise ValueError(f"Ese video dura {_fmt_dur(info['duration'])}: por ahora edito hasta {MAX_VIDEO_SECS // 60} minutos.")
     dur = info["duration"]
     audio_enc = ENC_A if info["has_audio"] else ["-an"]
+
+    if op == "reel":
+        # Un Reel / TikTok / Short en una sola pasada: recorta (opcional), pasa a vertical 9:16, pone el texto (opcional)
+        # y mezcla música de fondo (opcional). Una sola codificación: más rápido y con mejor calidad que encadenar pasos.
+        start = parse_time(args["start"], "inicio") if str(args.get("start") or "").strip() else 0.0
+        end = min(parse_time(args["end"], "final") if str(args.get("end") or "").strip() else dur, dur)
+        if start >= dur:
+            raise ValueError(f"El inicio ({_fmt_dur(start)}) está después del final del video ({_fmt_dur(dur)}).")
+        if end <= start:
+            raise ValueError("El final tiene que ir después del inicio.")
+        length = end - start
+        text = clean_caption(args.get("text")) if str(args.get("text") or "").strip() else ""
+        music = resolve_media(args.get("second"), AUDIO_EXTS, "audio") if str(args.get("second") or "").strip() else None
+        chain = "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920:flags=lanczos,setsar=1"
+        if text:
+            # Mismo truco que caption: el texto va en un .srt de la carpeta de trabajo y ffmpeg corre allí.
+            with open(os.path.join(workdir, "eddie.srt"), "w", encoding="utf-8") as f:
+                f.write(f"1\n{srt_time(0)} --> {srt_time(length)}\n{text}\n")
+            chain += ",subtitles=eddie.srt:force_style='Alignment=2,FontName=Arial,Bold=1,FontSize=14,Outline=2,Shadow=0,MarginV=70'"
+        head = ["-ss", f"{start:.3f}", "-i", inp] + (["-stream_loop", "-1", "-i", music] if music else [])
+        if music and info["has_audio"]:
+            fc = f"[0:v]{chain}[v];[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0:weights='1 0.35'[a]"
+            maps = ["-filter_complex", fc, "-map", "[v]", "-map", "[a]"] + ENC_A
+        elif music:
+            fc = f"[0:v]{chain}[v];[1:a]volume=0.8[a]"
+            maps = ["-filter_complex", fc, "-map", "[v]", "-map", "[a]"] + ENC_A
+        else:
+            maps = ["-vf", chain] + (ENC_A if info["has_audio"] else ["-an"])
+        return head + ["-t", f"{length:.3f}"] + maps + ENC_V + MP4_FAST, length, inp
 
     if op == "trim":
         start = parse_time(args["start"], "inicio") if str(args.get("start") or "").strip() else 0.0
@@ -1382,13 +1411,13 @@ TOOLS = {
     "say_text": (t_say_text, "Decir algo en voz alta", "Dice un texto en voz alta con la voz del sistema.", "confirm", {"text": S("Qué decir (máx. 300 caracteres).")}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
     "video_info": (t_video_info, "Ver videos y ffmpeg", "Dice si ffmpeg está instalado; con una ruta, la duración y el tamaño de un video; sin ruta, tus videos recientes.", "read", {"path": S("Video o audio: nombre (ej. clip.mp4) o ruta dentro de tu carpeta personal (opcional).")}),
-    "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, formato vertical 9:16, poner un texto, añadir música o aligerarlo.", "confirm", {
-        "operation": {"type": "string", "enum": list(VIDEO_OPS), "description": "trim, join, vertical, caption, music o compress."},
+    "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, vertical 9:16, poner texto, añadir música, aligerarlo o hacer un reel completo en un paso.", "confirm", {
+        "operation": {"type": "string", "enum": list(VIDEO_OPS), "description": "trim, join, vertical, caption, music, compress o reel."},
         "path": S("Video a editar: nombre (clip.mp4) o ruta (Videos/clip.mp4)."),
-        "second": S("join: el segundo video. music: el audio (mp3, wav…)."),
-        "start": S("trim y caption: inicio (90 o 1:30). Opcional."),
-        "end": S("trim y caption: final (90 o 1:30). Opcional."),
-        "text": S("caption: el texto a mostrar (máx. 200 caracteres)."),
+        "second": S("join: el segundo video. music y reel: el audio (mp3, wav…)."),
+        "start": S("trim, caption y reel: inicio (90 o 1:30). Opcional."),
+        "end": S("trim, caption y reel: final (90 o 1:30). Opcional."),
+        "text": S("caption y reel: el texto a mostrar (máx. 200 caracteres)."),
     }),
     "video_status": (t_video_status, "Cómo va la edición", "Dice cómo va la edición del video (porcentaje y archivo listo).", "read", {"id": S("Id del trabajo (opcional; sin él, el último).")}),
 }

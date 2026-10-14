@@ -200,6 +200,81 @@ export function summarize(entries, { range, today }) {
   return { range, currencies, followUp };
 }
 
+// The period right before `period` (to compare «este mes» with «el mes pasado»); null for «todo». A week or a day is compared with
+// the same stretch one week or one day earlier; a month, quarter or year with the whole one before.
+export function previousRange(period, today) {
+  const range = periodRange(period, today);
+  switch (period) {
+    case 'todo':
+      return null;
+    case 'hoy':
+    case 'ayer': {
+      const d = shiftDays(range.from, -1);
+      return { from: d, to: d };
+    }
+    case 'semana':
+      return { from: shiftDays(range.from, -7), to: shiftDays(range.to, -7) };
+    case 'trimestre': {
+      const [y, m] = range.from.split('-').map(Number);
+      const back = m <= 3 ? { y: y - 1, m: 10 } : { y, m: m - 3 };
+      return { from: `${back.y}-${pad(back.m)}-01`, to: lastDayOf(back.y, back.m + 2) };
+    }
+    case 'anio': {
+      const y = Number(range.from.slice(0, 4)) - 1;
+      return { from: `${y}-01-01`, to: `${y}-12-31` };
+    }
+    case 'mes_pasado': {
+      const [y, m] = range.from.split('-').map(Number);
+      const back = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+      return { from: `${back.y}-${pad(back.m)}-01`, to: lastDayOf(back.y, back.m) };
+    }
+    default: {
+      const [y, m] = range.from.split('-').map(Number);
+      const back = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+      return { from: `${back.y}-${pad(back.m)}-01`, to: lastDayOf(back.y, back.m) };
+    }
+  }
+}
+
+// How much did it change against the period before: per currency, % up or down (null when there was nothing before).
+export function compareTotals(current, previous) {
+  const pct = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 1000) / 10 : null);
+  const before = new Map((previous?.currencies || []).map((c) => [c.currency, c]));
+  return (current?.currencies || []).map((c) => {
+    const p = before.get(c.currency) || { income: 0, expense: 0, net: 0 };
+    return { currency: c.currency, incomeChangePct: pct(c.income, p.income), expenseChangePct: pct(c.expense, p.expense), previousIncome: p.income, previousExpense: p.expense, previousNet: p.net };
+  });
+}
+
+// Money someone owes the user, grouped by client (an entry with no client stands on its own), the most overdue first:
+// what the collections list and the reminder message are built from.
+export function receivablesByClient(entries, today) {
+  const groups = new Map();
+  for (const e of entries) {
+    if (e.kind !== 'ingreso' || e.status !== 'pendiente') continue;
+    const key = `${plain(e.client || e.concept).trim()}|${e.currency}`;
+    if (!groups.has(key)) groups.set(key, { client: e.client || '', currency: e.currency, cents: 0, items: [], oldestDue: null });
+    const g = groups.get(key);
+    g.cents += e.amountCents;
+    g.items.push(e);
+    if (e.dueDate && (!g.oldestDue || e.dueDate < g.oldestDue)) g.oldestDue = e.dueDate;
+  }
+  return [...groups.values()]
+    .map((g) => ({ ...g, daysLate: g.oldestDue && g.oldestDue < today ? daysBetween(g.oldestDue, today) : 0, overdue: Boolean(g.oldestDue && g.oldestDue < today) }))
+    .sort((a, b) => b.daysLate - a.daysLate || b.cents - a.cents);
+}
+
+// A polite first reminder, in plain words (the user's voice is applied by Eddie when he writes the final draft).
+export function reminderText(group, { today } = {}) {
+  const first = String(group.client || '').trim().split(/\s+/)[0];
+  const what = group.items.length === 1 ? `por «${group.items[0].concept}»` : `por ${group.items.length} trabajos`;
+  const amount = money(group.cents, group.currency);
+  const when = group.overdue ? `venció hace ${group.daysLate} día${group.daysLate === 1 ? '' : 's'}` : group.oldestDue ? `vence el ${group.oldestDue}` : 'sigue pendiente';
+  const hello = first ? `Hola ${first}, ¿cómo estás?` : 'Hola, ¿cómo estás?';
+  void today;
+  return `${hello} Te escribo para recordarte el pago pendiente de ${amount} ${what}, que ${when}. ¿Me confirmas cuándo puedes hacerlo? Gracias.`;
+}
+
 // What the morning summary says about money: what is owed to the user and late or due today, and what is to pay today.
 export function dueLines(entries, today, { max = 5 } = {}) {
   const who = (e) => (e.client ? `${e.client}` : e.concept);

@@ -97,11 +97,33 @@ function matchesIntent(connector, intent) {
 }
 
 // Connectors the AI may use in this request: configured on the server, not
-// switched off in the hub, and relevant to what the user is talking about.
+// switched off in the hub, and relevant to what the user is talking about. A
+// connector can name `companions`: others its work needs in the same turn (collecting
+// a debt needs Contactos to write the message, booking needs the Calendar to move or
+// cancel), which would otherwise be offered only if the user happened to say their words.
 function activeConnectors({ disabled = [], env = process.env, intent } = {}) {
   const off = new Set(disabled);
   // Entries without tools (Telegram, the local probe) only describe a channel for the hub.
-  return CONNECTORS.filter((c) => c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0 && matchesIntent(c, intent));
+  const usable = (c) => c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0;
+  const matched = CONNECTORS.filter((c) => usable(c) && matchesIntent(c, intent));
+  const companions = new Set(matched.flatMap((c) => c.companions || []));
+  return CONNECTORS.filter((c) => matched.includes(c) || (companions.has(c.id) && usable(c)));
+}
+
+// The playbooks of the agents on offer: how and when to use their tools. Short on purpose (they ride on every
+// request that touches the topic, and Groq's free plan has 8K tokens a minute); what does not fit is left out.
+export const GUIDE_BUDGET_CHARS = 4200;
+export function guideFor(connectors) {
+  const parts = [];
+  let used = 0;
+  for (const c of connectors) {
+    const text = String(c.guide || '').trim();
+    if (!text) continue;
+    if (used + text.length > GUIDE_BUDGET_CHARS && parts.length) break;
+    parts.push(text);
+    used += text.length;
+  }
+  return parts.length ? `Guías de tus agentes (cómo y cuándo usar sus herramientas; síguelas):\n\n${parts.join('\n\n')}` : '';
 }
 
 // Connectors the user could still use by name, whatever the topic — only the
@@ -244,6 +266,7 @@ export function createToolset({ disabled = [], context = {}, env = process.env, 
   const toolContext = { ...context, disabled, emit: (action) => actions.push(action) };
   return {
     offered: connectors.map((c) => c.id),
+    guide: guideFor(connectors),
     declarations: tools.map((t) => t.declaration),
     execute: (name, args) => runTool(tools, name, args, toolContext, { onStep, confirmations, steps }),
     actions,

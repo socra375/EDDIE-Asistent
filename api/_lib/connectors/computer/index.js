@@ -51,6 +51,11 @@ export default {
   category: 'asistente',
   route:
     /\b(disco|almacenamiento|espacio|memoria ram|\bram\b|cpu|procesador|bater[ií]a|procesos?|uptime|encendid[oa]|equipo|computador[a]?|ordenador|chromebook|\bpc\b|laptop|port[aá]til|linux|crostini|carpeta|archivos?|descargas|abre|abrir|cierra|cerrar|mata|terminal|\bip\b|red|internet|wi-?fi|sistema)\b/i,
+  guide: `TU EQUIPO (EDDIE PRIME) — cómo y cuándo:
+1. Con varios equipos vinculados y sin que diga cuál, pregunta; no adivines (computer_list si dudas).
+2. Consultar (computer_check) es seguro: hazlo directo. Cambiar algo (computer_action: abrir una app, cerrar un proceso) siempre pasa por tarjeta; antes de cerrar un proceso mira top_processes para el pid correcto.
+3. Si el equipo no responde, dilo en una frase (apagado, dormido o sin el agente) y no reintentes en bucle.
+4. Videos y edición son de las herramientas de marketing (video_info, make_reel, edit_video), no de computer_*.`,
   auth: {
     type: 'computer-link',
     isConnected: (user) => hasDevice(user.id),
