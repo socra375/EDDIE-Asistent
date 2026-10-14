@@ -120,3 +120,38 @@ export async function setRoutineState(id, state) {
   const sql = getDb();
   await sql`update routines set state = ${JSON.stringify(state)} where id = ${id}`;
 }
+
+// The routines that wait for this computer to start up (event "device_boot"), with where to tell the user.
+export async function bootRoutines(deviceId) {
+  const sql = getDb();
+  const rows = await sql`
+    select r.id, r.user_id, r.name, r.actions, r.state, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
+    from routines r
+    left join telegram_links l on l.user_id = r.user_id
+    join users u on u.id = r.user_id
+    where r.enabled and r.trigger_type = 'event' and r.event_type = 'device_boot' and r.device_id = ${deviceId}
+  `;
+  return rows.map((r) => ({
+    id: String(r.id),
+    userId: r.user_id,
+    name: r.name,
+    actions: Array.isArray(r.actions) ? r.actions : [],
+    state: r.state && typeof r.state === 'object' ? r.state : {},
+    chatId: r.chat_id == null ? null : Number(r.chat_id),
+    timezone: r.timezone,
+    user: { id: r.user_id, email: r.email, name: r.user_name },
+  }));
+}
+
+// A start-up that still has its other actions (summary, notice…) to run: the next cron tick does them.
+export async function markBootPending(id) {
+  const sql = getDb();
+  await sql`update routines set state = state || '{"pending": true}'::jsonb where id = ${id}`;
+}
+
+// True for the one tick that takes the pending start-up (so it runs once).
+export async function claimBootPending(id) {
+  const sql = getDb();
+  const rows = await sql`update routines set state = state - 'pending' where id = ${id} and state->>'pending' = 'true' returning id`;
+  return rows.length > 0;
+}

@@ -7,7 +7,8 @@
 import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { plainText, sanitizeCatalog } from './catalog.js';
-import { consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
+import { handleDeviceBoot } from '../routines/boot.js';
+import { claimBoot, consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
 import { ntfyBase, runOnComputer } from './run.js';
 import { INSTALLER_CODE_MINUTES, INSTALLER_FILENAME, installerOrigin, windowsInstaller } from './installer.js';
 
@@ -20,6 +21,14 @@ const cleanName = (value) => plainText(value, 60) || 'Mi equipo';
 const PLATFORMS = ['windows', 'mac', 'linux', 'chromebook'];
 const cleanPlatform = (value) => (PLATFORMS.includes(value) ? value : null);
 const cleanVersion = (value) => (typeof value === 'string' && /^[\w.+-]{1,20}$/.test(value) ? value : null);
+
+// The computer's boot time, sent by the agent in seconds since 1970 → ISO, or null if it makes no sense.
+function cleanBootTime(value) {
+  const seconds = Number(value);
+  const ms = seconds * 1000;
+  if (!Number.isFinite(ms) || ms > Date.now() + 5 * 60_000 || ms < Date.now() - 400 * 24 * 3600_000) return null;
+  return new Date(ms).toISOString();
+}
 
 function bearer(headers) {
   const raw = headers.authorization || headers.Authorization || '';
@@ -58,6 +67,9 @@ async function agentRoute(action, { method, headers, body }) {
   if (action === 'hello') {
     const tools = sanitizeCatalog(body?.tools);
     await updateCatalog(device.id, { version: cleanVersion(body?.version), tools, platform: cleanPlatform(body?.platform) });
+    // A new start-up of the computer (not just the agent restarting): the routines that wait for it go now.
+    const bootAt = cleanBootTime(body?.boot_time);
+    if (bootAt && (await claimBoot(device.id, bootAt).catch(() => false))) await handleDeviceBoot({ ...device, tools });
     return { status: 200, json: { ok: true, name: device.name, topic: device.topic, ntfy: ntfyBase(), tools: tools.length } };
   }
   if (action === 'next') return { status: 200, json: { job: await takeJob(device.id) } };

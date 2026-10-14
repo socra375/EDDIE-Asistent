@@ -8,8 +8,9 @@ import { localParts } from '../connectors/dates.js';
 import { devicesByUser } from '../computer/store.js';
 import { runOnDevice } from '../computer/run.js';
 import { mapLimit } from '../pool.js';
+import { BOOT_ACTIONS } from './boot.js';
 import { runRoutineActions } from './actions.js';
-import { claimRoutineDay, dueEventRoutines, dueScheduleRoutines, releaseRoutineDay, setRoutineState } from './store.js';
+import { claimBootPending, claimRoutineDay, dueEventRoutines, dueScheduleRoutines, releaseRoutineDay, setRoutineState } from './store.js';
 
 // A routine this long after its hour isn't run (same reasoning as the
 // morning briefing: nobody wants "a las 8" showing up at 3pm).
@@ -61,7 +62,20 @@ async function isDownloading(userId, deviceId) {
   return outcome.error ? null : Boolean(outcome.result?.descargando);
 }
 
+// The rest of a start-up routine (what the computer didn't do itself), once, after the agent flagged it (routines/boot.js).
+async function runBoot(routine, helpers) {
+  if (routine.state.pending !== true || !(await claimBootPending(routine.id))) return false;
+  try {
+    const text = `💻 ${routine.name}\n\n${await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone, skip: BOOT_ACTIONS })}`;
+    return await deliver(routine, text, routinePush(routine, text), helpers);
+  } catch (err) {
+    console.error('[routines] boot failed:', err.message);
+    return false;
+  }
+}
+
 async function runEvent(routine, helpers) {
+  if (routine.eventType === 'device_boot') return runBoot(routine, helpers);
   if (routine.eventType !== 'download_complete') return false;
   const now = await isDownloading(routine.userId, routine.deviceId);
   const was = routine.state.downloading;

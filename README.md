@@ -743,6 +743,22 @@ además de lo que ya pedía esa sección. No necesita variables nuevas.
 - **Límites que quedan**: las rutinas son diarias (una hora al día) o por evento; no hay «cada 2 horas» ni «una sola vez» salvo con un recordatorio. El aviso exige Telegram o notificaciones
   activadas. Si la función se corta a mitad de una tarea, ese día no se repite.
 
+### Cuando enciendas el PC (rutinas «device_boot»)
+
+- Dile a Eddie: **«cuando encienda la PC, abre YouTube, Google y WhatsApp Web»**. Crea una rutina por evento `device_boot` con la acción `open_sites`
+  (`urls`: solo direcciones https públicas; las **abre**, nunca escribe ni envía nada en ellas). También hay `say` (el PC dice un texto en voz alta con la **voz del sistema**,
+  no la de Eddie en la nube) y las acciones de siempre (`summary`, `notify`, `play_music`, `agent`).
+- **Cómo se entera**: el agente EDDIE Prime (**versión 1.8.0**, `public/eddie_agent.py`) arranca solo al iniciar sesión en Windows y, al arrancar, saluda a Eddie
+  (`agent/hello`) con la hora a la que se encendió el equipo (`psutil.boot_time()`). Si es un encendido distinto del último guardado (`computer_devices.boot_at`,
+  `db/migrations/0030_device_boot.sql`), Eddie lanza las rutinas de ese PC **en ese mismo instante**: las páginas se abren en segundos, **aunque el navegador estuviera cerrado**
+  (el agente las abre con el navegador predeterminado; la extensión de Chrome no sirve para esto porque necesita el navegador ya abierto). Un reinicio del agente (actualización,
+  fallo) repite la misma hora de encendido y **no** dispara nada; un agente recién instalado en un PC encendido hace días tampoco.
+- Lo demás de la rutina (resumen, aviso, música, tarea de Eddie) puede tardar y el agente espera la respuesta del saludo, así que lo hace el siguiente minuto del cron.
+- **Hay que actualizar el agente** (la versión anterior no manda la hora de encendido; Eddie te lo dice al crear la rutina): en Conectores → Tu equipo (EDDIE Prime)
+  descarga el instalador de nuevo y ejecútalo.
+- **Límites**: se dispara con el **inicio de sesión** del PC (el agente arranca ahí), no con el botón de encendido: si Windows pide contraseña, será al iniciar sesión. Despertar de
+  la suspensión no cuenta (el agente no se reinicia). Si el navegador predeterminado tarda en abrirse, las pestañas se abren con una pequeña pausa entre ellas.
+
 ## Telegram (hablar con Eddie desde el celular)
 
 Eddie también vive en Telegram: le escribes o le mandas **notas de voz** y te

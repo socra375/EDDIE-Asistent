@@ -83,6 +83,25 @@ export async function hasDevice(userId) {
   return rows.length > 0;
 }
 
+// A new start-up of the computer? `bootAt` is its operating-system boot time (ISO). True once per
+// boot: the update is atomic, so two hellos at the same time can't both win. The very first time
+// there is nothing to compare with, so it counts only if the computer started in the last few minutes
+// (an agent installed on a machine that has been on for days is not a "start-up").
+const FIRST_BOOT_MAX_AGE_MS = 15 * 60_000;
+const SAME_BOOT_SECONDS = 120;
+export async function claimBoot(deviceId, bootAt) {
+  const sql = getDb();
+  const fresh = Date.now() - new Date(bootAt).getTime() < FIRST_BOOT_MAX_AGE_MS;
+  const rows = await sql`
+    update computer_devices set boot_at = ${bootAt}
+    where id = ${deviceId}
+      and ((boot_at is null and ${fresh}) or abs(extract(epoch from (boot_at - ${bootAt}::timestamptz))) > ${SAME_BOOT_SECONDS})
+    returning id
+  `;
+  if (!rows.length) await sql`update computer_devices set boot_at = ${bootAt} where id = ${deviceId} and boot_at is null`;
+  return rows.length > 0;
+}
+
 export async function updateCatalog(deviceId, { version, tools, platform = null }) {
   const sql = getDb();
   await sql`update computer_devices set tools = ${JSON.stringify(tools)}, agent_version = ${version}, platform = coalesce(${platform}, platform) where id = ${deviceId}`;
