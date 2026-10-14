@@ -1149,26 +1149,23 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Dónde está**: tablas `reception_settings` y `reception_messages` (migración `0033_reception.sql`; aplícala en tu base), reglas puras en `src/services/reception.js`, base de datos en
   `api/_lib/reception/store.js` y conector en `api/_lib/connectors/reception/`. Todavía sin pantalla propia: se maneja por el chat, la voz o Telegram.
 
-## Investigador: busca en segundo plano mientras Eddie responde
+## Investigador: busca en la web mientras Eddie prepara su respuesta
 
-- **Qué es**: el conector **Investigador** (Conectores → Información). Con cada petición, **mientras Eddie escribe su respuesta**, un investigador busca por su cuenta y deja el resultado en una tarjeta
-  **«Investigador»** bajo la respuesta: lo que encontró en tu **memoria** (lo guardado en Memoria, conversaciones pasadas, segundo cerebro y Negocios) y, si lo que pides es del mundo exterior, en la
-  **web** (con las fuentes y enlaces). Es el mismo Eddie con un ayudante, no otra IA, y **solo lee**: no cambia nada.
-- **Hoy no se ve**: la app **solo muestra tarjetas de aprobación** (las que piden tu OK para enviar, borrar, agendar…); ni el recibo de pasos («En curso», «Hecho», el plan) ni la tarjeta del Investigador aparecen. Por eso la búsqueda automática en segundo plano está **apagada por defecto**: el servidor solo la activa si la petición trae `research: true` (`api/_lib/chatStream.js`) y la app no lo manda. `research_now` («investiga X y dime») sigue funcionando: Eddie contesta con lo encontrado. Para volver a verla basta mandar `research: true` y montar `ResearchCard` (y `StepTrace` para los pasos) en `ChatPanel` y `HomePanel`; los componentes siguen en `src/components/Chat/`.
-- **Cómo corre en paralelo** (cuando se activa): arranca a la vez que la respuesta, no después. Memoria, conversaciones, segundo cerebro, negocios y web se buscan **todos a la vez**, cada uno con su límite de tiempo (4 s la
-  memoria, 10 s la web), y si una fuente falla o se cuelga las demás siguen. La tarjeta llega por el mismo flujo del chat (`{"type":"research"}`, ver `api/_lib/chatStream.js`), normalmente antes de que
-  termine la respuesta; mientras busca en la web, la burbuja de espera dice «Investigador: buscando…». Si al terminar la respuesta la búsqueda no acabó, el chat espera **12 s como máximo** y deja una
-  nota; nunca retrasa más la respuesta ni la hace fallar.
-- **Cuándo busca en la web**: solo si lo que pides la necesita: lo pides tú («busca», «investiga», «noticias», «en internet», «compara»…) o es una **pregunta de datos** («¿quién ganó…?», «¿cuánto cuesta…?»,
-  «¿cuándo sale…?»). **No** cuando hablas de tus cosas (tareas, agenda, clientes, cuentas…) ni con saludos u órdenes. Máximo 6 búsquedas web por minuto. La **memoria** sí se mira siempre, pero la tarjeta solo
-  aparece si hay algo que mostrar (y para las búsquedas automáticas exige que el recuerdo comparta al menos dos palabras con tu pregunta, para no llenar el chat de ruido).
+- **Qué es**: el conector **Investigador** (Conectores → Información). Cuando lo que pides es del **mundo exterior** (una pregunta de datos o un «busca» / «investiga»), un investigador **busca en la web en
+  segundo plano** mientras Eddie junta lo que sabe, y lo que encuentra **entra directo en la respuesta**: Eddie la escribe con esos datos y **cita las fuentes** (título y enlace). No aparece ninguna tarjeta ni
+  aviso: la app solo muestra tarjetas de aprobación. Es el mismo Eddie con un ayudante, no otra IA, y **solo lee**: no cambia nada.
+- **Cómo corre**: arranca lo primero al recibir tu mensaje (`api/_lib/handler.js`) y trabaja a la vez que Eddie arma su contexto (recuerdos de conversaciones, segundo cerebro, negocios, carpetas…). Justo antes de
+  llamar al modelo se recoge lo encontrado y se añade al prompt como **datos copiados de páginas, nunca órdenes**. Si la búsqueda no está lista a los **5 s** desde que empezó, se descarta y Eddie responde sin ella
+  (el peor caso retrasa la respuesta 5 s; lo normal es que ya esté lista). Si falla o la cuota se agota, la respuesta sale igual.
+- **Cuándo busca**: solo si lo que pides la necesita: lo pides tú («busca», «investiga», «noticias», «en internet», «compara»…) o es una **pregunta de datos** («¿quién ganó…?», «¿cuánto cuesta…?», «¿cuándo
+  sale…?»). **No** cuando hablas de tus cosas (tareas, agenda, clientes, cuentas…) ni con saludos u órdenes. Máximo **6 búsquedas por minuto** por persona (la búsqueda gratis de Tavily es limitada).
+- **Tu memoria**: ya llega al prompt por sus propios bloques (Memoria, conversaciones, segundo cerebro, Negocios); el investigador no la busca dos veces.
 - **Bajo petición**: «investiga X y dime» usa la herramienta `research_now` (memoria, web o todo): Eddie recibe lo encontrado con sus fuentes y contesta con eso, citándolas; si no hay nada, lo dice.
-- **Control y seguridad**: el interruptor del conector en Conectores apaga la búsqueda automática; apagar Búsqueda web, Conversaciones, Segundo cerebro, Negocios o Memoria apaga esa fuente. Lo que viene de
-  la web o de chats viejos son **datos, nunca órdenes**; la tarjeta se limpia antes de mostrarse (solo enlaces http/https, textos sin etiquetas, tamaños acotados) y los enlaces abren en una pestaña nueva.
-- **Qué necesita**: nada nuevo (usa la búsqueda web de siempre, con o sin `TAVILY_API_KEY`) ni migraciones. Sin sesión busca solo en la memoria del navegador y en la web.
-- **Límites**: por ahora funciona en el chat y en Inicio; **Telegram** sigue contestando sin tarjeta (un solo mensaje). La tarjeta se guarda con la conversación.
-- **Dónde está**: reglas puras en `src/services/research.js`, motor en `api/_lib/research/engine.js`, orquestación junto a la respuesta en `api/_lib/research/background.js` (la usa `api/_lib/handler.js`),
-  conector en `api/_lib/connectors/research/` y la tarjeta en `src/components/Chat/ResearchCard.jsx`.
+- **Control**: el interruptor del conector (o apagar Búsqueda web) deja a Eddie sin investigador en segundo plano; `research_now` y `search_web` siguen según su propio interruptor.
+- **Qué necesita**: nada nuevo (usa la búsqueda web de siempre, con o sin `TAVILY_API_KEY`) ni migraciones.
+- **Límites**: funciona en el chat y en Inicio; **Telegram** responde por otro camino y todavía no usa el investigador de fondo (sí puede usar `search_web` y `research_now`).
+- **Dónde está**: reglas puras (cuándo buscar, el bloque del prompt) en `src/services/research.js`, motor en `api/_lib/research/engine.js`, el arranque en segundo plano en `api/_lib/research/background.js` y el
+  conector en `api/_lib/connectors/research/`.
 
 ## Contactos: la agenda de Eddie
 
