@@ -748,13 +748,16 @@ además de lo que ya pedía esa sección. No necesita variables nuevas.
 - Dile a Eddie: **«cuando encienda la PC, abre YouTube, Google y WhatsApp Web»**. Crea una rutina por evento `device_boot` con la acción `open_sites`
   (`urls`: solo direcciones https públicas; las **abre**, nunca escribe ni envía nada en ellas). También hay `say` (el PC dice un texto en voz alta con la **voz del sistema**,
   no la de Eddie en la nube) y las acciones de siempre (`summary`, `notify`, `play_music`, `agent`).
-- **Cómo se entera**: el agente EDDIE Prime (**versión 1.8.0**, `public/eddie_agent.py`) arranca solo al iniciar sesión en Windows y, al arrancar, saluda a Eddie
-  (`agent/hello`) con la hora a la que se encendió el equipo (`psutil.boot_time()`). Si es un encendido distinto del último guardado (`computer_devices.boot_at`,
-  `db/migrations/0030_device_boot.sql`), Eddie lanza las rutinas de ese PC **en ese mismo instante**: las páginas se abren en segundos, **aunque el navegador estuviera cerrado**
+- **Cómo se entera**: el agente EDDIE Prime (**versión 1.8.1**, `public/eddie_agent.py`) arranca solo al iniciar sesión en Windows y, al arrancar, saluda a Eddie
+  (`agent/hello`). Dos señales, basta una: **(1)** la hora de arranque del sistema cambió (`computer_devices.boot_at`, `db/migrations/0030_device_boot.sql`), o **(2)** el agente estuvo
+  apagado antes de arrancar: anota que sigue vivo cada ~20 s (`alive.json`) y, si al arrancar la última marca es de hace más de 90 s, el equipo estuvo apagado
+  (`new_start`; `computer_devices.start_fired_at`, `db/migrations/0031_device_start.sql`, evita repetirlo en 3 min). **La señal 2 es imprescindible en Windows**: con el *inicio rápido*,
+  apagar y encender **no** cambia la hora de arranque (lo comprobamos con datos reales: tras un apagado la hora guardada no cambió y no se abrió nada con la versión 1.8.0).
+  Con cualquiera de las dos, Eddie lanza las rutinas de ese PC **en ese mismo instante**: las páginas se abren en segundos, **aunque el navegador estuviera cerrado**
   (el agente las abre con el navegador predeterminado; la extensión de Chrome no sirve para esto porque necesita el navegador ya abierto). Un reinicio del agente (actualización,
   fallo) repite la misma hora de encendido y **no** dispara nada; un agente recién instalado en un PC encendido hace días tampoco.
 - Lo demás de la rutina (resumen, aviso, música, tarea de Eddie) puede tardar y el agente espera la respuesta del saludo, así que lo hace el siguiente minuto del cron.
-- **Hay que actualizar el agente** (la versión anterior no manda la hora de encendido; Eddie te lo dice al crear la rutina): en Conectores → Tu equipo (EDDIE Prime)
+- **Hay que actualizar el agente a la 1.8.1** (las anteriores no detectan el encendido con inicio rápido; Eddie te lo dice al crear la rutina): en Conectores → Tu equipo (EDDIE Prime)
   descarga el instalador de nuevo y ejecútalo.
 - **Límites**: se dispara con el **inicio de sesión** del PC (el agente arranca ahí), no con el botón de encendido: si Windows pide contraseña, será al iniciar sesión. Despertar de
   la suspensión no cuenta (el agente no se reinicia). Si el navegador predeterminado tarda en abrirse, las pestañas se abren con una pequeña pausa entre ellas.

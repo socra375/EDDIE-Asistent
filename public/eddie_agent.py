@@ -54,7 +54,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.8.0"
+VERSION = "1.8.1"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -83,6 +83,10 @@ CONFIG_DIR = config_dir()
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 LOG_PATH = os.path.join(CONFIG_DIR, "agent.log")
 LOCK_PATH = os.path.join(CONFIG_DIR, "agent.lock")
+ALIVE_PATH = os.path.join(CONFIG_DIR, "alive.json")
+ALIVE_EVERY = 20  # segundos entre una marca de «sigo vivo» y la siguiente
+NEW_START_GAP = 90  # tanto sin marcas = el equipo estuvo apagado (un reinicio del agente dura menos)
+FRESH_BOOT_SECS = 900  # sin marcas previas, solo cuenta si el equipo arrancó hace menos de esto
 MAX_LOG_BYTES = 512 * 1024
 HOME = os.path.realpath(os.path.expanduser("~"))
 # Apps que se pueden abrir en Windows sin configurar nada (son de Windows, siempre están).
@@ -1167,6 +1171,47 @@ def os_boot_time():
         return None
 
 
+def read_alive():
+    try:
+        with open(ALIVE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def write_alive(boot):
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        tmp = ALIVE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"t": time.time(), "boot": boot}, f)
+        os.replace(tmp, ALIVE_PATH)
+    except OSError:
+        pass  # sin esto solo se pierde la detección de «recién encendido»
+
+
+def detect_new_start(now=None, boot=None, prev=None):
+    """¿Este arranque del agente es un encendido nuevo del equipo (y no un simple reinicio del agente)?
+
+    La hora de arranque del sistema no basta: con el «inicio rápido» de Windows, apagar y encender NO la
+    cambia. Por eso el agente anota cada ~20 s que sigue vivo; si al arrancar la última marca es de hace más de
+    NEW_START_GAP segundos, el equipo estuvo apagado. También cuenta si la hora de arranque cambió.
+    """
+    now = time.time() if now is None else now
+    if prev is None:
+        # Primera vez con marcas: solo es un encendido si el equipo arrancó hace poco (no si el agente se acaba de instalar).
+        return bool(boot) and now - boot < FRESH_BOOT_SECS
+    try:
+        gap = now - float(prev.get("t", 0))
+    except (TypeError, ValueError):
+        return False
+    if gap > NEW_START_GAP:
+        return True
+    old_boot = prev.get("boot")
+    return bool(boot and old_boot and abs(boot - old_boot) > 120)
+
+
 def run_loop(cfg):
     stop = threading.Event()
     state = {"since": "all", "fatal": None}
@@ -1201,11 +1246,18 @@ def run_loop(cfg):
         finally:
             busy.release()
 
+    # ¿Encendido nuevo? Se calcula antes de saludar y se anota ya que sigue vivo.
+    boot = os_boot_time()
+    new_start = detect_new_start(boot=boot, prev=read_alive())
+    write_alive(boot)
+    log("Encendido nuevo del equipo." if new_start else "Reinicio del agente (el equipo ya estaba encendido).")
+    last_alive = time.time()
+
     # Al arrancar: se presenta (catálogo actualizado) y recoge lo pendiente.
     wait = 5
     while True:
         try:
-            hello = api(cfg, "agent/hello", {"version": VERSION, "platform": detect_platform(), "tools": catalog(cfg), "boot_time": os_boot_time()})
+            hello = api(cfg, "agent/hello", {"version": VERSION, "platform": detect_platform(), "tools": catalog(cfg), "boot_time": boot, "new_start": new_start})
             break
         except ApiError as e:
             if e.status == 401:
@@ -1224,6 +1276,9 @@ def run_loop(cfg):
         stop.wait(POLL_SECS)
         if stop.is_set():
             break
+        if time.time() - last_alive >= ALIVE_EVERY:
+            write_alive(boot)
+            last_alive = time.time()
         try:
             if poll_once(cfg, state):
                 ring()

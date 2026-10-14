@@ -11,8 +11,8 @@ import { clip } from '../http.js';
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const EVENT_TYPES = ['download_complete', 'device_boot'];
-// The first agent that reports its boot time and can open pages / speak (public/eddie_agent.py).
-const BOOT_AGENT = [1, 8, 0];
+// The first agent that also notices a start-up after being switched off (Windows' fast startup keeps the boot time) — public/eddie_agent.py.
+const BOOT_AGENT = [1, 8, 1];
 const versionAtLeast = (version, min) => {
   const parts = String(version || '').split('.').map((n) => Number.parseInt(n, 10) || 0);
   for (let i = 0; i < 3; i += 1) if ((parts[i] || 0) !== min[i]) return (parts[i] || 0) > min[i];

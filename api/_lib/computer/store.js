@@ -102,6 +102,19 @@ export async function claimBoot(deviceId, bootAt) {
   return rows.length > 0;
 }
 
+// The agent says it was off before starting (see detect_new_start in public/eddie_agent.py). True once per
+// start: atomic, and never twice within a few minutes.
+const START_COOLDOWN_MINUTES = 3;
+export async function claimStart(deviceId) {
+  const sql = getDb();
+  const rows = await sql`
+    update computer_devices set start_fired_at = now()
+    where id = ${deviceId} and (start_fired_at is null or start_fired_at < now() - make_interval(mins => ${START_COOLDOWN_MINUTES}))
+    returning id
+  `;
+  return rows.length > 0;
+}
+
 export async function updateCatalog(deviceId, { version, tools, platform = null }) {
   const sql = getDb();
   await sql`update computer_devices set tools = ${JSON.stringify(tools)}, agent_version = ${version}, platform = coalesce(${platform}, platform) where id = ${deviceId}`;
