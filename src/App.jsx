@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { useTick } from './services/tick';
 import { LocationProvider } from './context/LocationContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ChatProvider, useChat } from './context/ChatContext';
@@ -49,6 +50,13 @@ const FILLER_MAX_MS = 6000;
 // Reads Eddie's answers aloud when the voice is on. An answer that streams in
 // is spoken sentence by sentence while it is still being written; anything
 // that arrives whole (small talk, the probe, an error) is read in one go.
+// While Eddie is open and signed in, asks the server to run what is due (reminders, routines) every minute.
+function TickBridge() {
+  const { user } = useAuth();
+  useTick(Boolean(user));
+  return null;
+}
+
 export function AutoReadBridge() {
   const { messages, status, lastReply, liveSteps } = useChat();
   const { speakWithSettings, streamWithSettings } = useVoice();
@@ -304,6 +312,7 @@ function AppShell() {
       {call && <CallScreen incoming={call.incoming} onClose={() => setCall(null)} />}
       <YouTubePlayer />
       <AutoReadBridge />
+      <TickBridge />
       <PerfBridge />
       <SettingsSyncBridge />
     </div>
@@ -323,6 +332,7 @@ export default function App() {
                 <NotesProvider>
                   <ContactsApp />
                   <AutoReadBridge />
+                  <TickBridge />
                 </NotesProvider>
               </ChatProvider>
             </VoiceProvider>

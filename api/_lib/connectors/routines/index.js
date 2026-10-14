@@ -89,13 +89,13 @@ async function cancelRoutineTool(args, context) {
 export default {
   id: 'routines',
   name: 'Rutinas automáticas',
-  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}") o un aviso de texto.`,
+  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto o una tarea que Eddie hace solo con sus herramientas (agent). Varias rutinas a la misma hora corren a la vez.`,
   icon: 'clock',
   category: 'asistente',
   route: /rutina|autom[aá]tic[oa]|cada d[ií]a a las|todos los d[ií]as a las|cuando termine|cuando acabe/i,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
-  note: 'Las rutinas solo pueden hacer lo de esta lista fija (resumen, música, un aviso de texto): nada sensible, porque nadie confirma una tarjeta cuando corren solas.',
+  note: 'Las rutinas solo pueden hacer lo de esta lista (resumen, música, un aviso de texto o una tarea de Eddie): nada sensible se ejecuta, porque nadie confirma una tarjeta cuando corren solas; lo que necesite permiso se te avisa como pendiente.',
   tools: [
     {
       label: 'Crear una rutina',
@@ -106,7 +106,7 @@ export default {
       declaration: {
         name: 'create_routine',
         description:
-          `Crea una rutina automática. Por hora: pon time ("08:00"). Por evento: pon event ("download_complete", necesita un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
+          `Crea una rutina automática. Por hora: pon time ("08:00"). Por evento: pon event ("download_complete", necesita un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
         parameters: {
           type: 'OBJECT',
           properties: {

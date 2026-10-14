@@ -7,6 +7,7 @@ import { sendPush } from '../push/send.js';
 import { localParts } from '../connectors/dates.js';
 import { devicesByUser } from '../computer/store.js';
 import { runOnDevice } from '../computer/run.js';
+import { mapLimit } from '../pool.js';
 import { runRoutineActions } from './actions.js';
 import { claimRoutineDay, dueEventRoutines, dueScheduleRoutines, releaseRoutineDay, setRoutineState } from './store.js';
 
@@ -77,15 +78,28 @@ async function runEvent(routine, helpers) {
   }
 }
 
-export async function runRoutines({ now = new Date(), send = telegramSend, push = sendPush } = {}) {
-  const helpers = { send, push };
-  const result = { scheduled: 0, events: 0 };
+// Routines due at the same time (an AI task can take half a minute) run side by side, a few at a time.
+const PARALLEL = 3;
 
-  for (const routine of await dueScheduleRoutines()) {
-    if (await runSchedule(routine, now, helpers)) result.scheduled += 1;
-  }
-  for (const routine of await dueEventRoutines()) {
-    if (await runEvent(routine, helpers)) result.events += 1;
-  }
+export async function runRoutines({ now = new Date(), send = telegramSend, push = sendPush, deadline = Infinity } = {}) {
+  const helpers = { send, push };
+  const result = { scheduled: 0, events: 0, postponed: 0 };
+
+  result.postponed += await mapLimit(
+    await dueScheduleRoutines(),
+    PARALLEL,
+    async (routine) => {
+      if (await runSchedule(routine, now, helpers)) result.scheduled += 1;
+    },
+    { deadline },
+  );
+  result.postponed += await mapLimit(
+    await dueEventRoutines(),
+    PARALLEL,
+    async (routine) => {
+      if (await runEvent(routine, helpers)) result.events += 1;
+    },
+    { deadline },
+  );
   return result;
 }

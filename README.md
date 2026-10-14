@@ -686,6 +686,22 @@ minutos es un flujo de GitHub Actions.
    probarlo. Si tu dominio no es `eddie-asistent.vercel.app`, agrega el secreto `EDDIE_APP_URL` con tu
    dirección. Sin `CRON_SECRET` en GitHub el flujo no hace nada (avisa con una advertencia).
 
+> **Aviso (14 oct 2026): el cron de GitHub Actions NO es puntual.** GitHub retrasa y se salta los flujos programados de
+> repositorios con poca actividad: en la última semana, `eddie-cron.yml` corrió **30 veces en vez de unas 2.000**, con
+> **3 a 9 horas entre una y otra** (huecos de 165 a 572 min). Por eso los recordatorios y rutinas llegaban tarde. Úsalo solo
+> como respaldo y pon un disparador de verdad (siguiente sección).
+
+### Puntualidad: un disparador cada minuto (hazlo una vez)
+
+1. Entra en **cron-job.org** (gratis, sin tarjeta) y crea una cuenta.
+2. *Create cronjob* → **URL** `https://eddie-asistent.vercel.app/api/connectors/cron`, **Execution schedule: every 1 minute**.
+3. En *Advanced* → **Request method** `GET` y, en *Headers*, añade `Authorization` con valor `Bearer <tu CRON_SECRET>` (el mismo de Vercel).
+4. Guarda y mira *History*: debe dar **200** con `{"ok":true,…}`.
+
+Además, **con Eddie abierto** (o `/contactos/`) y sesión iniciada, la propia app revisa lo pendiente **cada minuto** y al volver al
+primer plano (`POST /api/connectors/tick`, `src/services/tick.js`): así hay puntualidad aunque el disparador externo falle. Es el mismo
+trabajo idempotente que el cron, así que nada sale dos veces.
+
 `GET /api/connectors/cron` (con `Authorization: Bearer <CRON_SECRET>`) envía lo que toque; Vercel lo
 llama además una vez al día (11:00 UTC) desde `vercel.json`. Se puede llamar las veces que sea: cada
 aviso y cada resumen se reservan con una sola operación en la base antes de enviarse, así que no se
@@ -714,6 +730,18 @@ esté cerrada.
 
 Usa la misma base de datos y el mismo cron que los recordatorios: aplica `db/migrations/0026_routines.sql`
 además de lo que ya pedía esa sección. No necesita variables nuevas.
+
+### Agentes: tareas que Eddie hace solo, varias a la vez
+
+- **Acción `agent`** (`api/_lib/routines/actions.js`): una rutina puede llevar una tarea para Eddie («cada día a las 8, revisa el clima y dime si llevo paraguas»,
+  «a las 6, mira mis tareas y mis correos y dime qué es urgente»). A la hora, Eddie la toma como un mensaje tuyo, con **todas sus herramientas, memoria y
+  segundo cerebro** (`askEddie`, el mismo cerebro de Telegram), y el resultado te llega por Telegram o notificación. Máximo 40 s por tarea.
+- **Sin nadie delante**: no puede preguntar ni esperar confirmaciones; lo delicado (enviar, borrar, mover) **no se hace** y se te avisa como «Falta tu permiso para…».
+  Tampoco toca las rutinas ni tu navegador.
+- **Simultáneas**: lo que toca a la misma hora corre **a la vez** (recordatorios y resúmenes de 5 en 5, rutinas de 3 en 3: `api/_lib/pool.js`) en vez de una tras otra.
+  Cada llamada tiene 30 s para *empezar* trabajos; lo que no cabe se queda para el siguiente minuto en lugar de morir a medias.
+- **Límites que quedan**: las rutinas son diarias (una hora al día) o por evento; no hay «cada 2 horas» ni «una sola vez» salvo con un recordatorio. El aviso exige Telegram o notificaciones
+  activadas. Si la función se corta a mitad de una tarea, ese día no se repite.
 
 ## Telegram (hablar con Eddie desde el celular)
 

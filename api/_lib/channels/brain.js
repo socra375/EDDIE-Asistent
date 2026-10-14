@@ -16,14 +16,15 @@ import { parseLearnCommand } from '../../../src/services/commands.js';
 
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'cerebras', 'openrouter']);
 
-export async function askEddie({ link, text, images = [], note }) {
+// `disable`: connector ids switched off for this call only (a background task must not edit routines).
+export async function askEddie({ link, text, images = [], note, disable = [] }) {
   const { userId } = link;
   const ctx = await loadUserContext(userId);
   const s = ctx.settings;
   const provider = ALLOWED_PROVIDERS.has(s.provider) ? s.provider : 'gemini';
   const model = typeof s.model === 'string' && s.model.length < 100 ? s.model : undefined;
   const language = /^[a-z]{2}$/.test(s.language || '') ? s.language : 'es';
-  const off = sanitizeConnectorIds(s.disabledConnectors);
+  const off = sanitizeConnectorIds([...(Array.isArray(s.disabledConnectors) ? s.disabledConnectors : []), ...disable]);
   const disabledConnectors = ctx.memoryOn ? off : [...new Set([...off, 'memory'])];
   const history = link.history.map((m) => ({ role: m.role, content: String(m.content) }));
   const asked = [...history, { role: 'user', content: text }];
