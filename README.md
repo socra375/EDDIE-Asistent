@@ -1091,6 +1091,28 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Sin probar contra los servicios reales**: Pexels, Openverse, Wikimedia y Tavily se implementaron según su documentación y se probaron con
   respuestas simuladas; revísalo con tus claves y fíjate sobre todo en el cupo sin clave de Openverse.
 
+## Marketing y videos: el agente de contenido
+
+- **Qué es**: el conector **Marketing y videos** (Conectores → Asistente). Eddie piensa tu contenido —guion con tiempos, texto en pantalla, descripción y hashtags— **con tu voz y los datos
+  de tu negocio** (lee «Cómo hablo», contexto, precios y clientes del cerebro de Negocios con `marketing_brief`), y **edita tus videos en tu PC con ffmpeg, gratis**. No es otra IA: es el mismo
+  Eddie con herramientas de marketing.
+- **Qué edita** (`edit_video`, cada una crea un video **nuevo** en `Videos/Eddie` —`Movies/Eddie` en Mac—; el original nunca se toca ni se pisa):
+  `trim` (recortar), `join` (unir dos videos), `vertical` (9:16 para Reels, TikTok y Shorts), `caption` (poner un texto en pantalla, con inicio y final opcionales), `music` (música
+  de fondo bajita, en bucle si es corta) y `compress` (aligerar el archivo para mandarlo). Para varios pasos se hacen uno por uno: cada uno usa el archivo que dejó el anterior.
+  Ejemplo: «recorta el clip.mp4 del 0:05 al 0:30, pásalo a vertical y ponle el texto "2x1 hoy"».
+- **Cómo se usa**: «hazme un guion para un reel de mi panadería», «¿qué videos tengo?» (`video_info`), «recorta clip.mp4 del 0:10 al 0:40». Antes de editar sale una **tarjeta** con el equipo, la
+  edición, el archivo y los tiempos (el texto se puede corregir ahí). Un video tarda más de lo que Eddie espera la respuesta, así que si no termina en ~8 s el agente sigue en segundo plano y se
+  pregunta con `video_status` («¿cómo va el video?», porcentaje y archivo listo).
+- **Qué necesita**: el agente **EDDIE Prime 1.9.0** o más nuevo (con uno anterior Eddie te dice cómo actualizarlo: volver a descargar el instalador en Windows o `eddie_agent.py` en Linux y Mac) y
+  **ffmpeg** (gratis): `winget install Gyan.FFmpeg` en Windows, `brew install ffmpeg` en Mac, `sudo apt install ffmpeg` en Linux. Si falta, Eddie lo dice con el comando. Si lo instalas en otro sitio,
+  `"ffmpeg": "ruta/a/ffmpeg"` en `config.json` del agente.
+- **Límites y seguridad**: solo archivos de tu carpeta personal (mp4, mov, mkv, webm, avi, m4v; audio mp3, wav, m4a, aac, ogg, flac); nada de comandos libres (operaciones fijas, sin shell); un
+  trabajo a la vez; videos de hasta 30 minutos y un trabajo se corta a los 30 minutos; si ffmpeg falla no queda un archivo a medias. El texto de `caption` se limpia (sin etiquetas ni llaves) y se
+  escribe en un archivo temporal que se borra al terminar.
+- **Lo que NO hace**: no graba, no genera imágenes ni video con IA, no publica por ti y **no controla CapCut ni Canva** (CapCut no tiene API pública; Canva se puede sumar después si lo quieres).
+  Música: usa solo la que tengas o tenga licencia; una canción comercial puede bloquear tu video al publicarlo.
+- **Dónde está**: agente `public/eddie_agent.py` (herramientas `video_info`, `edit_video`, `video_status`) y conector `api/_lib/connectors/marketing/`. No necesita variables ni migraciones nuevas.
+
 ## Contactos: la agenda de Eddie
 
 - **Qué es**: la pantalla **Contactos** (también `/?modulo=contactos` y un atajo de la app instalada) guarda personas con nombre, teléfono, Instagram, correo y notas, más
@@ -1373,7 +1395,7 @@ api/                  Funciones serverless (Vercel) + lógica compartida
   _lib/construction3d/   Cerebro 3D: URLs firmadas del bucket (s3.js), proyectos (store.js) y rutas (handlers.js)
   _lib/browser/          Tu navegador: vínculo con la extensión, páginas por abrir y reuniones del Calendario
   _lib/drive/            Carpetas de Drive conectadas: leer su estructura, buscar por nombre, el bloque del prompt e importarlas al cerebro de Negocios (importer, analyze, content)
-  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser
+  _lib/connectors/       Registro de conectores (registry.js) y uno por carpeta: agent, clock, calculator, weather, tasks, websearch, news, wikipedia, currency, gmail, google, browser, marketing
 extension/            Extensión de Chrome «Eddie en tu navegador» (se empaqueta en public/eddie-extension.zip con scripts/build-extension.mjs)
 db/
   migrations/0001_eddie_accounts.sql  Esquema Postgres (usuarios, sesiones, tareas, etc.)
