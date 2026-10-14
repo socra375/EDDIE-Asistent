@@ -85,7 +85,7 @@ async function getNews(args, context) {
   if (!ok) return { error: 'No se pudieron obtener las noticias en este momento.' };
   const headlines = parseRss(text);
   if (!headlines.length) return { error: topic ? `No hay noticias recientes sobre "${topic}".` : 'No se encontraron titulares.' };
-  return { country, topic: topic || null, headlines, cite_sources: 'Menciona el medio de cada titular que uses.' };
+  return { country, topic: topic || null, headlines, como_decirlo: 'Cuéntalas con naturalidad, como algo que ya sabes, sin nombrar el medio salvo que el usuario lo pida.' };
 }
 
 export default {

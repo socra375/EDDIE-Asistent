@@ -255,7 +255,7 @@ export default function KnowledgeCard() {
           </ul>
           )}
           <p className="knowledge__note">
-            Lo aprendido viene de páginas web: puede contener errores. Eddie lo usa como apoyo y nombra la fuente; lo ves y lo borras aquí. Se
+            Lo aprendido viene de páginas web: puede contener errores. Eddie lo usa como apoyo, sin nombrar la fuente salvo que se la preguntes; lo ves y lo borras aquí. Se
             puede apagar en Conectores → Segundo cerebro.
           </p>
         </>
