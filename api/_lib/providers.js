@@ -906,6 +906,8 @@ export async function callProvider({ provider: requestedProvider, model: request
   const startedAt = Date.now();
   const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages, context.memory) });
   const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
+  // The playbooks of the agents on offer ride on the system prompt, only for providers that can call tools (Claude here has none).
+  const systemFor = (p) => (p === 'claude' || !toolset.guide ? system : `${system}\n\n${toolset.guide}`);
   let started = false;
   const trackedChunk = (text) => {
     started = true;
@@ -913,7 +915,7 @@ export async function callProvider({ provider: requestedProvider, model: request
   };
 
   try {
-    return withToolOutput(await callSingleProvider({ provider, model, system, messages, toolset, onChunk: trackedChunk }));
+    return withToolOutput(await callSingleProvider({ provider, model, system: systemFor(provider), messages, toolset, onChunk: trackedChunk }));
   } catch (firstErr) {
     let err = firstErr;
     const backups = plan.backups;
@@ -927,7 +929,7 @@ export async function callProvider({ provider: requestedProvider, model: request
       // calls queue it again if needed.
       toolset.reset();
       try {
-        const result = await callSingleProvider({ provider: backup.provider, system, messages, toolset, onChunk: trackedChunk });
+        const result = await callSingleProvider({ provider: backup.provider, system: systemFor(backup.provider), messages, toolset, onChunk: trackedChunk });
         return { ...withToolOutput(result), fallbackFrom: provider };
       } catch (backupErr) {
         backupErr.message = `${err.message} (El respaldo ${backup.name} también falló: ${backupErr.message})`;

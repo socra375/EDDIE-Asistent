@@ -12,6 +12,13 @@ import { pickDevice, resolveTool, runOnDevice } from '../../computer/run.js';
 import { clip } from '../http.js';
 
 const MIN_AGENT = '1.9.0';
+const MIN_AGENT_REEL = '1.10.0';
+const versionAtLeast = (version, min) => {
+  const a = String(version || '').split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const b = min.split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i];
+  return true;
+};
 const BRIEF_AREAS = ['estilo', 'contexto', 'precios', 'clientes'];
 const PLATFORMS = ['reels', 'tiktok', 'shorts', 'instagram', 'facebook', 'whatsapp', 'youtube', 'otro'];
 
@@ -22,6 +29,7 @@ const OPERATIONS = {
   caption: 'Poner un texto',
   music: 'Añadir música',
   compress: 'Aligerar el archivo',
+  reel: 'Hacer un reel (vertical, texto y música)',
 };
 
 const getUser = async (context) => context.getUser?.();
@@ -73,13 +81,13 @@ async function brief(args, context) {
 
 // The user's computer and the video tool, or an error the model can act on. An agent older than 1.9.0
 // has no video tools: say how to update instead of listing tools it does not have.
-async function videoTool(user, name, given, risk) {
+async function videoTool(user, name, given, risk, { minVersion = MIN_AGENT } = {}) {
   if (!user) return { error: 'Para editar videos en tu PC, inicia sesión con tu cuenta de Google.' };
   const picked = pickDevice(await devicesByUser(user.id), given?.device);
   if (picked.error) return picked;
-  if (!picked.device.tools.some((t) => t.name === name)) {
+  if (!picked.device.tools.some((t) => t.name === name) || !versionAtLeast(picked.device.version, minVersion)) {
     return {
-      error: `El agente EDDIE Prime de «${picked.device.name}» (versión ${picked.device.version || 'antigua'}) todavía no edita videos: hace falta la ${MIN_AGENT} o más nueva. En Windows, vuelve a descargar el instalador en Conectores → Tu equipo (EDDIE Prime) y ejecútalo; en Linux o Mac, vuelve a descargar eddie_agent.py.`,
+      error: `El agente EDDIE Prime de «${picked.device.name}» (versión ${picked.device.version || 'antigua'}) todavía no hace eso: hace falta la ${minVersion} o más nueva. En Windows, vuelve a descargar el instalador en Conectores → Tu equipo (EDDIE Prime) y ejecútalo; en Linux o Mac, vuelve a descargar eddie_agent.py.`,
     };
   }
   return resolveTool(user, name, given, { risk });
@@ -110,6 +118,13 @@ export default {
   category: 'asistente',
   route:
     /marketing|publicidad|promoci[oó]n|promocionar|anuncio|\breels?\b|tiktok|\bshorts?\b|instagram|contenido para|publicaci[oó]n|hashtags?|gui[oó]n|campa[ñn]a|(edit|recort|une|unir|junta|pon|ponle|a[ñn]ade|a[ñn]adele|agrega|pasa|convierte|aligera|comprime)\w*.*(video|v[ií]deo|clip)|(video|v[ií]deo|clip).*(vertical|subt[ií]tul|m[uú]sica|recort|edit|texto|peso|pesa|ligero)|ffmpeg/i,
+  guide: `MARKETING Y VIDEOS — cómo y cuándo:
+1. Antes de escribir un guion, anuncio o publicación llama a marketing_brief (con la plataforma si la dijo). Escribe con la voz del usuario y solo con los datos reales de su negocio: nunca inventes precios, ofertas ni resultados.
+2. Entrega siempre listo para usar: gancho (primeros 2 s), guion con tiempos, texto en pantalla por escena, descripción con 5 a 8 hashtags y el llamado a la acción.
+3. Si ya tiene el video: video_info para hallar el archivo exacto. Para un Reel, TikTok o Short usa make_reel (recorta, vertical, texto y música en un solo paso, una sola tarjeta). Para un arreglo suelto usa edit_video. Cada edición crea un archivo nuevo; para encadenar usa el que dejó la anterior.
+4. Si tarda, dile que sigue y mira video_status cuando pregunte; no repitas la orden.
+5. Si el equipo no responde, falta ffmpeg o el agente es viejo, dilo en una frase con qué hacer y no insistas.
+6. No publicas por él ni prometes resultados. Si pide un plan semanal, ofrécele crear una tarea por publicación (create_task).`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Edita en tu PC, así que necesita el agente EDDIE Prime (versión 1.9.0 o más nueva) y ffmpeg instalado (gratis; Eddie te dice cómo si falta). Cada edición crea un video nuevo en Videos/Eddie —el original no se toca— y pide tu confirmación. Solo con archivos de tu carpeta personal. No graba, no genera imágenes de video y no publica.',
@@ -196,6 +211,55 @@ export default {
       },
       run: async (args, context) => {
         const resolved = await videoTool(await getUser(context), 'edit_video', args, 'confirm');
+        if (resolved.error) return { error: resolved.error };
+        return forModel(await runOnDevice(resolved.device, resolved.tool, resolved.args), resolved);
+      },
+    },
+    {
+      label: 'Hacer un reel',
+      activity: 'Preparando el reel…',
+      sensitive: true,
+      summarize: (result) => (result?.error ? undefined : clip(result?.summary, 120)),
+      declaration: {
+        name: 'make_reel',
+        description:
+          'Convierte un video del usuario en un Reel / TikTok / Short EN UN SOLO PASO, en su PC: recorta el tramo que sirve (start y end, opcionales), lo pasa a vertical 9:16, le pone el texto en pantalla (text, opcional) y le añade música de fondo (music, opcional). Crea un video NUEVO en Videos/Eddie; el original no se toca. Úsala en vez de encadenar recortar + vertical + texto + música. Pide confirmación con una tarjeta. Si no sabes el nombre exacto del archivo, usa video_info primero.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            path: { type: 'STRING', description: 'El video: nombre («clip.mp4») o ruta («Videos/clip.mp4»).' },
+            start: { type: 'STRING', description: 'Dónde empieza el tramo (segundos o minutos:segundos). Opcional.' },
+            end: { type: 'STRING', description: 'Dónde termina el tramo. Opcional.' },
+            text: { type: 'STRING', description: 'Texto en pantalla (gancho corto, máx. 200 caracteres). Opcional.' },
+            music: { type: 'STRING', description: 'Audio de fondo (mp3, wav…): nombre o ruta. Opcional; solo música que el usuario pueda usar.' },
+            device: DEVICE_ARG,
+          },
+          required: ['path'],
+        },
+      },
+      prepare: async (args, context) => {
+        const given = { operation: 'reel', path: args.path, start: args.start, end: args.end, text: args.text, second: args.music, device: args.device };
+        const resolved = await videoTool(await getUser(context), 'edit_video', given, 'confirm', { minVersion: MIN_AGENT_REEL });
+        if (resolved.error) return { error: resolved.error };
+        const a = resolved.args;
+        const fields = [
+          { key: 'device', label: 'Equipo', value: resolved.device.name },
+          { key: 'edit', label: 'Edición', value: OPERATIONS.reel },
+          { key: 'path', label: 'Video', value: a.path },
+          ...(a.start ? [{ key: 'start', label: 'Desde', value: a.start }] : []),
+          ...(a.end ? [{ key: 'end', label: 'Hasta', value: a.end }] : []),
+          ...(a.text ? [{ key: 'text', label: 'Texto', value: a.text, editable: true }] : []),
+          ...(a.second ? [{ key: 'music', label: 'Música', value: a.second }] : []),
+          { key: 'nota', label: 'Nota', value: 'Crea un video nuevo en Videos/Eddie; el original no se toca.' },
+        ];
+        return {
+          args: { path: a.path, ...(a.start ? { start: a.start } : {}), ...(a.end ? { end: a.end } : {}), ...(a.text ? { text: a.text } : {}), ...(a.second ? { music: a.second } : {}), device: resolved.device.name },
+          preview: { title: `Hacer un reel en ${resolved.device.name}`, confirmLabel: 'Hacer el reel', fields },
+        };
+      },
+      run: async (args, context) => {
+        const given = { operation: 'reel', path: args.path, start: args.start, end: args.end, text: args.text, second: args.music, device: args.device };
+        const resolved = await videoTool(await getUser(context), 'edit_video', given, 'confirm', { minVersion: MIN_AGENT_REEL });
         if (resolved.error) return { error: resolved.error };
         return forModel(await runOnDevice(resolved.device, resolved.tool, resolved.args), resolved);
       },

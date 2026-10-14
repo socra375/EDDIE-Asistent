@@ -96,7 +96,7 @@ Spotify en el de casa. Todo lo demás (`kill_process`…) sigue pidiendo confirm
 ## Videos con ffmpeg (agente 1.9.0+)
 
 Las usa el conector **Marketing y videos** (README → «Marketing y videos»): `edit_video` corre `ffmpeg` (gratis, instalado en el equipo) con una lista **cerrada** de operaciones y nunca un
-comando libre: `trim`, `join`, `vertical` (9:16), `caption`, `music` y `compress`.
+comando libre: `trim`, `join`, `vertical` (9:16), `caption`, `music`, `compress` y `reel` (agente **1.10.0**: recorta, pasa a vertical, pone texto y mezcla música en **una sola** pasada de ffmpeg).
 
 - **Archivos**: entran por nombre («clip.mp4», que se busca en Videos, Descargas, Escritorio, Documentos y Música —el más reciente—) o por ruta dentro de tu carpeta personal
   («Videos/clip.mp4»; «Descargas», «Escritorio»… valen aunque el sistema esté en inglés). Fuera de tu carpeta personal, no. Salen **siempre** a `Videos/Eddie` (`Movies/Eddie` en Mac) con un

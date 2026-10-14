@@ -1097,13 +1097,13 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   de tu negocio** (lee «Cómo hablo», contexto, precios y clientes del cerebro de Negocios con `marketing_brief`), y **edita tus videos en tu PC con ffmpeg, gratis**. No es otra IA: es el mismo
   Eddie con herramientas de marketing.
 - **Qué edita** (`edit_video`, cada una crea un video **nuevo** en `Videos/Eddie` —`Movies/Eddie` en Mac—; el original nunca se toca ni se pisa):
-  `trim` (recortar), `join` (unir dos videos), `vertical` (9:16 para Reels, TikTok y Shorts), `caption` (poner un texto en pantalla, con inicio y final opcionales), `music` (música
+  `reel` (**un Reel / TikTok / Short completo en un paso**: recorta el tramo, lo pasa a 9:16, pone el texto y mezcla la música, en una sola codificación y con una sola tarjeta; herramienta `make_reel`, agente **1.10.0**), `trim` (recortar), `join` (unir dos videos), `vertical` (9:16), `caption` (poner un texto en pantalla, con inicio y final opcionales), `music` (música
   de fondo bajita, en bucle si es corta) y `compress` (aligerar el archivo para mandarlo). Para varios pasos se hacen uno por uno: cada uno usa el archivo que dejó el anterior.
   Ejemplo: «recorta el clip.mp4 del 0:05 al 0:30, pásalo a vertical y ponle el texto "2x1 hoy"».
 - **Cómo se usa**: «hazme un guion para un reel de mi panadería», «¿qué videos tengo?» (`video_info`), «recorta clip.mp4 del 0:10 al 0:40». Antes de editar sale una **tarjeta** con el equipo, la
   edición, el archivo y los tiempos (el texto se puede corregir ahí). Un video tarda más de lo que Eddie espera la respuesta, así que si no termina en ~8 s el agente sigue en segundo plano y se
   pregunta con `video_status` («¿cómo va el video?», porcentaje y archivo listo).
-- **Qué necesita**: el agente **EDDIE Prime 1.9.0** o más nuevo (con uno anterior Eddie te dice cómo actualizarlo: volver a descargar el instalador en Windows o `eddie_agent.py` en Linux y Mac) y
+- **Qué necesita**: el agente **EDDIE Prime 1.9.0** o más nuevo (**1.10.0** para `make_reel`) (con uno anterior Eddie te dice cómo actualizarlo: volver a descargar el instalador en Windows o `eddie_agent.py` en Linux y Mac) y
   **ffmpeg** (gratis): `winget install Gyan.FFmpeg` en Windows, `brew install ffmpeg` en Mac, `sudo apt install ffmpeg` en Linux. Si falta, Eddie lo dice con el comando. Si lo instalas en otro sitio,
   `"ffmpeg": "ruta/a/ffmpeg"` en `config.json` del agente.
 - **Límites y seguridad**: solo archivos de tu carpeta personal (mp4, mov, mkv, webm, avi, m4v; audio mp3, wav, m4a, aac, ogg, flac); nada de comandos libres (operaciones fijas, sin shell); un
@@ -1119,13 +1119,13 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   por 250 a Ana», «pagué 80 de luz ayer»), dice **cuánto entró, salió y cuánto te deben**, avisa **quién está atrasado** y prepara un **borrador de factura o recibo**. Es el mismo Eddie con herramientas
   de cuentas, no otra IA. Se une con los otros cerebros por el nombre del cliente: «¿cuánto me debe Ana?» y luego «escríbele a Ana» (Contactos) funcionan seguidos.
 - **Herramientas**: `ledger_add` (anotar; con `due_date` queda **pendiente**: por cobrar o por pagar), `ledger_list` (movimientos con totales; «¿qué gasté este mes?», «¿qué le vendí a Ana?»,
-  «¿quién me debe?»), `ledger_summary` (el balance de un periodo: hoy, ayer, semana, mes, mes pasado, trimestre, año o todo; en qué se gasta más; lo que te deben y lo atrasado), `ledger_update`
+  «¿quién me debe?»), `ledger_summary` (el balance de un periodo: hoy, ayer, semana, mes, mes pasado, trimestre, año o todo; en qué se gasta más; lo que te deben y lo atrasado; **y cuánto subió o bajó frente al periodo anterior**), `ledger_collections` («¿quién me debe?»: por cliente, los más atrasados primero, con su contacto de Contactos —y si falta el número o hay dos con el mismo nombre— y un **texto de recordatorio amable** que Eddie adapta a tu tono y deja como borrador de WhatsApp; no se envía solo), `ledger_update`
   («Ana ya me pagó» marca pagado y apunta el día; también corrige montos, fechas y nombres), `ledger_delete` (con tarjeta de confirmación) e `invoice_draft` (borrador con subtotal, impuesto y total
   calculados; **no es un comprobante fiscal**).
 - **Cómo cuenta**: por **cobrado y pagado** (base de caja): un ingreso o gasto pagado cuenta el día en que se pagó; lo pendiente cuenta como «te deben» o «debes» hasta que se marca pagado, y es
   «atrasado» cuando pasó su vencimiento. Los totales van **por moneda** (USD, DOP… la que digas; sin inventarla) y el dinero se guarda en centavos, así que las sumas no se descuadran.
 - **Resumen de la mañana**: si hay cobros atrasados, que vencen hoy o pagos por hacer hoy, el resumen de Telegram trae el apartado **💰 Cobros y pagos**. Con una rutina automática puedes pedir más:
-  «cada lunes a las 8 dime quién me debe» (acción `agent`).
+  «todos los días a las 8 dime si alguien se atrasó» (acción `agent`; las rutinas son diarias o por evento).
 - **Cuidados**: nunca inventa un monto, una fecha ni una moneda (si falta, pregunta); anotar lo mismo dos veces seguidas lo guarda una sola vez; un movimiento ambiguo («Ana», con dos Anas) no se toca
   hasta que se aclare; solo ves lo tuyo. Es contabilidad básica de apoyo: **no declara impuestos, no da asesoría fiscal ni emite comprobantes**. Tope de 5000 movimientos.
 - **Dónde está**: tabla `ledger_entries` (migración `0032_ledger.sql`; aplícala en tu base), reglas puras en `src/services/ledger.js`, base de datos en `api/_lib/ledger/store.js` y conector en
@@ -1138,7 +1138,7 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **No contesta a tus clientes por su cuenta**: trabaja para ti. Tú le dices «Ana quiere una cita el jueves» o «me llamó Pedro, quiere cotizar un logo»; el mensaje de confirmación para el cliente es un
   **borrador** que preparas con Contactos (`prepare_message`) y envías tú. (Una recepción abierta al público —una página donde el cliente escribe directo— expondría tus datos y hoy no existe.)
 - **Herramientas**: `reception_set_hours` (tu horario por días: «lun-vie 9 a 17 con descanso de 12 a 13», «sábado 9 a 12», cerrar días, duración de cada cita), `reception_availability` («¿hay lugar el
-  jueves?»: rangos libres por día, hasta 7 días), `reception_book` (agendar, **con tarjeta de confirmación**; la hora se corrige ahí), `reception_take_message`, `reception_messages` («¿tengo recados?», urgentes
+  jueves?»: rangos libres por día, hasta 7 días), `reception_book` (agendar, **con tarjeta de confirmación**; la hora se corrige ahí), `reception_appointments` («¿qué citas tengo?», con los id para **mover o cancelar** con el Calendario), `reception_take_message`, `reception_messages` («¿tengo recados?», urgentes
   primero) y `reception_message_done` («ya llamé a Pedro»).
 - **Cómo decide si hay lugar**: horario de atención **menos lo que ya hay en tu Google Calendar** (se leen todos los eventos del día, no solo los primeros; los eventos de todo el día, como cumpleaños, no
   bloquean). Una cita tiene que caber entera dentro del horario, no caer en el descanso, no chocar con nada ni ser en el pasado. Al agendar se **vuelve a comprobar** (la agenda pudo cambiar desde que viste la
@@ -1167,6 +1167,14 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
 - **Límites**: funciona en el chat y en Inicio; **Telegram** responde por otro camino y todavía no usa el investigador de fondo (sí puede usar `search_web` y `research_now`).
 - **Dónde está**: reglas puras (cuándo buscar, el bloque del prompt) en `src/services/research.js`, motor en `api/_lib/research/engine.js`, el arranque en segundo plano en `api/_lib/research/background.js` y el
   conector en `api/_lib/connectors/research/`.
+
+## Entrenamiento de los agentes: cómo y cuándo hacen cada cosa
+
+- **Guías por agente** (`guide` en cada conector): un recetario corto de «cómo y cuándo» que se suma al prompt **solo cuando ese agente entra en la conversación** (marketing, cuentas, recepción, investigador, EDDIE Prime y rutinas). Dicen en qué orden usar las herramientas, qué preguntar y qué **no** hacer: no inventar montos ni horarios, no enviar nada por el usuario, pedir tarjeta antes de cambiar algo, ofrecer el siguiente paso útil (confirmar la cita, recordar el cobro, crear una rutina). Cada guía cabe en ~1.100 caracteres y el conjunto en 4.200 (`GUIDE_BUDGET_CHARS` en `api/_lib/connectors/registry.js`): con un solo agente son ~300 tokens, con cuatro a la vez ~1.050; en una charla normal, cero. No se añaden con el proveedor Claude, que no usa herramientas.
+- **Compañeros** (`companions`): un agente trae consigo los conectores que necesita **en el mismo turno**, aunque el usuario no diga sus palabras. Cuentas trae **Contactos** (para dejar el recordatorio listo) y Recepción trae **Contactos y Calendario** (`update_event` / `delete_event` para mover o cancelar). Sin esto, «¿quién me debe?» no podía preparar el mensaje porque Contactos solo aparecía si el usuario decía «escríbele».
+- **Herramientas nuevas**: `make_reel` (Marketing, agente 1.10.0), `ledger_collections` y la comparación con el periodo anterior (Cuentas), `reception_appointments` (Recepción).
+- **Rutinas**: son **diarias o por evento** (no «cada lunes» ni «cada 2 horas»); la guía de rutinas y el conector lo dicen y ofrecen la diaria («todos los días a las 8 dime si alguien se atrasó»). El ruteo ahora también reconoce «cada lunes», «cada semana», «todas las mañanas»… para que el conector aparezca y pueda explicarlo.
+- **Cómo se prueba**: sin un modelo real en este entorno, se comprueban las piezas que sí son deterministas: (1) **ruteo**: 31 frases reales → qué agentes y compañeros aparecen y cuáles no; (2) **prompt**: lo que recibe el modelo (guía, herramientas, nada en una charla normal, presupuesto); (3) **escenarios completos** con base de datos y Calendario simulados y el código real del agente con ffmpeg: cobrar de punta a punta, agendar y listar citas, hacer un reel. Cómo **obedece** un modelo real cada guía solo se ve usándolo: si algún agente se salta un paso, se afina su guía.
 
 ## Contactos: la agenda de Eddie
 
