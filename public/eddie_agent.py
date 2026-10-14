@@ -34,6 +34,7 @@ hace falta para darle un nombre propio a algo que no encuentra solo, por ejemplo
 """
 
 import argparse
+import glob
 import ipaddress
 import json
 import os
@@ -47,14 +48,16 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.8.1"
+VERSION = "1.9.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -607,6 +610,418 @@ def t_check_downloads(_args, _cfg):
     return {"descargando": downloading, "recientes": recent, "summary": summary}
 
 
+# ------------------------------------------------------------------- video
+# Marketing: editar videos con ffmpeg (gratis, instalado en el equipo). Solo
+# operaciones de una lista cerrada, solo con archivos de tu carpeta personal, y
+# el resultado va siempre a una carpeta aparte (Videos/Eddie): el original
+# nunca se toca ni se pisa. Un video tarda más que los 15 s que Eddie espera la
+# respuesta, así que se edita en segundo plano y se consulta con video_status.
+
+VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
+AUDIO_EXTS = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
+VIDEO_OPS = ("trim", "join", "vertical", "caption", "music", "compress")
+VIDEO_LABELS = {"trim": "recorte", "join": "union", "vertical": "vertical", "caption": "texto", "music": "musica", "compress": "ligero"}
+MAX_VIDEO_SECS = 1800  # una entrada más larga que esto se rechaza
+VIDEO_TIMEOUT = 1800  # un trabajo que pasa de esto se corta
+VIDEO_WAIT = 8  # cuánto espera edit_video por si el trabajo es corto (Eddie espera 15 s)
+FOLDER_ALIASES = {"descargas": "Downloads", "escritorio": "Desktop", "documentos": "Documents", "peliculas": "Movies", "videos": "Videos", "musica": "Music"}
+VIDEO_JOBS = {}
+VIDEO_LOCK = threading.Lock()
+ENC_V = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p"]
+ENC_A = ["-c:a", "aac", "-b:a", "128k"]
+MP4_FAST = ["-movflags", "+faststart"]
+
+
+def _plain(text):
+    return unicodedata.normalize("NFD", str(text)).encode("ascii", "ignore").decode("ascii").lower().strip()
+
+
+def _hidden():
+    """Para que en Windows ffmpeg no abra una ventana de consola."""
+    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if IS_WINDOWS else {}
+
+
+def find_ffmpeg(cfg, name="ffmpeg"):
+    """Dónde está ffmpeg (o ffprobe): el que diga la configuración ("ffmpeg": ruta), el PATH o los sitios
+    habituales de cada sistema (el agente arranca con un PATH corto y no ve lo recién instalado)."""
+    exe = name + (".exe" if IS_WINDOWS else "")
+    custom = str((cfg or {}).get("ffmpeg") or "")
+    if custom:
+        cand = os.path.join(os.path.dirname(custom), exe)
+        if os.path.isfile(cand):
+            return cand
+    found = shutil.which(name)
+    if found:
+        return found
+    places = []
+    if IS_WINDOWS:
+        local = os.environ.get("LOCALAPPDATA") or ""
+        places.append(os.path.join(local, "Microsoft", "WinGet", "Links", exe))
+        places += sorted(glob.glob(os.path.join(local, "Microsoft", "WinGet", "Packages", "Gyan.FFmpeg*", "ffmpeg-*", "bin", exe)), reverse=True)
+        for base in (os.environ.get("ProgramFiles"), "C:\\"):
+            if base:
+                places.append(os.path.join(base, "ffmpeg", "bin", exe))
+    elif sys.platform == "darwin":
+        places += ["/opt/homebrew/bin/" + exe, "/usr/local/bin/" + exe]
+    return next((p for p in places if os.path.isfile(p)), None)
+
+
+def ffmpeg_hint():
+    how = {"windows": "winget install Gyan.FFmpeg  (en una terminal) y vuelve a pedírmelo", "mac": "brew install ffmpeg"}.get(detect_platform(), "sudo apt install ffmpeg")
+    return f"Falta ffmpeg (es gratis) en este equipo: instálalo con  {how}."
+
+
+def out_dir_path():
+    return os.path.join(HOME, "Movies" if sys.platform == "darwin" else "Videos", "Eddie")
+
+
+def _media_folders():
+    names = ("Videos", "Movies", "Downloads", "Desktop", "Documents", "Music")
+    folders = [os.path.join(HOME, n) for n in names] + [out_dir_path()]
+    return [f for f in folders if os.path.isdir(f)]
+
+
+def _ci_child(folder, name):
+    """El nombre real de `name` dentro de `folder`, sin importar mayúsculas."""
+    try:
+        for entry in os.listdir(folder):
+            if entry.lower() == name.lower():
+                return entry
+    except OSError:
+        pass
+    return None
+
+
+def resolve_media(raw, exts, what):
+    """Un archivo de video o audio dentro de tu carpeta personal. Acepta una ruta («Videos/clip.mp4»,
+    «Descargas/clip.mp4») o solo el nombre («clip.mp4», «clip»), que se busca en Videos, Descargas,
+    Escritorio, Documentos y Música (el más reciente)."""
+    text = str(raw or "").strip().strip("\"'").replace("\\", "/")
+    if not text:
+        raise ValueError(f"Dime qué {what} usar.")
+    if "/" in text or text.startswith("~"):
+        if text.startswith("/") or re.match(r"^[A-Za-z]:/", text):
+            full = inside_home(text)
+        else:
+            cur = HOME
+            parts = [p for p in text.split("/") if p and p != "~"]
+            for i, part in enumerate(parts):
+                if part in (".", ".."):
+                    raise ValueError("Solo uso archivos dentro de tu carpeta personal.")
+                alias = FOLDER_ALIASES.get(_plain(part)) if i == 0 and len(parts) > 1 else None
+                hit = _ci_child(cur, part) or (alias and _ci_child(cur, alias))
+                cur = os.path.join(cur, hit or part)
+            full = inside_home(cur)
+        if not full:
+            raise ValueError("Solo uso archivos dentro de tu carpeta personal.")
+    else:
+        wanted = text.lower()
+        found = []
+        for folder in _media_folders():
+            try:
+                with os.scandir(folder) as it:
+                    for e in it:
+                        low = e.name.lower()
+                        if low.endswith(exts) and (low == wanted or os.path.splitext(low)[0] == wanted) and e.is_file(follow_symlinks=False):
+                            found.append((e.stat().st_mtime, e.path))
+            except OSError:
+                continue
+        if not found:
+            raise ValueError(f"No encuentro «{text[:60]}» en Videos, Descargas, Escritorio, Documentos ni Música. Dime la carpeta (ej. Videos/{text[:40]}).")
+        found.sort(reverse=True)
+        full = inside_home(found[0][1])
+        if not full:
+            raise ValueError("Solo uso archivos dentro de tu carpeta personal.")
+    if not os.path.isfile(full):
+        raise ValueError(f"No existe el archivo {short_path(full)}.")
+    if not full.lower().endswith(exts):
+        raise ValueError(f"Ese archivo no sirve: uso {', '.join(exts)}.")
+    return full
+
+
+def probe_media(cfg, path):
+    """Duración, tamaño de imagen y si trae audio, con ffprobe."""
+    ffprobe = find_ffmpeg(cfg, "ffprobe")
+    if not ffprobe:
+        raise ValueError(ffmpeg_hint())
+    try:
+        res = subprocess.run([ffprobe, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", path],
+                             stdin=subprocess.DEVNULL, capture_output=True, timeout=30, **_hidden())
+        data = json.loads(res.stdout.decode("utf-8", "replace") or "{}")
+    except subprocess.TimeoutExpired:
+        raise ValueError("No pude leer el archivo: tardó demasiado.")
+    except ValueError:
+        raise ValueError("No pude leer el archivo: no parece un video válido.")
+    streams = data.get("streams") or []
+    video = next((s for s in streams if s.get("codec_type") == "video"), None)
+    fmt = data.get("format") or {}
+    try:
+        duration = float(fmt.get("duration") or (video or {}).get("duration") or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    return {
+        "duration": duration,
+        "width": int((video or {}).get("width") or 0),
+        "height": int((video or {}).get("height") or 0),
+        "has_video": video is not None,
+        "has_audio": any(s.get("codec_type") == "audio" for s in streams),
+        "size_mb": round(os.path.getsize(path) / (1024 * 1024), 1),
+    }
+
+
+def parse_time(raw, what="tiempo"):
+    """90, 90.5, 1:30 o 1:02:03 → segundos."""
+    s = str(raw).strip().replace(",", ".")
+    if re.fullmatch(r"\d+(\.\d+)?", s):
+        return float(s)
+    m = re.fullmatch(r"(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)", s)
+    if not m:
+        raise ValueError(f"No entiendo el {what} «{str(raw)[:20]}»: usa segundos (90) o minutos:segundos (1:30).")
+    return int(m.group(1) or 0) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+
+
+def clean_caption(raw):
+    """El texto que se pondrá en el video: sin etiquetas ni caracteres de control, en pocas líneas."""
+    t = re.sub(r"[<>{}\\]", "", str(raw or ""))
+    t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", t)
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in t.splitlines()]
+    return "\n".join(line for line in lines if line)[:200]
+
+
+def srt_time(sec):
+    ms = int(round(sec * 1000))
+    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+
+
+def _fmt_dur(sec):
+    sec = int(round(sec))
+    return f"{sec // 60}:{sec % 60:02d}"
+
+
+def _plan_edit(op, args, cfg, workdir):
+    """Entradas y opciones de ffmpeg para una operación → (opciones, segundos esperados, entrada principal)."""
+    inp = resolve_media(args.get("path"), VIDEO_EXTS, "video")
+    info = probe_media(cfg, inp)
+    if not info["has_video"]:
+        raise ValueError("Ese archivo no tiene imagen.")
+    if info["duration"] <= 0:
+        raise ValueError("No pude saber cuánto dura ese video.")
+    if info["duration"] > MAX_VIDEO_SECS:
+        raise ValueError(f"Ese video dura {_fmt_dur(info['duration'])}: por ahora edito hasta {MAX_VIDEO_SECS // 60} minutos.")
+    dur = info["duration"]
+    audio_enc = ENC_A if info["has_audio"] else ["-an"]
+
+    if op == "trim":
+        start = parse_time(args["start"], "inicio") if str(args.get("start") or "").strip() else 0.0
+        end = parse_time(args["end"], "final") if str(args.get("end") or "").strip() else dur
+        end = min(end, dur)
+        if start >= dur:
+            raise ValueError(f"El inicio ({_fmt_dur(start)}) está después del final del video ({_fmt_dur(dur)}).")
+        if end <= start:
+            raise ValueError("El final tiene que ir después del inicio.")
+        length = end - start
+        return ["-ss", f"{start:.3f}", "-i", inp, "-t", f"{length:.3f}"] + ENC_V + audio_enc + MP4_FAST, length, inp
+
+    if op == "vertical":
+        vf = "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920:flags=lanczos,setsar=1"
+        return ["-i", inp, "-vf", vf] + ENC_V + audio_enc + MP4_FAST, dur, inp
+
+    if op == "compress":
+        vf = "scale='min(1280,iw)':-2"
+        return ["-i", inp, "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p"] + (["-c:a", "aac", "-b:a", "96k"] if info["has_audio"] else ["-an"]) + MP4_FAST, dur, inp
+
+    if op == "caption":
+        text = clean_caption(args.get("text"))
+        if not text:
+            raise ValueError("Dime qué texto poner en el video.")
+        start = parse_time(args["start"], "inicio") if str(args.get("start") or "").strip() else 0.0
+        end = min(parse_time(args["end"], "final") if str(args.get("end") or "").strip() else dur, dur)
+        if start >= end:
+            raise ValueError("El texto tiene que empezar antes de donde termina.")
+        # El texto se escribe en un .srt dentro de la carpeta de trabajo y ffmpeg corre allí: así no hay que escapar rutas.
+        with open(os.path.join(workdir, "eddie.srt"), "w", encoding="utf-8") as f:
+            f.write(f"1\n{srt_time(start)} --> {srt_time(end)}\n{text}\n")
+        portrait = info["height"] > info["width"]
+        style = f"Alignment=2,FontName=Arial,Bold=1,FontSize={14 if portrait else 16},Outline=2,Shadow=0,MarginV={70 if portrait else 30}"
+        vf = f"subtitles=eddie.srt:force_style='{style}'"
+        return ["-i", inp, "-vf", vf] + ENC_V + (["-c:a", "copy"] if info["has_audio"] else ["-an"]) + MP4_FAST, dur, inp
+
+    if op == "music":
+        music = resolve_media(args.get("second"), AUDIO_EXTS, "audio")
+        if info["has_audio"]:
+            fc = "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0:weights='1 0.35'[a]"
+        else:
+            fc = "[1:a]volume=0.8[a]"
+        copy_ok = inp.lower().endswith((".mp4", ".mov", ".m4v"))
+        return (["-i", inp, "-stream_loop", "-1", "-i", music, "-filter_complex", fc, "-map", "0:v", "-map", "[a]"]
+                + (["-c:v", "copy"] if copy_ok else ENC_V) + ENC_A + ["-t", f"{dur:.3f}", "-shortest"] + MP4_FAST), dur, inp
+
+    # join
+    other = resolve_media(args.get("second"), VIDEO_EXTS, "segundo video")
+    info2 = probe_media(cfg, other)
+    if not info2["has_video"] or info2["duration"] <= 0:
+        raise ValueError("El segundo archivo no tiene imagen.")
+    if info["duration"] + info2["duration"] > MAX_VIDEO_SECS:
+        raise ValueError(f"Juntos duran más de {MAX_VIDEO_SECS // 60} minutos.")
+    w, h = (info["width"] // 2) * 2, (info["height"] // 2) * 2
+    if w < 2 or h < 2:
+        raise ValueError("No pude leer el tamaño del primer video.")
+    parts = [f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v{i}]" for i in (0, 1)]
+    both_audio = info["has_audio"] and info2["has_audio"]
+    if both_audio:
+        parts += [f"[{i}:a]aresample=44100,aformat=channel_layouts=stereo[a{i}]" for i in (0, 1)]
+        parts.append("[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]")
+    else:
+        parts.append("[v0][v1]concat=n=2:v=1:a=0[v]")
+    mid = ["-i", inp, "-i", other, "-filter_complex", ";".join(parts), "-map", "[v]"] + (["-map", "[a]"] if both_audio else []) + ENC_V + (ENC_A if both_audio else ["-an"]) + MP4_FAST
+    return mid, info["duration"] + info2["duration"], inp
+
+
+def _job_percent(job):
+    """Por dónde va ffmpeg, leyendo el archivo de progreso que él mismo escribe."""
+    if job["state"] == "done":
+        return 100
+    try:
+        with open(os.path.join(job["workdir"], "progress.txt"), "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 2048))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return 0
+    marks = re.findall(r"out_time_(?:us|ms)=(\d+)", tail)
+    if not marks or job["expected"] <= 0:
+        return 0
+    return max(0, min(99, int(int(marks[-1]) / 1_000_000 / job["expected"] * 100)))
+
+
+def _watch_video_job(job, err):
+    timed_out = False
+    try:
+        job["proc"].wait(timeout=VIDEO_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        job["proc"].kill()
+        job["proc"].wait()
+    finally:
+        err.close()
+    detail = ""
+    try:
+        with open(os.path.join(job["workdir"], "error.txt"), "rb") as f:
+            lines = [l.strip() for l in f.read().decode("utf-8", "replace").splitlines() if l.strip()]
+        detail = lines[-1][:300] if lines else ""
+    except OSError:
+        pass
+    size = os.path.getsize(job["output"]) if os.path.isfile(job["output"]) else 0
+    if job["proc"].returncode == 0 and size > 0 and not timed_out:
+        job["size_mb"] = round(size / (1024 * 1024), 1)
+        job["state"] = "done"
+    else:
+        try:
+            os.remove(job["output"])  # nunca dejar un video a medias
+        except OSError:
+            pass
+        job["error"] = f"Se cortó: tardó más de {VIDEO_TIMEOUT // 60} minutos." if timed_out else (detail or "ffmpeg no pudo terminar la edición.")
+        job["state"] = "error"
+    job["ended"] = time.time()
+    shutil.rmtree(job["workdir"], ignore_errors=True)
+
+
+def _job_view(job):
+    name = short_path(job["output"])
+    base = {"id": job["id"], "operacion": job["op"], "archivo": name, "carpeta": short_path(os.path.dirname(job["output"]))}
+    if job["state"] == "running":
+        pct = _job_percent(job)
+        return {**base, "estado": "editando", "porcentaje": pct, "summary": f"Editando el video… {pct}%"}
+    if job["state"] == "done":
+        return {**base, "estado": "listo", "tamano_mb": job.get("size_mb"), "summary": f"Listo: {name}"}
+    return {**base, "estado": "error", "error": job.get("error"), "summary": f"No se pudo editar: {job.get('error')}"}
+
+
+def t_edit_video(args, cfg):
+    op = str(args.get("operation") or "").strip().lower()
+    if op not in VIDEO_OPS:
+        raise ValueError(f"Operación desconocida. Puedo: {', '.join(VIDEO_OPS)}.")
+    ffmpeg = find_ffmpeg(cfg)
+    if not ffmpeg:
+        raise ValueError(ffmpeg_hint())
+    with VIDEO_LOCK:
+        busy = next((j for j in VIDEO_JOBS.values() if j["state"] == "running"), None)
+        if busy:
+            raise ValueError(f"Ya estoy editando «{os.path.basename(busy['input'])}» ({_job_percent(busy)}%). Espera a que termine.")
+        workdir = tempfile.mkdtemp(prefix="eddie-video-")
+        try:
+            mid, expected, inp = _plan_edit(op, args, cfg, workdir)
+            os.makedirs(out_dir_path(), exist_ok=True)
+            stem = re.sub(r"[^\w\-]+", "_", os.path.splitext(os.path.basename(inp))[0]).strip("_")[:40] or "video"
+            out = os.path.join(out_dir_path(), f"{stem}-{VIDEO_LABELS[op]}-{time.strftime('%Y%m%d-%H%M%S')}.mp4")
+            argv = [ffmpeg, "-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-nostats", "-progress", os.path.join(workdir, "progress.txt")] + mid + [out]
+            err = open(os.path.join(workdir, "error.txt"), "wb")
+            proc = subprocess.Popen(argv, cwd=workdir, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, **_hidden())
+        except Exception:
+            shutil.rmtree(workdir, ignore_errors=True)
+            raise
+        job = {"id": os.urandom(4).hex(), "op": op, "input": inp, "output": out, "workdir": workdir, "expected": expected,
+               "state": "running", "started": time.time(), "proc": proc}
+        VIDEO_JOBS[job["id"]] = job
+        for old in sorted(VIDEO_JOBS.values(), key=lambda j: j["started"])[:-10]:
+            if old["state"] != "running":
+                VIDEO_JOBS.pop(old["id"], None)
+    threading.Thread(target=_watch_video_job, args=(job, err), daemon=True).start()
+    log("Edición de video:", op, short_path(inp), "→", short_path(out))
+    deadline = time.time() + VIDEO_WAIT
+    while time.time() < deadline and job["state"] == "running":
+        time.sleep(0.25)
+    view = _job_view(job)
+    if job["state"] == "running":
+        view["summary"] = f"Empecé a editar el video ({view['porcentaje']}%); tarda un poco, pregunta cómo va"
+    return view
+
+
+def t_video_status(args, _cfg):
+    want = str(args.get("id") or "").strip()
+    with VIDEO_LOCK:
+        jobs = sorted(VIDEO_JOBS.values(), key=lambda j: j["started"], reverse=True)
+    job = next((j for j in jobs if not want or j["id"] == want), None)
+    if job:
+        return _job_view(job)
+    recent = []
+    try:
+        names = [n for n in os.listdir(out_dir_path()) if n.lower().endswith(".mp4")]
+        names.sort(key=lambda n: os.path.getmtime(os.path.join(out_dir_path(), n)), reverse=True)
+        recent = names[:5]
+    except OSError:
+        pass
+    return {"estado": "sin_trabajos", "ultimos_videos": recent, "carpeta": short_path(out_dir_path()), "summary": "No estoy editando nada ahora."}
+
+
+def t_video_info(args, cfg):
+    if not find_ffmpeg(cfg):
+        return {"ffmpeg": False, "instalar": ffmpeg_hint(), "summary": "Este equipo todavía no tiene ffmpeg."}
+    out = {"ffmpeg": True, "carpeta_de_salida": short_path(out_dir_path())}
+    if str(args.get("path") or "").strip():
+        path = resolve_media(args.get("path"), VIDEO_EXTS + AUDIO_EXTS, "archivo")
+        info = probe_media(cfg, path)
+        out.update({"archivo": short_path(path), "duracion_s": round(info["duration"], 1), "ancho": info["width"], "alto": info["height"],
+                    "con_audio": info["has_audio"], "tamano_mb": info["size_mb"]})
+        size = f", {info['width']}x{info['height']}" if info["has_video"] else ""
+        out["summary"] = f"{os.path.basename(path)}: {_fmt_dur(info['duration'])}{size}"
+        return out
+    recent = []
+    for folder in _media_folders():
+        try:
+            with os.scandir(folder) as it:
+                for e in it:
+                    if e.name.lower().endswith(VIDEO_EXTS) and e.is_file(follow_symlinks=False):
+                        st = e.stat()
+                        recent.append((st.st_mtime, e.path, st.st_size))
+        except OSError:
+            continue
+    recent.sort(reverse=True)
+    out["videos_recientes"] = [{"archivo": short_path(p), "modificado": time.strftime("%Y-%m-%d %H:%M", time.localtime(m)), "tamano_mb": round(sz / (1024 * 1024), 1)} for m, p, sz in recent[:12]]
+    out["summary"] = f"ffmpeg listo; {len(recent)} video{'s' if len(recent) != 1 else ''} en tus carpetas"
+    return out
+
+
 def _is_mine(proc):
     """¿El proceso es de este usuario? (uids en Linux/Mac; nombre de usuario en Windows)."""
     if hasattr(proc, "uids") and hasattr(os, "getuid"):
@@ -966,9 +1381,19 @@ TOOLS = {
     "open_urls": (t_open_urls, "Abrir páginas web", "Abre una o varias páginas https en el navegador predeterminado, aunque el navegador esté cerrado.", "confirm", {"urls": S("Direcciones https separadas por espacios o saltos de línea.")}),
     "say_text": (t_say_text, "Decir algo en voz alta", "Dice un texto en voz alta con la voz del sistema.", "confirm", {"text": S("Qué decir (máx. 300 caracteres).")}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
+    "video_info": (t_video_info, "Ver videos y ffmpeg", "Dice si ffmpeg está instalado; con una ruta, la duración y el tamaño de un video; sin ruta, tus videos recientes.", "read", {"path": S("Video o audio: nombre (ej. clip.mp4) o ruta dentro de tu carpeta personal (opcional).")}),
+    "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, formato vertical 9:16, poner un texto, añadir música o aligerarlo.", "confirm", {
+        "operation": {"type": "string", "enum": list(VIDEO_OPS), "description": "trim, join, vertical, caption, music o compress."},
+        "path": S("Video a editar: nombre (clip.mp4) o ruta (Videos/clip.mp4)."),
+        "second": S("join: el segundo video. music: el audio (mp3, wav…)."),
+        "start": S("trim y caption: inicio (90 o 1:30). Opcional."),
+        "end": S("trim y caption: final (90 o 1:30). Opcional."),
+        "text": S("caption: el texto a mostrar (máx. 200 caracteres)."),
+    }),
+    "video_status": (t_video_status, "Cómo va la edición", "Dice cómo va la edición del video (porcentaje y archivo listo).", "read", {"id": S("Id del trabajo (opcional; sin él, el último).")}),
 }
 
-REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"], "open_urls": ["urls"], "say_text": ["text"]}
+REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"], "open_urls": ["urls"], "say_text": ["text"], "edit_video": ["operation", "path"]}
 
 
 def catalog(cfg):

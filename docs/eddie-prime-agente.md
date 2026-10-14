@@ -63,6 +63,9 @@ vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a 
 | `kill_process {pid}` | confirmación | cierra un proceso **de tu usuario** (nunca el 1 ni el propio agente) |
 | `scan_network` | lectura | qué dispositivos hay en tu red local: IP, MAC y el nombre que cada uno anuncia (ver «Red local») |
 | `check_downloads` | lectura | si hay una descarga a medias en tu carpeta Descargas y qué llegó hace poco; la usan las rutinas automáticas (ver `docs/eddie-2-arquitectura.md` o el README) |
+| `video_info {path}` | lectura | si ffmpeg está instalado; con `path`, duración, tamaño y audio de un video; sin él, tus videos recientes (ver «Videos con ffmpeg») |
+| `edit_video {operation, path, second, start, end, text}` | confirmación | edita un video con ffmpeg y deja uno **nuevo** en `Videos/Eddie` (ver «Videos con ffmpeg») |
+| `video_status {id}` | lectura | cómo va la edición: porcentaje y archivo listo |
 
 Eddie las ve con `computer_check` / `computer_action`: dos herramientas genéricas cuyo argumento `tool` es el nombre
 de la herramienta del agente. El servidor solo acepta herramientas que el agente declaró al vincularse o al
@@ -89,6 +92,20 @@ siempre, con una nota de que no se volverá a pedir. Al confirmarla, el servidor
 que si el usuario hubiera dicho que sí otra vez. Es **por equipo**: aprobar Spotify en el PC de la oficina no aprueba
 Spotify en el de casa. Todo lo demás (`kill_process`…) sigue pidiendo confirmación siempre; esto es exclusivo de
 `open_app`.
+
+## Videos con ffmpeg (agente 1.9.0+)
+
+Las usa el conector **Marketing y videos** (README → «Marketing y videos»): `edit_video` corre `ffmpeg` (gratis, instalado en el equipo) con una lista **cerrada** de operaciones y nunca un
+comando libre: `trim`, `join`, `vertical` (9:16), `caption`, `music` y `compress`.
+
+- **Archivos**: entran por nombre («clip.mp4», que se busca en Videos, Descargas, Escritorio, Documentos y Música —el más reciente—) o por ruta dentro de tu carpeta personal
+  («Videos/clip.mp4»; «Descargas», «Escritorio»… valen aunque el sistema esté en inglés). Fuera de tu carpeta personal, no. Salen **siempre** a `Videos/Eddie` (`Movies/Eddie` en Mac) con un
+  nombre nuevo (`clip-recorte-AAAAMMDD-HHMMSS.mp4`): el original no se toca ni se pisa.
+- **En segundo plano**: Eddie espera la respuesta 15 s y un video puede tardar más, así que `edit_video` lanza ffmpeg, espera hasta 8 s por si es corto y, si no, responde «editando» con un id;
+  `video_status` lee el progreso (`-progress`) y dice cuándo está listo. Un trabajo a la vez; se corta a los 30 minutos y, si falla, borra el archivo a medias.
+- **ffmpeg**: se busca en la configuración (`"ffmpeg": ruta`), el PATH y los sitios de siempre (WinGet y `Archivos de programa` en Windows; Homebrew en Mac). Si falta, `video_info` y `edit_video`
+  responden con el comando para instalarlo. Para el texto, `caption` escribe un `.srt` en una carpeta temporal y corre ffmpeg allí (así no hay rutas que escapar); el texto se limpia antes.
+- **Límites**: videos de hasta 30 minutos (uniendo, la suma); mp4, mov, mkv, webm, avi, m4v y audio mp3, wav, m4a, aac, ogg, flac.
 
 ## Descargas (check_downloads) y rutinas por evento
 
