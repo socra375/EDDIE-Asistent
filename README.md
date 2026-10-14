@@ -764,7 +764,7 @@ además de lo que ya pedía esa sección. No necesita variables nuevas.
 
 ## Eddie en cualquier web (panel lateral del navegador)
 
-- **Qué es**: con la extensión «Eddie en tu navegador» **1.2.0**, pulsa **Alt+E** (o el ícono de la extensión → «Abrir Eddie en esta web») y Eddie se abre **al lado de la página que estés viendo**, en cualquier web. Es el chat de Eddie solo
+- **Qué es**: con la extensión «Eddie» (antes «Eddie en tu navegador») **1.2.0 o superior**, pulsa **Alt+E** (o el ícono de la extensión → «Abrir Eddie en esta web») y Eddie se abre **al lado de la página que estés viendo**, en cualquier web. Es el chat de Eddie solo
   (`/?panel=1`, `src/panel/PanelApp.jsx`), con el interruptor **«Usar esta página»**. También clic derecho → «Resumir esta página con Eddie» o «Preguntarle a Eddie sobre «lo seleccionado»».
 - **Lee la página (opcional, apagado hasta que lo permitas)**: con el botón «Permitir que Eddie lea la página que veo» (Chrome pide el permiso), cada mensaje que envías con «Usar esta página» marcado lleva el **texto visible de la pestaña de delante**
   (12.000 caracteres como máximo) y tu selección. Nunca formularios ni páginas con contraseña, nunca en segundo plano. Eddie lo recibe marcado como palabras de la página, no como órdenes (contra instrucciones escondidas en una web), y **no queda en el historial**.
