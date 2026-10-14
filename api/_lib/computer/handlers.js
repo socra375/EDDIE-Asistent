@@ -8,7 +8,7 @@ import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { plainText, sanitizeCatalog } from './catalog.js';
 import { handleDeviceBoot } from '../routines/boot.js';
-import { claimBoot, consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
+import { claimBoot, claimStart, consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
 import { ntfyBase, runOnComputer } from './run.js';
 import { INSTALLER_CODE_MINUTES, INSTALLER_FILENAME, installerOrigin, windowsInstaller } from './installer.js';
 
@@ -68,8 +68,18 @@ async function agentRoute(action, { method, headers, body }) {
     const tools = sanitizeCatalog(body?.tools);
     await updateCatalog(device.id, { version: cleanVersion(body?.version), tools, platform: cleanPlatform(body?.platform) });
     // A new start-up of the computer (not just the agent restarting): the routines that wait for it go now.
+    // Two signs, either is enough: the system's boot time changed, or (agent 1.8.1+) it was off before starting —
+    // the second catches Windows' fast startup, where a shutdown does not change the boot time.
     const bootAt = cleanBootTime(body?.boot_time);
-    if (bootAt && (await claimBoot(device.id, bootAt).catch(() => false))) await handleDeviceBoot({ ...device, tools });
+    const bootChanged = bootAt ? await claimBoot(device.id, bootAt).catch(() => false) : false;
+    let started = false;
+    if (bootChanged) {
+      started = true;
+      await claimStart(device.id).catch(() => {}); // so the other sign, arriving at once, doesn't fire it again
+    } else if (body?.new_start === true) {
+      started = await claimStart(device.id).catch(() => false);
+    }
+    if (started) await handleDeviceBoot({ ...device, tools });
     return { status: 200, json: { ok: true, name: device.name, topic: device.topic, ntfy: ntfyBase(), tools: tools.length } };
   }
   if (action === 'next') return { status: 200, json: { job: await takeJob(device.id) } };
