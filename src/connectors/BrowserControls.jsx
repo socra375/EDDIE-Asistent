@@ -160,6 +160,16 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
         {!bridge.installed && (
           <p className="connector__meta">Este navegador no tiene la extensión: está vinculado otro. Puedes instalarla aquí también (pasos de abajo).</p>
         )}
+        {bridge.installed && !bridge.linked && (
+          <>
+            <p className="connectors__warning" role="alert">
+              La extensión de este navegador perdió su vínculo con Eddie (pasa al quitarla y volver a ponerla, o al cargarla desde otra carpeta), así que no puede abrir páginas. Vincúlala de nuevo:
+            </p>
+            <button type="button" className="btn btn-primary connector__action" disabled={busy === 'link'} onClick={() => run('link', linkHere)}>
+              <Icon name="globe" size={14} /> {busy === 'link' ? 'Vinculando…' : 'Vincular este navegador'}
+            </button>
+          </>
+        )}
         <p className="connector__meta">
           <a href="/eddie-extension.zip" download>Descargar la extensión (zip)</a> · versión actual {latest || '?'}
         </p>
