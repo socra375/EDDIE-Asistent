@@ -12,9 +12,10 @@
 import { resolveVideo, watchUrl } from '../connectors/youtube/index.js';
 import { requestOpen } from '../browser/open.js';
 import { hasLink } from '../browser/store.js';
+import { safeHttpsUrl } from '../browser/urls.js';
 
 export const DEFAULT_SONG = 'Creed - Lonely';
-export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent'];
+export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'say'];
 // A task given to Eddie to carry out on his own (see runAgent): how long he gets before it is reported as unfinished.
 const AGENT_TIMEOUT_MS = 40_000;
 const MAX_ACTIONS = 5;
@@ -31,6 +32,14 @@ export function validateActions(actions) {
       const text = String(a.text || '').trim();
       if (!text) return { error: 'La acción "notify" necesita un texto (qué avisar).' };
       clean.push({ type: 'notify', text: text.slice(0, 300) });
+    } else if (a.type === 'open_sites') {
+      const urls = (Array.isArray(a.urls) ? a.urls : String(a.urls || '').split(/[\s,;]+/)).map((u) => safeHttpsUrl(String(u).trim())).filter(Boolean);
+      if (!urls.length) return { error: 'La acción "open_sites" necesita urls: direcciones https públicas, p. ej. ["https://www.youtube.com","https://web.whatsapp.com"].' };
+      clean.push({ type: 'open_sites', urls: [...new Set(urls)].slice(0, 8) });
+    } else if (a.type === 'say') {
+      const text = String(a.text || '').replace(/\s+/g, ' ').trim();
+      if (!text) return { error: 'La acción "say" necesita text: lo que dirá en voz alta.' };
+      clean.push({ type: 'say', text: text.slice(0, 300) });
     } else if (a.type === 'agent') {
       const prompt = String(a.prompt || '').trim();
       if (prompt.length < 5) return { error: 'La acción "agent" necesita un prompt: la tarea que Eddie debe hacer solo (mínimo 5 caracteres).' };
@@ -51,6 +60,8 @@ export function describeActions(actions) {
   return actions
     .map((a) => {
       if (a.type === 'summary') return 'el resumen del día';
+      if (a.type === 'open_sites') return `abre ${a.urls.map((u) => new URL(u).hostname.replace(/^www\./, '')).join(', ')}`;
+      if (a.type === 'say') return `dice en voz alta «${a.text}»`;
       if (a.type === 'agent') return `Eddie hace solo: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? '…' : ''}»`;
       if (a.type === 'play_music') return `pone "${a.query || DEFAULT_SONG}"`;
       return `avisa "${a.text}"`;
@@ -82,6 +93,17 @@ async function runPlayMusic(user, action) {
   }
 }
 
+// Pages for the user's browser (the extension takes them when the browser is running).
+async function runOpenSites(user, action) {
+  if (!(await hasLink(user.id))) return `🌐 Quería abrir ${action.urls.length} página(s), pero no tienes tu navegador vinculado (Conectores → Tu navegador).`;
+  let opened = 0;
+  for (const url of action.urls) {
+    const out = await requestOpen({ getUser: async () => user }, { url, label: '' });
+    if (!out.error) opened += 1;
+  }
+  return `🌐 Pedí abrir ${opened} página${opened === 1 ? '' : 's'} en tu navegador.`;
+}
+
 // A background agent: Eddie takes the task like a message from the user, with all his
 // tools, memory and notes, but nobody is there to answer. So he cannot ask anything or
 // confirm anything (a delicate action is reported as pending, never done), and he does not
@@ -109,11 +131,14 @@ async function runAgent(user, timezone, action) {
 // Runs every action in order and joins what each one has to say into one
 // message. Never throws: an action that fails says so in its own line
 // instead of losing the rest of the routine.
-export async function runRoutineActions(actions, { user, timezone }) {
+export async function runRoutineActions(actions, { user, timezone, skip = [] }) {
   const lines = [];
   for (const action of actions) {
+    if (skip.includes(action.type)) continue; // already done by the computer itself (routines/boot.js)
     if (action.type === 'summary') lines.push(await runSummary(user, timezone));
     else if (action.type === 'agent') lines.push(await runAgent(user, timezone, action));
+    else if (action.type === 'open_sites') lines.push(await runOpenSites(user, action));
+    else if (action.type === 'say') lines.push('🔈 Decir en voz alta solo funciona al encender el PC.');
     else if (action.type === 'play_music') lines.push(await runPlayMusic(user, action));
     else lines.push(action.text);
   }

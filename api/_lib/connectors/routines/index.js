@@ -10,7 +10,14 @@ import { ACTION_TYPES, DEFAULT_SONG, describeActions, validateActions } from '..
 import { clip } from '../http.js';
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-const EVENT_TYPES = ['download_complete'];
+const EVENT_TYPES = ['download_complete', 'device_boot'];
+// The first agent that reports its boot time and can open pages / speak (public/eddie_agent.py).
+const BOOT_AGENT = [1, 8, 0];
+const versionAtLeast = (version, min) => {
+  const parts = String(version || '').split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i += 1) if ((parts[i] || 0) !== min[i]) return (parts[i] || 0) > min[i];
+  return true;
+};
 
 function normalizeTime(value) {
   const m = TIME_RE.exec(String(value || '').trim());
@@ -40,24 +47,33 @@ async function createRoutineTool(args, context) {
 
   const { actions, error: actionsError } = await parseActions(args.actions);
   if (actionsError) return { error: actionsError };
+  if (event !== 'device_boot' && actions.some((a) => a.type === 'say')) return { error: 'La acción "say" (decir en voz alta) solo se usa en rutinas de event="device_boot", porque la dice el propio PC.' };
 
   let deviceId = null;
+  let deviceName = '';
   if (event) {
     const devices = await devicesByUser(user.id);
     const picked = pickDevice(devices, args.device);
     if (picked.error) return { error: picked.error };
-    const hasTool = picked.device.tools.some((t) => t.name === 'check_downloads' && t.risk === 'read');
-    if (!hasTool) return { error: `El agente de «${picked.device.name}» es muy viejo para vigilar descargas. Descarga el instalador de nuevo en Conectores → Tu equipo (EDDIE Prime) para actualizarlo.` };
+    const updateHint = 'Descarga el instalador de nuevo en Conectores → Tu equipo (EDDIE Prime) y ejecútalo para actualizarlo.';
+    if (event === 'device_boot') {
+      if (!versionAtLeast(picked.device.version, BOOT_AGENT)) return { error: `El agente de «${picked.device.name}» es de una versión vieja (${picked.device.version || 'desconocida'}) y no avisa cuando el PC se enciende. ${updateHint}` };
+    } else if (!picked.device.tools.some((t) => t.name === 'check_downloads' && t.risk === 'read')) {
+      return { error: `El agente de «${picked.device.name}» es muy viejo para vigilar descargas. ${updateHint}` };
+    }
     deviceId = picked.device.id;
+    deviceName = picked.device.name;
   }
 
-  const name = clip(String(args.name || '').trim(), 80) || (time ? `Rutina de las ${time}` : 'Aviso de descarga');
+  const name = clip(String(args.name || '').trim(), 80) || (time ? `Rutina de las ${time}` : event === 'device_boot' ? 'Al encender el PC' : 'Aviso de descarga');
   const routine = await createRoutine(user.id, { name, triggerType: time ? 'schedule' : 'event', time, eventType: event, deviceId, actions });
   return {
     routine,
     summary: time
       ? `Rutina «${name}» creada: todos los días a las ${time}, ${describeActions(actions)}.`
-      : `Rutina «${name}» creada: cuando termine una descarga, ${describeActions(actions)}.`,
+      : event === 'device_boot'
+        ? `Rutina «${name}» creada: cuando se encienda «${deviceName}», ${describeActions(actions)}. Se dispara con el inicio de sesión del PC; despertarlo de la suspensión no cuenta.`
+        : `Rutina «${name}» creada: cuando termine una descarga, ${describeActions(actions)}.`,
   };
 }
 
@@ -68,7 +84,7 @@ async function listRoutinesTool(_args, context) {
   if (!routines.length) return { routines: [], summary: 'No tienes ninguna rutina creada.' };
   const described = routines.map((r) => ({
     name: r.name,
-    cuando: r.triggerType === 'schedule' ? `todos los días a las ${r.time}` : 'cuando termine una descarga',
+    cuando: r.triggerType === 'schedule' ? `todos los días a las ${r.time}` : r.eventType === 'device_boot' ? 'cuando se encienda el PC' : 'cuando termine una descarga',
     hace: describeActions(r.actions),
     activa: r.enabled,
   }));
@@ -89,10 +105,10 @@ async function cancelRoutineTool(args, context) {
 export default {
   id: 'routines',
   name: 'Rutinas automáticas',
-  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto o una tarea que Eddie hace solo con sus herramientas (agent). Varias rutinas a la misma hora corren a la vez.`,
+  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto una tarea que Eddie hace solo con sus herramientas (agent), abrir páginas web (open_sites) o, al encender el PC, decir algo en voz alta (say). También cuando se enciende un PC vinculado con EDDIE Prime («cuando encienda la PC, abre YouTube y WhatsApp Web»). Varias rutinas a la misma hora corren a la vez.`,
   icon: 'clock',
   category: 'asistente',
-  route: /rutina|autom[aá]tic[oa]|cada d[ií]a a las|todos los d[ií]as a las|cuando termine|cuando acabe/i,
+  route: /rutina|autom[aá]tic[oa]|cada d[ií]a a las|todos los d[ií]as a las|cuando termine|cuando acabe|cuando (encienda|prenda|arranque|inicie)|al (encender|prender|arrancar|iniciar)/i,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Las rutinas solo pueden hacer lo de esta lista (resumen, música, un aviso de texto o una tarea de Eddie): nada sensible se ejecuta, porque nadie confirma una tarjeta cuando corren solas; lo que necesite permiso se te avisa como pendiente.',
@@ -106,7 +122,7 @@ export default {
       declaration: {
         name: 'create_routine',
         description:
-          `Crea una rutina automática. Por hora: pon time ("08:00"). Por evento: pon event ("download_complete", necesita un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
+          `Crea una rutina automática. Por hora: pon time ("08:00"). Por evento: pon event ("download_complete" cuando termine una descarga, o "device_boot" cuando se encienda el PC; ambos necesitan un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), open_sites (necesita urls: arreglo de direcciones https completas, p. ej. YouTube https://www.youtube.com, Google https://www.google.com, WhatsApp Web https://web.whatsapp.com; solo las ABRE, nunca escribe ni envía nada en ellas), say (solo con device_boot; necesita text: lo que dice el PC en voz alta con la voz del sistema), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="device_boot", actions=[{"type":"open_sites","urls":["https://www.youtube.com","https://www.google.com","https://web.whatsapp.com"]}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
         parameters: {
           type: 'OBJECT',
           properties: {

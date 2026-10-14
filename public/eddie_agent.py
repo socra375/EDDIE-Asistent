@@ -50,9 +50,11 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import webbrowser
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -499,6 +501,70 @@ def t_open_app(args, cfg):
     return {"abierta": label, "summary": f"Abrí {label}"}
 
 
+MAX_OPEN_URLS = 8
+
+
+def _clean_urls(raw):
+    """Las direcciones https públicas de un texto (separadas por espacios, comas o saltos de línea)."""
+    urls = []
+    for part in re.split(r"[\s,;]+", str(raw or "")):
+        part = part.strip()
+        if not part:
+            continue
+        if len(part) > 2000:
+            raise ValueError("Una dirección es demasiado larga.")
+        u = urllib.parse.urlparse(part)
+        host = (u.hostname or "").lower()
+        if u.scheme != "https" or not host or u.username or u.password or "." not in host or host.endswith(".local") or host == "localhost":
+            raise ValueError(f"Solo abro direcciones https públicas: «{part[:60]}» no sirve.")
+        try:
+            ipaddress.ip_address(host)
+            raise ValueError(f"No abro direcciones IP: «{part[:60]}».")
+        except ValueError as e:
+            if "No abro" in str(e):
+                raise
+        if part not in urls:
+            urls.append(part)
+    if not urls:
+        raise ValueError("Dame al menos una dirección https para abrir.")
+    if len(urls) > MAX_OPEN_URLS:
+        raise ValueError(f"Máximo {MAX_OPEN_URLS} páginas a la vez.")
+    return urls
+
+
+def t_open_urls(args, _cfg):
+    """Abre páginas en el navegador predeterminado (aunque no esté abierto), una pestaña por dirección."""
+    urls = _clean_urls(args.get("urls"))
+    for i, url in enumerate(urls):
+        if i == 0:
+            webbrowser.open(url, new=2)
+        else:
+            time.sleep(0.8)  # que el navegador alcance a abrirse antes de la siguiente pestaña
+            webbrowser.open_new_tab(url)
+    return {"abiertas": urls, "summary": f"Abrí {len(urls)} página{'s' if len(urls) != 1 else ''} en el navegador"}
+
+
+def t_say_text(args, _cfg):
+    """Dice un texto en voz alta con la voz del propio sistema (sin internet; no es la voz de Eddie en la nube)."""
+    text = re.sub(r"\s+", " ", str(args.get("text") or "")).strip()[:300]
+    if not text:
+        raise ValueError("Dime qué decir.")
+    if IS_WINDOWS:
+        ps = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak($env:EDDIE_SAY)"
+        argv = ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps]
+    elif detect_platform() == "mac":
+        argv = ["say", text]
+    else:
+        tool = shutil.which("spd-say") or shutil.which("espeak")
+        if not tool:
+            raise ValueError("Este equipo no tiene voz instalada (spd-say o espeak).")
+        argv = [tool, text]
+    env = dict(os.environ, EDDIE_SAY=text)
+    kwargs = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if IS_WINDOWS else {"start_new_session": True}
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, **kwargs)
+    return {"dicho": text, "summary": "Lo dije en voz alta"}
+
+
 PARTIAL_DOWNLOAD_EXT = (".crdownload", ".part", ".download", ".tmp")
 RECENT_DOWNLOAD_SECS = 120  # qué tan reciente cuenta como "recién terminado"
 
@@ -893,10 +959,12 @@ TOOLS = {
     "open_app": (t_open_app, "Abrir una app", "Busca y abre cualquier app instalada por su nombre.", "confirm", {"name": S("Nombre de la app a abrir.")}),
     "kill_process": (t_kill_process, "Cerrar un proceso", "Cierra un proceso de tu usuario por su pid.", "confirm", {"pid": I("Id del proceso.")}),
     "scan_network": (t_scan_network, "Dispositivos en tu red", "Qué hay conectado a la misma red (IP, MAC y el nombre que cada uno anuncia). Solo mira; no ataca ni escanea puertos.", "read", {}),
+    "open_urls": (t_open_urls, "Abrir páginas web", "Abre una o varias páginas https en el navegador predeterminado, aunque el navegador esté cerrado.", "confirm", {"urls": S("Direcciones https separadas por espacios o saltos de línea.")}),
+    "say_text": (t_say_text, "Decir algo en voz alta", "Dice un texto en voz alta con la voz del sistema.", "confirm", {"text": S("Qué decir (máx. 300 caracteres).")}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
 }
 
-REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"]}
+REQUIRED = {"list_directory": ["path"], "open_app": ["name"], "kill_process": ["pid"], "open_urls": ["urls"], "say_text": ["text"]}
 
 
 def catalog(cfg):
@@ -1091,6 +1159,14 @@ def cmd_run(cfg):
         release_lock()
 
 
+def os_boot_time():
+    """Cuándo se encendió el equipo (segundos desde 1970), para que Eddie sepa si es un encendido nuevo o solo el agente que se reinició."""
+    try:
+        return int(psutil.boot_time()) if psutil else None
+    except Exception:
+        return None
+
+
 def run_loop(cfg):
     stop = threading.Event()
     state = {"since": "all", "fatal": None}
@@ -1129,7 +1205,7 @@ def run_loop(cfg):
     wait = 5
     while True:
         try:
-            hello = api(cfg, "agent/hello", {"version": VERSION, "platform": detect_platform(), "tools": catalog(cfg)})
+            hello = api(cfg, "agent/hello", {"version": VERSION, "platform": detect_platform(), "tools": catalog(cfg), "boot_time": os_boot_time()})
             break
         except ApiError as e:
             if e.status == 401:
