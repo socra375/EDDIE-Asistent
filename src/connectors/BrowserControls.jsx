@@ -160,6 +160,9 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
         {!bridge.installed && (
           <p className="connector__meta">Este navegador no tiene la extensión: está vinculado otro. Puedes instalarla aquí también (pasos de abajo).</p>
         )}
+        <p className="connector__meta">
+          <a href="/eddie-extension.zip" download>Descargar la extensión (zip)</a> · versión actual {latest || '?'}
+        </p>
         {outdated && (
           <p className="connector__meta">
             Hay una versión nueva ({latest}): <a href="/eddie-extension.zip" download>descárgala</a>, reemplaza la carpeta y pulsa «Recargar» en chrome://extensions.
