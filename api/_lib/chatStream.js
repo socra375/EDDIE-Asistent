@@ -92,7 +92,9 @@ export async function runChatStream(req, res) {
         write({ type: 'chunk', text });
       },
       (step) => write({ type: 'step', ...step }),
-      { cookies, getUser, onResearch: (card) => write({ type: 'research', ...card }) },
+      // The research agent's card is opt-in (`research: true` in the request): the app shows only approval cards, so
+      // it does not ask, and nobody searches in the background for a card that would not be shown.
+      { cookies, getUser, ...(req.body?.research === true ? { onResearch: (card) => write({ type: 'research', ...card }) } : {}) },
     );
     ensureStream();
     const done = { type: 'done', provider: result.provider, model: result.model, fallbackFrom: result.fallbackFrom };

@@ -8,8 +8,6 @@ import { exportTxt } from '../utils/export';
 import ChatPanel from '../components/Chat/ChatPanel';
 import Icon from '../layout/Icon';
 import ConfirmCard from '../components/Chat/ConfirmCard';
-import StepTrace from '../components/Chat/StepTrace';
-import ResearchCard from '../components/Chat/ResearchCard';
 import EddieOrb from './EddieOrb';
 import HudLayer from './HudLayer';
 import { useHudDirector } from './useHudDirector';
@@ -220,15 +218,8 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
-          ) : status === 'processing' && (activity || liveSteps.length > 0) ? (
+          ) : status === 'processing' && (activity || liveSteps.length > 0) ? null : reply ? (
             <>
-              <StepTrace steps={liveSteps} live />
-              {activity && <p className="home__activity">{activity}</p>}
-            </>
-          ) : reply ? (
-            <>
-              <StepTrace steps={lastAssistant?.steps} />
-              <ResearchCard card={lastAssistant?.research} />
               <p className="home__reply">{replyPreview}</p>
               {reply.length > PREVIEW_CHARS && (
                 <button type="button" className="home__more" onClick={() => setExpanded((v) => !v)}>
