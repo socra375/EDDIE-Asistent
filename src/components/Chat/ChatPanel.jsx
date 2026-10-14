@@ -12,8 +12,6 @@ import Icon from '../../layout/Icon';
 import RichText from '../Shared/RichText';
 import MessageActions from './MessageActions';
 import ConfirmCard from './ConfirmCard';
-import StepTrace from './StepTrace';
-import ResearchCard from './ResearchCard';
 import { copyText } from '../../services/messageActions';
 import './Chat.css';
 
@@ -30,7 +28,7 @@ const QUICK_STARTS = [
 
 // `embedded`: inside Inicio's Conversación panel, which has its own Limpiar button.
 export default function ChatPanel({ showCore = true, embedded = false }) {
-  const { messages, status, sendMessage, resetConversation, activity, liveSteps, resolveConfirmation } = useChat();
+  const { messages, status, sendMessage, resetConversation, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -333,8 +331,6 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                   </span>
                 )}
               </span>
-              {m.role === 'assistant' && <StepTrace steps={m.steps} />}
-              {m.role === 'assistant' && <ResearchCard card={m.research} />}
               {m.images?.length > 0 && (
                 <div className="bubble__images" aria-label="Imágenes adjuntas">
                   {m.images.map((img, i) => (
@@ -446,8 +442,7 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
           {status === 'processing' && (
             <div className="bubble bubble--assistant bubble--pending">
               <span className="bubble__author">Eddie</span>
-              <StepTrace steps={liveSteps} live />
-              <p className="bubble__text">{activity || 'Analizando tu solicitud…'}</p>
+              <p className="bubble__text">Eddie está trabajando en ello…</p>
             </div>
           )}
         </div>
