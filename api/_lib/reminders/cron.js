@@ -6,11 +6,22 @@ import { timingSafeEqual } from 'node:crypto';
 import { runScheduledJobs } from './run.js';
 import { runRoutines } from '../routines/run.js';
 
+// The function may run 60 s: nothing new starts after this, so a slow AI task is never cut off by the platform.
+export const JOB_BUDGET_MS = 30_000;
+
 function secretMatches(headers) {
   const expected = Buffer.from(String(process.env.CRON_SECRET || ''));
   const header = String(headers.authorization || '');
   const got = Buffer.from(header.startsWith('Bearer ') ? header.slice(7).trim() : '');
   return expected.length >= 16 && expected.length === got.length && timingSafeEqual(expected, got);
+}
+
+// Everything due right now: reminders, summaries and routines, together. Safe to call from anywhere and as
+// often as wanted: each job is claimed before it runs, so nothing goes out twice.
+export async function runAllDue() {
+  const deadline = Date.now() + JOB_BUDGET_MS;
+  const [reminders, routines] = await Promise.all([runScheduledJobs({ deadline }), runRoutines({ deadline })]);
+  return { ...reminders, routines };
 }
 
 export async function handleCronRequest({ method, headers = {} }) {
@@ -21,8 +32,7 @@ export async function handleCronRequest({ method, headers = {} }) {
   if (!secretMatches(headers)) return { status: 401, json: { error: 'No autorizado.' } };
   if (!process.env.DATABASE_URL) return { status: 503, json: { error: 'Falta DATABASE_URL.' } };
   try {
-    const [reminders, routines] = await Promise.all([runScheduledJobs(), runRoutines()]);
-    return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { ok: true, ...reminders, routines } };
+    return { status: 200, headers: { 'Cache-Control': 'no-store' }, json: { ok: true, ...(await runAllDue()) } };
   } catch (err) {
     console.error('[cron] failed:', err);
     return { status: 500, json: { error: 'El trabajo programado falló.' } };

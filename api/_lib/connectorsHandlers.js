@@ -6,6 +6,7 @@ import { describeConnectors } from './connectors/registry.js';
 import { getToday } from './todayHandlers.js';
 import { handleTelegramRoute } from './telegram/handlers.js';
 import { handleCronRequest } from './reminders/cron.js';
+import { handleTickRequest } from './reminders/tick.js';
 import { handleEpisodesRoute } from './episodes/handlers.js';
 import { handleKnowledgeRoute } from './knowledge/handlers.js';
 import { handleBusinessRoute } from './business/handlers.js';
@@ -45,6 +46,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
     return { status: 405, json: { error: 'Método no permitido.' } };
   }
   if (path.length === 1 && path[0] === 'cron') return handleCronRequest({ method, headers });
+  if (path.length === 1 && path[0] === 'tick') return handleTickRequest({ method, cookies });
   if (path[0] === 'episodes') return handleEpisodesRoute({ method, path, cookies, body });
   if (path[0] === 'knowledge') return handleKnowledgeRoute({ method, path, cookies, query, body });
   if (path[0] === 'media') return handleMediaRoute({ method, path, cookies, query, body });
