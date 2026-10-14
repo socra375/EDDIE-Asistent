@@ -76,6 +76,15 @@ falsa o con texto malicioso que la IA copie (cada nota muestra su fuente y se bo
   resultados con esos títulos. Límite propio: `DAILY_IMAGE_SEARCH_LIMIT`. La licencia de lo encontrado en la web general no está verificada y se avisa.
 - **Riesgo que queda**: el contenido lo filtra la política de Gemini, no Eddie; las imágenes editadas a partir de fotos de personas dependen de ella.
 
+## Eddie en cualquier web: panel lateral (14 oct 2026)
+
+- **Lectura de páginas, opt-in**: la extensión 1.2.0 solo lee la pestaña de delante si el usuario activó «Leer la página que veo» (permiso de Chrome para todas las webs `https`, pedido con un clic) y **solo cuando envía un mensaje** con «Usar esta página» marcado.
+  Lee el texto visible (12.000 caracteres) y la selección, **nunca valores de formularios** y **nunca una página con un campo de contraseña**; nada en segundo plano. Si la lectura está apagada la extensión responde `disabled` aunque se lo pida la página de Eddie.
+- **Inyección de instrucciones**: el texto de la página llega a la IA marcado como palabras de la web, con la orden de no seguir instrucciones que aparezcan ahí. Las acciones delicadas siguen pidiendo confirmación en tarjeta, así que una web hostil no puede ejecutar nada por sí sola.
+- **Quién puede hablar con la extensión**: el panel solo contesta mensajes de la propia Eddie (`event.origin` y `event.source` del marco) y Eddie solo acepta contexto de una dirección `chrome-extension://` que sea su ventana padre.
+- **Marcos**: `Content-Security-Policy: frame-ancestors 'self' chrome-extension://<id de la extensión>` en todas las rutas: ninguna otra web puede incrustar Eddie (de paso, cierra el clic secuestrado). Cambiar el id de la extensión obliga a cambiar la cabecera en `vercel.json`.
+- **Riesgo que queda**: el texto de la página sale hacia el proveedor de IA elegido (Gemini, Groq…). No lo actives en banca, correo o historiales médicos; el interruptor del panel lo apaga al instante.
+
 ## Llamar a Eddie (12 oct 2026)
 
 - **Micrófono**: solo se abre tras un toque en «Llamar a Eddie» (o «Contestar») y se cierra al colgar, al cerrar la pantalla o al silenciar. La palabra clave y los aplausos se pausan durante la llamada.

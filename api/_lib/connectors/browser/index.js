@@ -120,7 +120,7 @@ export default {
     isConnected: (user) => hasLink(user.id),
   },
   requiredEnv: ['DATABASE_URL'],
-  note: 'Abrir páginas: la extensión solo abre pestañas, no lee lo que tienes abierto. Controlar una pestaña (browser_task) es distinto: el usuario confirma una vez, y mientras esa tarea dura Eddie sí ve una captura de esa pestaña y hace clics/escribe en ella — nunca fuera de esa pestaña, nunca en campos de contraseña o pago. En redes sociales y mensajería solo redacta la respuesta y nunca la envía: siempre la manda el usuario.',
+  note: 'Abrir páginas: la extensión abre pestañas y no lee lo que tienes abierto, salvo en su panel lateral si el usuario activó «Leer la página que veo» (solo al escribirle a Eddie). Controlar una pestaña (browser_task) es distinto: el usuario confirma una vez, y mientras esa tarea dura Eddie sí ve una captura de esa pestaña y hace clics/escribe en ella — nunca fuera de esa pestaña, nunca en campos de contraseña o pago. En redes sociales y mensajería solo redacta la respuesta y nunca la envía: siempre la manda el usuario.',
   details: async (user) => {
     const link = user ? await linkByUser(user.id) : null;
     if (!link) return { latestVersion: EXTENSION_VERSION };

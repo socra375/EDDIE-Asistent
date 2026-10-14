@@ -1,7 +1,8 @@
 // Eddie en tu navegador — the part that runs all the time.
 //
 // Mostly, it just opens tabs: it never reads a page, a tab's address or
-// anything the user types.
+// anything the user types. (The one exception, added with the side panel, is panel.js:
+// only if the user turns "Leer la página que veo" on, and only when they message Eddie.)
 //   1. Every half minute it asks Eddie's server for the pages Eddie wants
 //      opened (a document it just made, a link the user asked for).
 //   2. Every ten minutes it asks for the meetings in the user's calendar,
@@ -20,6 +21,7 @@
 // outside of what a screenshot shows. The user can stop it any time from
 // this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
+import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
 const POLL_ALARM = 'eddie-poll';
@@ -405,6 +407,17 @@ async function handle(message, fromPage) {
       await poll();
       await refreshAgenda();
       return state();
+    case 'open-panel':
+      return fromPage ? { ok: false } : openPanel(message.windowId);
+    case 'panel-state':
+      return fromPage ? { ok: false } : { ok: true, ...(await readPagesState()) };
+    case 'set-read-pages':
+      return fromPage ? { ok: false } : { ok: true, ...(await setReadPages(message.enabled === true)) };
+    case 'take-ask':
+      return fromPage ? { ok: false } : takeAsk();
+    // Eddie's own page may ask too (its window, when the panel can't be embedded), but only once the user turned reading on.
+    case 'page-context':
+      return pageContext();
     case 'stop-task': {
       if (fromPage) return { ok: false };
       const { activeTask } = await read('activeTask');
@@ -428,3 +441,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handle(message, false).then(sendResponse, (err) => sendResponse({ ok: false, error: String(err?.message || err) }));
   return true;
 });
+
+registerPanel();

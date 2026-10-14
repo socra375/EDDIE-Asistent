@@ -52,6 +52,14 @@ async function render() {
   }
 }
 
+// Eddie in a panel beside the page you are on (sidepanel.html). Asked from this click, as the browser requires.
+$('open-panel').addEventListener('click', async () => {
+  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+  const result = await ask({ type: 'open-panel', windowId: win.id });
+  if (result?.ok) window.close();
+  else show(result?.error || 'No pude abrir el panel.');
+});
+
 $('refresh').addEventListener('click', async () => {
   show('');
   $('refresh').disabled = true;
