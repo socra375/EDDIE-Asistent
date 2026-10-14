@@ -21,6 +21,8 @@ import GalleryPanel from './gallery/GalleryPanel';
 import ContactsPanel from './contacts/ContactsPanel';
 import CallScreen from './call/CallScreen';
 import ContactsApp from './contacts/ContactsApp';
+import PanelApp from './panel/PanelApp';
+import { isPanelMode } from './services/panelMode';
 import { isContactsApp, resumeContactsAfterLogin } from './services/contactsApp';
 import { CALL_EVENT, useCallActive } from './services/callState';
 import YouTubePlayer from './player/YouTubePlayer';
@@ -320,6 +322,24 @@ function AppShell() {
 }
 
 export default function App() {
+  // Eddie beside any website (the browser extension's side panel): the chat alone.
+  if (isPanelMode()) {
+    return (
+      <SettingsProvider>
+        <AuthProvider>
+          <LocationProvider>
+            <VoiceProvider>
+              <ChatProvider>
+                <PanelApp />
+                <AutoReadBridge />
+                <SettingsSyncBridge />
+              </ChatProvider>
+            </VoiceProvider>
+          </LocationProvider>
+        </AuthProvider>
+      </SettingsProvider>
+    );
+  }
   // Contactos installed as an app of its own: only the address book, none of Eddie's shell.
   if (isContactsApp()) {
     // The same providers as Eddie, so calls work here too, but none of Eddie's screens.

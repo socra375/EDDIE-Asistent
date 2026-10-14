@@ -17,6 +17,10 @@
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'self' chrome-extension://amdcngcajoekfaljieikbgifmhoigdfb" }]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },

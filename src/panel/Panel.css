@@ -1,0 +1,47 @@
+/* Eddie beside any website: the chat alone, in a narrow column. */
+.panel-app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  background: #050510;
+  color: #d6fbff;
+  font-family: system-ui, sans-serif;
+}
+.panel-app--center {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+.panel-app__hint {
+  max-width: 320px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+.panel-app__bar {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(63, 232, 255, 0.25);
+  font-size: 13px;
+}
+.panel-app__switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.panel-app__status {
+  opacity: 0.7;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-app__chat {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

@@ -22,6 +22,7 @@ import { applyMediaActions } from '../services/mediaActions';
 import { applyWhatsappActions } from '../services/whatsappActions';
 import { applyMessageActions } from '../services/messageActions';
 import { callBridge } from '../services/callState';
+import { panelContext } from '../services/panelMode';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
@@ -438,7 +439,17 @@ export function ChatProvider({ children }) {
 
       // What was said with the local probe stays out of what the cloud sees:
       // its answers ("no puedo, pero puedo revisar el disco duro") would be imitated.
-      const history = [...messages, userMessage].filter((m) => !m.local).slice(-MAX_HISTORY_SENT);
+      // In the browser panel: the page the user is looking at rides along with this one message (not kept in the history).
+      let page = '';
+      try {
+        page = (await panelContext.provide?.()) || '';
+      } catch {
+        page = '';
+      }
+      const history = [...messages, userMessage]
+        .filter((m) => !m.local)
+        .slice(-MAX_HISTORY_SENT)
+        .map((m) => (page && m === userMessage ? { ...m, content: `${page}\n\nPregunta del usuario: ${m.content}` } : m));
       const system = buildSystemPrompt({
         mode,
         language: settings.language,

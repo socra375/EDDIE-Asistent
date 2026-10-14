@@ -40,6 +40,9 @@ function set(next) {
 
 export const bridgeState = () => state;
 
+// Any message to the extension (for the panel's own window, where the page asks it directly).
+export const askExtension = send;
+
 // Calls back whenever what the page knows about the extension changes.
 export function onBridgeChange(fn) {
   listeners.add(fn);

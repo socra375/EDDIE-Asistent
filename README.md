@@ -762,6 +762,18 @@ además de lo que ya pedía esa sección. No necesita variables nuevas.
 - **Límites**: se dispara con el **inicio de sesión** del PC (el agente arranca ahí), no con el botón de encendido: si Windows pide contraseña, será al iniciar sesión. Despertar de
   la suspensión no cuenta (el agente no se reinicia). Si el navegador predeterminado tarda en abrirse, las pestañas se abren con una pequeña pausa entre ellas.
 
+## Eddie en cualquier web (panel lateral del navegador)
+
+- **Qué es**: con la extensión «Eddie en tu navegador» **1.2.0**, pulsa **Alt+E** (o el ícono de la extensión → «Abrir Eddie en esta web») y Eddie se abre **al lado de la página que estés viendo**, en cualquier web. Es el chat de Eddie solo
+  (`/?panel=1`, `src/panel/PanelApp.jsx`), con el interruptor **«Usar esta página»**. También clic derecho → «Resumir esta página con Eddie» o «Preguntarle a Eddie sobre «lo seleccionado»».
+- **Lee la página (opcional, apagado hasta que lo permitas)**: con el botón «Permitir que Eddie lea la página que veo» (Chrome pide el permiso), cada mensaje que envías con «Usar esta página» marcado lleva el **texto visible de la pestaña de delante**
+  (12.000 caracteres como máximo) y tu selección. Nunca formularios ni páginas con contraseña, nunca en segundo plano. Eddie lo recibe marcado como palabras de la página, no como órdenes (contra instrucciones escondidas en una web), y **no queda en el historial**.
+  Ese texto sale hacia el proveedor de IA que uses, como cualquier mensaje: no actives la lectura en webs privadas (banco, correo).
+- **Cómo funciona**: el panel (`extension/sidepanel.html`) mete la página de Eddie en un marco y hace de intermediario (`postMessage` + el permiso de la extensión). Eddie añade la cabecera `Content-Security-Policy: frame-ancestors` (`vercel.json`): **solo el panel de la extensión (y la propia Eddie) puede incrustarla**.
+- **Si el marco no guarda tu sesión** (Chrome puede bloquear las cookies de un marco), a los 9 s el panel lo dice y ofrece **abrir Eddie en una ventana pequeña** (`?panel=1`, mismo chat, la extensión le da la página directamente). Google no deja iniciar sesión dentro de un marco: el panel ofrece abrir Eddie en una pestaña.
+- **Actualizar la extensión**: descarga el zip de nuevo en Conectores → Tu navegador, extráelo sobre la carpeta de antes y en `chrome://extensions` pulsa **recargar**. Se vuelve a pedir el permiso de leer páginas (es otro permiso, aparte).
+- **Probado** con Chromium real y la extensión: el panel carga el chat, la página llega al mensaje (sin el contenido de formularios), una página con contraseña no se lee, con el interruptor apagado no se lee nada y el texto no se queda en el historial. **No probado**: el panel lateral propio de Chrome (el botón real), el atajo Alt+E y el clic derecho en un Chrome de escritorio, ni la sesión dentro del marco en producción.
+
 ## Telegram (hablar con Eddie desde el celular)
 
 Eddie también vive en Telegram: le escribes o le mandas **notas de voz** y te
@@ -1032,7 +1044,7 @@ navegador»** (`extension/`) le da esa mano: abre pestañas y, solo si lo confir
   teléfono o Telegram, la extensión viene a buscarlo cada 30 s (las páginas que nadie recoge en 2 min se descartan). Las reuniones
   las lee del Calendario cada 10 min y pone una alarma por cada una. Tablas nuevas: `browser_links`, `browser_pair_codes` y
   `browser_commands` (`db/migrations/0019_browser.sql`). No añade funciones a Vercel: va por `/api/connectors/browser/*`.
-- **Privacidad y seguridad**: pide los permisos `alarms`, `storage` y `debugger`; fuera de una tarea confirmada no lee páginas ni las
+- **Privacidad y seguridad**: pide los permisos `alarms`, `storage`, `debugger`, `sidePanel`, `scripting` y `contextMenus`; fuera de una tarea confirmada y de la lectura opcional del panel (abajo) no lee páginas ni las
   direcciones de tus pestañas. Guarda su clave solo en la extensión (en la base de datos queda su hash). Solo abre direcciones `https`
   públicas, sin contraseña ni IP ni nombres internos (la misma regla en el servidor y en la extensión). Eddie abre directo solo Google
   (documentos, calendario, reuniones), YouTube, servicios de reunión y la propia Eddie; lo demás pide confirmación. Un evento solo

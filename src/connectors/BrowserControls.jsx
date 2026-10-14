@@ -257,7 +257,7 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
       <button type="button" className="btn btn-primary connector__action" disabled={Boolean(busy)} onClick={() => run('link', linkHere)}>
         <Icon name="globe" size={14} /> {busy === 'link' ? 'Vinculando…' : 'Vincular este navegador'}
       </button>
-      <p className="connector__meta">La extensión solo abre pestañas: no lee ni controla lo que tienes abierto.</p>
+      <p className="connector__meta">La extensión abre pestañas y, si lo activas en su panel, lee la página que ves cuando le escribes a Eddie; no controla ninguna pestaña sin tu confirmación.</p>
       {error && (
         <p className="connectors__warning" role="alert">
           {error}
