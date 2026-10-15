@@ -22,6 +22,7 @@
 // this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
 import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
+import { joinGroup, setGroupStatus } from './group.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
 const POLL_ALARM = 'eddie-poll';
@@ -68,6 +69,7 @@ async function openNow(raw, { id } = {}) {
   recent.set(url, Date.now());
   const tab = await chrome.tabs.create({ url, active: true });
   if (tab?.windowId != null) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  if (tab?.id != null) await joinGroup(tab.id); // under «Eddie» in the tab strip
   return true;
 }
 
@@ -245,6 +247,7 @@ async function runTaskLoop(task, tabId) {
     }
   } finally {
     if (attached) await chrome.debugger.detach({ tabId }).catch(() => {});
+    await setGroupStatus(tabId, 'ready'); // «✅ Eddie» again
     await write({ activeTask: null, stopTaskId: null });
   }
 }
@@ -263,6 +266,7 @@ async function maybeStartTask(task) {
   }
   const tab = await chrome.tabs.create({ url, active: true });
   if (tab?.windowId != null) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  await joinGroup(tab.id, 'working'); // «⏳ Eddie» while he works in it
   await waitForLoad(tab.id);
   runTaskLoop(task, tab.id).finally(() => {
     if (runningTaskId === task.id) runningTaskId = null;

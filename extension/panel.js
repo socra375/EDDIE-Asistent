@@ -8,6 +8,8 @@
 // the browser asks them for the permission itself), only the tab in front, only
 // when the user sends Eddie a message with that switch on (never in the background), only
 // its visible text — never a form's contents — and never a page that has a password field.
+import { joinFrontTab } from './group.js';
+
 const ALL_SITES = { origins: ['https://*/*'] };
 const MAX_TEXT = 12000;
 const MAX_SELECTION = 3000;
@@ -70,6 +72,7 @@ export async function openPanel(windowId) {
   if (!id) return { ok: false, error: 'No hay ventana del navegador.' };
   try {
     await chrome.sidePanel.open({ windowId: id });
+    await joinFrontTab(id); // the page Eddie opened on shows up under «Eddie» in the tab strip
     return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
