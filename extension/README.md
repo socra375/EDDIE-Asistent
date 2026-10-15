@@ -19,6 +19,16 @@ documentos que crea y los enlaces que le pidas.
 - Si el panel no puede conservar tu sesión (algunos navegadores bloquean las cookies dentro de un marco) o hay que iniciar sesión, el panel lo dice y ofrece **abrir Eddie en una ventana** pequeña o en una pestaña.
 - Permisos nuevos: `sidePanel`, `scripting` (leer la pestaña, solo con lo anterior) y `contextMenus` (el clic derecho).
 
+## Las pestañas de Eddie (desde la 1.3.0)
+
+Todo lo que Eddie abre o usa aparece en un **grupo de pestañas de color cian llamado «Eddie»**, para que veas de un vistazo qué pestañas son suyas y las cierres o desagrupes de un clic (clic derecho en el grupo):
+
+- una página que Eddie abre (un documento que creó, un enlace, una reunión);
+- la pestaña de una **tarea de navegador**: el grupo dice **«⏳ Eddie»** mientras trabaja y **«✅ Eddie»** cuando termina;
+- la página que tienes delante cuando abres **el panel lateral** de Eddie.
+
+Nunca mueve una **pestaña fijada** ni una que **tú ya metiste en un grupo tuyo**. Solo usa la API de pestañas y grupos del navegador (¿está fijada?, ¿en qué grupo y ventana?): no lee la dirección, el título ni el contenido de ninguna página para esto. Permiso nuevo: `tabGroups` (sin avisos de Chrome; al ser una extensión descomprimida se aplica al recargarla).
+
 ## Qué hace y qué no
 
 - Pide solo `alarms` (para abrir cada reunión a su hora) y `storage` (guarda su clave y lo que ya abrió).
@@ -34,6 +44,7 @@ documentos que crea y los enlaces que le pidas.
 | `manifest.json` | Permisos, direcciones de Eddie que le pueden hablar y la clave que fija su id (`amdcngcajoekfaljieikbgifmhoigdfb`). |
 | `background.js` | Sondeo, alarmas de reuniones, apertura de pestañas, vínculo con Eddie. |
 | `urls.js` | Qué direcciones se abren. |
+| `group.js` | El grupo de pestañas «Eddie» (qué entra, el título según lo que hace). |
 | `popup.html`, `popup.js` | La ventana del ícono: abrir el panel, estado y vínculo manual con código. |
 | `sidepanel.html`, `sidepanel.js` | El panel lateral: marco con Eddie (`/?panel=1`) y el intermediario con la extensión. |
 | `panel.js` | Atajo, clic derecho y la lectura de la página (con sus límites). |

@@ -903,6 +903,14 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **Los límites de siempre**: la tarea se puede detener desde el ícono de la extensión; tiene tope de pasos y de minutos; y lo que Eddie lee en una página son datos, no órdenes (la guía del conector se lo recuerda).
 - **Rutinas**: abrir páginas en una rutina (`open_sites`) ya no pedía tarjeta; no cambia.
 
+## Las pestañas de Eddie: el grupo «Eddie» en tu navegador
+
+- **Qué ves**: todo lo que Eddie abre o usa en tu navegador aparece en un **grupo de pestañas cian llamado «Eddie»** (extensión 1.3.0, `extension/group.js`): una página que abre (un documento, un enlace, una reunión), la pestaña de una **tarea de navegador** (**«⏳ Eddie»** mientras trabaja, **«✅ Eddie»** al terminar) y la página que tienes delante cuando abres su **panel lateral** (Alt+E).
+- **Para qué**: para saber **qué pestañas son de Eddie y cuáles no**. Cuando Eddie trabaja en una página (más aún en una de confianza, sin tarjeta), una página o cuenta puede reaccionar a actividad automática que tú no hiciste con tus manos; con el grupo se ve de un vistazo y puedes cerrarla o desagruparla.
+- **Respeta lo tuyo**: nunca mueve una pestaña fijada ni una que ya metiste en un grupo propio, ni les cambia el nombre; solo usa la API de pestañas y grupos (no lee la dirección, el título ni el contenido de las páginas).
+- **Para tenerlo**: descarga la extensión nueva en Conectores → Tu navegador, reemplaza la carpeta y pulsa «Recargar» en `chrome://extensions` (el hub avisa de la versión nueva). Pedía un permiso nuevo, `tabGroups`, sin avisos de Chrome.
+- **Qué no garantiza**: que un sitio no detecte actividad automática. Eddie hace clics reales con tu sesión; en redes sociales y mensajería solo redacta (nunca envía), justamente para no arriesgar tu cuenta, y lo demás depende de las condiciones de cada servicio.
+
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
 > **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en
