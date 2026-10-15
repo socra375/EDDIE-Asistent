@@ -5,7 +5,8 @@
 //    are close in meaning to what the user just said and hand them to the
 //    model as background.
 import { embedQuery, embedText } from './embed.js';
-import { addEpisode, countEpisodes, saveLimitReached, searchEpisodes } from './store.js';
+import { addEpisode, countEpisodes, saveLimitReached, searchEpisodes, searchEpisodesByWords } from './store.js';
+import { WORDS_MIN_HITS, hitsIn, wordsOf } from '../wordsearch.js';
 import { analyzeConversation } from '../brain/analyze.js';
 import { keepSkills } from '../brain/ingest.js';
 import { itemsToActions } from '../../../src/services/brainKinds.js';
@@ -36,6 +37,9 @@ const plain = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').
 export function isActionRequest(text) {
   return ACTION_VERBS.test(plain(text));
 }
+// A new note this close in meaning to one from the last few days is the same note: it is not stored twice.
+export const DUPLICATE_SIMILARITY = 0.95;
+const DUPLICATE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 // Below this, a message ("ok", "gracias") says nothing to search for.
 const MIN_QUERY_CHARS = 15;
 const MIN_MESSAGES_TO_KEEP = 4;
@@ -78,7 +82,33 @@ export async function recallEpisodes(userId, query, { limit = AUTO_LIMIT, minSim
   return searchEpisodes(userId, embedding, { limit, minSimilarity });
 }
 
-export const recallForTool = (userId, query) => recallEpisodes(userId, query, { limit: TOOL_LIMIT, minSimilarity: TOOL_MIN_SIMILARITY });
+// Past conversations by plain words, for when the search by meaning cannot run or finds nothing (Gemini out of quota,
+// slow or down, or a question phrased unlike the note): notes that share at least `minHits` distinct words with the
+// query, the best matches first.
+export async function recallByWords(userId, query, { limit = AUTO_LIMIT, minHits = WORDS_MIN_HITS } = {}) {
+  const ws = wordsOf(query);
+  if (ws.length < minHits) return [];
+  const rows = await searchEpisodesByWords(userId, ws, { limit: 12 });
+  return rows
+    .map((e) => ({ e, h: hitsIn(ws, e.summary) }))
+    .filter(({ h }) => h >= minHits)
+    .sort((a, b) => b.h - a.h)
+    .slice(0, limit)
+    .map(({ e }) => e);
+}
+
+// For the tool ("¿de qué hablamos…?"): by meaning first; by words when that finds nothing or cannot run, where one
+// shared word is enough because the user asked outright.
+export async function recallForTool(userId, query) {
+  let found = [];
+  try {
+    found = await recallEpisodes(userId, query, { limit: TOOL_LIMIT, minSimilarity: TOOL_MIN_SIMILARITY });
+  } catch {
+    found = [];
+  }
+  if (found.length) return found;
+  return recallByWords(userId, query, { limit: TOOL_LIMIT, minHits: 1 });
+}
 
 // The automatic recall for a chat request. Never throws and never makes the
 // answer wait long: no memory is better than a slow or failed reply.
@@ -88,10 +118,17 @@ export async function recallBlock({ userId, messages, timezone }) {
   if (!query) return '';
   try {
     const wide = isActionRequest(messages.filter((m) => m?.role === 'user').at(-1)?.content || '');
-    const found = await Promise.race([
-      wide ? recallEpisodes(userId, query, { limit: ACTION_LIMIT, minSimilarity: ACTION_MIN_SIMILARITY }) : recallEpisodes(userId, query),
-      new Promise((resolve) => setTimeout(() => resolve([]), wide ? ACTION_TIMEOUT_MS : RECALL_TIMEOUT_MS)),
-    ]);
+    let found = [];
+    try {
+      found = await Promise.race([
+        wide ? recallEpisodes(userId, query, { limit: ACTION_LIMIT, minSimilarity: ACTION_MIN_SIMILARITY }) : recallEpisodes(userId, query),
+        new Promise((resolve) => setTimeout(() => resolve([]), wide ? ACTION_TIMEOUT_MS : RECALL_TIMEOUT_MS)),
+      ]);
+    } catch (err) {
+      console.error('[episodes] recall by meaning failed:', err.message);
+    }
+    // Nothing by meaning (embeddings down, slow, or a different phrasing): a plain-words search needs no embedding.
+    if (!found.length) found = await recallByWords(userId, query, { limit: wide ? ACTION_LIMIT : AUTO_LIMIT });
     return formatRecall(found, timezone, { budget: wide ? ACTION_BUDGET_CHARS : AUTO_BUDGET_CHARS });
   } catch (err) {
     console.error('[episodes] recall failed:', err.message);
@@ -119,9 +156,12 @@ export async function saveConversation({ userId, messages, conversationId = null
   const analysis = await analyze(kept);
   if (!analysis) return { saved: false, reason: 'nada' };
   const embedding = await embedText(analysis.summary, { taskType: 'RETRIEVAL_DOCUMENT' });
-  const episode = await addEpisode(userId, { summary: analysis.summary, embedding, conversationId, source, messageCount: kept.length });
+  // The same thing said again (a document analysed twice, a chat re-sent): the note that is already there stands.
+  const near = (await searchEpisodes(userId, embedding, { limit: 1 }).catch(() => []))[0];
+  const duplicate = Boolean(near && near.similarity >= DUPLICATE_SIMILARITY && Date.now() - Date.parse(near.createdAt) < DUPLICATE_WINDOW_MS);
+  const episode = duplicate ? near : await addEpisode(userId, { summary: analysis.summary, embedding, conversationId, source, messageCount: kept.length });
   const { actions, skills, counts } = itemsToActions(analysis.items, { source: 'conversacion' });
   // The skills never fail the note: they are a bonus of the analysis.
   const learned = keepLearning && skills.length ? await skillsFn(userId, skills, { sourceTitle: 'Conversación con Eddie' }).catch(() => []) : [];
-  return { saved: true, episode, actions, learned, counts };
+  return { saved: true, episode, actions, learned, counts, ...(duplicate ? { duplicate: true } : {}) };
 }

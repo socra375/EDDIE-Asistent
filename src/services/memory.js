@@ -183,6 +183,25 @@ function withList(memory, category, list) {
   return { ...memory, [category]: keepNewest(list, LIMITS[category]) };
 }
 
+// The same fact said another way ("El hosting está en Vercel" / "El hosting del proyecto está en Vercel"): at least
+// four meaningful words each and 80 % of them in common. A shorter or looser overlap is a different fact (or a
+// contradiction: "Usar Neon para la base de datos" is not "Usar Supabase para la base de datos").
+const NEAR_DUPLICATE = 0.8;
+const NEAR_MIN_WORDS = 4;
+const NEGATION = /(?:^| )(?:no|nunca|ni|sin|jamas|tampoco)(?: |$)/;
+// Numbers and negations are what turn "the same words" into a different fact ("20 dólares" / "30 dólares",
+// "usar Neon" / "no usar Neon"), so they must agree before two facts can count as one.
+const numbersOf = (text) => normalizeText(text).split(' ').filter((w) => /\d/.test(w)).sort().join(',');
+export function nearDuplicate(a, b) {
+  if (numbersOf(a) !== numbersOf(b) || NEGATION.test(normalizeText(a)) !== NEGATION.test(normalizeText(b))) return false;
+  const x = new Set(words(a));
+  const y = new Set(words(b));
+  if (x.size < NEAR_MIN_WORDS || y.size < NEAR_MIN_WORDS) return false;
+  let shared = 0;
+  for (const w of x) if (y.has(w)) shared += 1;
+  return shared / (x.size + y.size - shared) >= NEAR_DUPLICATE;
+}
+
 // Adds one fact. Profile and preferences are keyed ("nombre"): saying it again
 // replaces the old value, and the old one is kept in `history` so the change is never silent. The rest skip an
 // exact repeat. Returns { memory, changed, label } — `label` is the one-liner the chat shows — and, when something
@@ -225,7 +244,7 @@ export function addItem(memory, { category, key, text, project, days, source, co
 
   if (category === 'decisions' || category === 'knowledge' || category === 'context') {
     const list = memory[category];
-    if (list.some((i) => normalizeText(i.text) === normalizeText(value))) return { memory, changed: false, label: '' };
+    if (list.some((i) => normalizeText(i.text) === normalizeText(value) || nearDuplicate(i.text, value))) return { memory, changed: false, label: '' };
     const entry = { id: memoryId(), text: value, date: now, ...incoming };
     let base = list;
     let revoked = 0;
@@ -483,6 +502,7 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
 
   const out = [];
   let used = 0;
+  let shown = 0;
   for (const { title, lines } of sections) {
     const kept = [];
     for (const line of lines) {
@@ -491,7 +511,16 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
       kept.push(`- ${line}`);
       used += cost;
     }
+    shown += kept.length;
     if (kept.length) out.push(`${title}:\n${kept.join('\n')}`);
   }
+  // What did not come along is said, so Eddie knows there is more and can ask for it (the `recall` tool) instead of
+  // answering as if this were all he knew. Decisions since replaced are history, not memories left out.
+  const stored = countItems(live) - live.decisions.filter((d) => d.status === 'revocada').length;
+  const left = stored - shown;
+  if (shown && left >= MORE_MIN) out.push(`(Tienes ${left} recuerdos más guardados que no vienen al caso en este mensaje; si preguntan por algo que no ves aquí, búscalo con la herramienta recall antes de decir que no lo sabes.)`);
   return out.join('\n');
 }
+
+// Fewer than this left out is not worth a line.
+const MORE_MIN = 3;

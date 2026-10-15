@@ -6,6 +6,7 @@
 import { embedQuery } from '../episodes/embed.js';
 import { queryFrom } from '../episodes/recall.js';
 import { countNotes, searchNotes, searchNotesByWords } from './store.js';
+import { WORDS_MIN_HITS, hitsIn, wordsOf } from '../wordsearch.js';
 
 // Related text lands around 0.6–0.8 cosine with Gemini embeddings; below is mostly noise.
 // An explicit "what did you learn about…?" is allowed to look further.
@@ -17,7 +18,6 @@ const AUTO_BUDGET_CHARS = 1400;
 // Runs before the first word of the answer: if the notes aren't ready, Eddie answers without them.
 const RECALL_TIMEOUT_MS = 1500;
 // Notes found by plain words (no embedding): only when they share at least this many of the user's words.
-const WORDS_MIN_HITS = 2;
 
 const domain = (url) => {
   try {
@@ -48,10 +48,6 @@ export async function recallKnowledge(userId, query, { limit = AUTO_LIMIT, minSi
   const embedding = await embedQuery(query);
   return searchNotes(userId, embedding, { limit, minSimilarity });
 }
-
-const WORD = /[\p{L}\p{N}]{4,}/gu;
-const STOP = new Set(['sobre', 'acerca', 'aprendiste', 'aprendido', 'aprender', 'investigaste', 'sabes', 'cuales', 'cuáles', 'tiene', 'tienes', 'dime', 'dame', 'esto', 'esta', 'este', 'como', 'cómo', 'para', 'qué', 'que', 'con', 'una', 'los', 'las', 'del', 'por']);
-const wordsOf = (text) => [...new Set((String(text).toLowerCase().match(WORD) || []).filter((w) => !STOP.has(w)))];
 
 // For the tool: by meaning first, by words when that finds nothing or cannot run.
 export async function recallForTool(userId, query) {
@@ -94,7 +90,7 @@ async function byWords(userId, query) {
   const ws = wordsOf(query);
   if (ws.length < WORDS_MIN_HITS) return [];
   const rows = await searchNotesByWords(userId, ws, { limit: 12 });
-  const hits = (n) => ws.filter((w) => `${n.topic || ''} ${n.content}`.toLowerCase().includes(w)).length;
+  const hits = (n) => hitsIn(ws, `${n.topic || ''} ${n.content}`);
   return rows
     .map((n) => ({ n, h: hits(n) }))
     .filter(({ h }) => h >= WORDS_MIN_HITS)

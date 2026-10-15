@@ -871,6 +871,14 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **En el panel Memoria** cada recuerdo muestra su procedencia, si es una deducción, si es una decisión revocada y qué decía antes. Los textos de la memoria que ya tenías se leen igual que antes.
 - **Qué no hace**: no revisa lo que ya estaba guardado (si hay una clave vieja en la memoria, bórrala a mano); no detecta duplicados por significado ni respalda las conversaciones sin Gemini (eso es la parte 2 del plan); y el filtro es estricto a propósito, así que una frase con la palabra «token» o «tarjeta» tampoco se guarda.
 
+## Recordar mejor: sin Gemini, sin repetidos y sabiendo qué falta
+
+- **Conversaciones sin Gemini**: si la búsqueda por significado no puede correr (cuota agotada, lenta, caída) o no encuentra nada, Eddie busca en las notas por **palabras** (`api/_lib/wordsearch.js`, compartido con el segundo cerebro). En la respuesta automática exige **2 palabras en común** (con una sola entraría ruido); si preguntas tú de forma explícita («¿de qué hablamos del logo?») basta una. Guardar sigue necesitando Gemini (el vector de la nota), pero no se pierde: el chat reintenta en el siguiente cierre.
+- **Notas repetidas**: si el resumen de una conversación es casi idéntico (similitud ≥ 0,95) a uno de los últimos 3 días, no se guarda otra nota; lo que la conversación enseñó (datos, preferencias) sigue llegando a la memoria.
+- **Datos repetidos con otras palabras**: en conocimientos, decisiones y contexto, «El hosting está en Vercel» y «El hosting del proyecto está en Vercel» cuentan como uno (80 % de las palabras importantes en común). **Nunca** se funden si cambia un número («20 dólares» / «30 dólares») o el sentido («usar Neon» / «no usar Neon»), porque eso es un cambio, no un repetido: una decisión opuesta se guarda y la anterior se revoca.
+- **«Tienes N recuerdos más»**: el bloque de memoria del prompt termina diciendo cuántos recuerdos se quedaron fuera por no venir al caso (si son 3 o más; las decisiones revocadas no cuentan) y manda a la herramienta `recall` antes de contestar «no lo sé».
+- **Qué no hace**: no busca por significado sin Gemini (las palabras no entienden sinónimos: «cobrar» no encuentra «precio»); y los datos clave-valor del perfil no se comparan por significado (poca cantidad y riesgo de fundir dos hechos distintos con el mismo valor).
+
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
 > **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en
