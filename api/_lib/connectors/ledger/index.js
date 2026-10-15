@@ -304,7 +304,7 @@ export default {
 5. «¿Quién me debe?» = ledger_collections. Si hay atrasados, ofrece recordárselo; si acepta, escribe el mensaje con su tono a partir del texto sugerido y déjalo como borrador con prepare_message (Contactos). El usuario lo envía, tú no.
 6. Factura o recibo: invoice_draft con los precios que dijo; recuérdale que es un borrador, no un comprobante fiscal, y ofrece anotarlo como cobro pendiente.
 7. No des asesoría fiscal ni legal: para impuestos, que lo consulte con un contador.
-8. Si suele haber atrasados, ofrece una rutina diaria («todos los días a las 8 dime si alguien se atrasó») y créala solo si acepta.`,
+8. Si suele haber atrasados, ofrece una rutina («de lunes a viernes a las 8 dime si alguien se atrasó») y créala solo si acepta.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Solo con sesión iniciada. Guarda ingresos, gastos y cobros o pagos pendientes (con fecha de vencimiento), por moneda; el resumen de la mañana te avisa de los cobros atrasados. Es contabilidad básica de apoyo: no declara impuestos ni emite comprobantes fiscales. Borrar pide tu confirmación. Tope de 5000 movimientos.',

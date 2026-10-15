@@ -1,5 +1,6 @@
 // Database side of routines (see db/migrations/0026_routines.sql).
 import { getDb } from '../db.js';
+import { decodeDays, encodeDays } from '../../../src/services/weekdays.js';
 
 export const MAX_ROUTINES = 30;
 
@@ -9,6 +10,8 @@ function shapeRoutine(row) {
     name: row.name,
     triggerType: row.trigger_type,
     time: row.time || null,
+    // The weekdays it runs on (0 = domingo … 6 = sábado); null = every day.
+    days: decodeDays(row.days),
     eventType: row.event_type || null,
     deviceId: row.device_id || null,
     actions: Array.isArray(row.actions) ? row.actions : [],
@@ -17,12 +20,12 @@ function shapeRoutine(row) {
   };
 }
 
-export async function createRoutine(userId, { name, triggerType, time = null, eventType = null, deviceId = null, actions }) {
+export async function createRoutine(userId, { name, triggerType, time = null, days = null, eventType = null, deviceId = null, actions }) {
   const sql = getDb();
   const rows = await sql`
-    insert into routines (user_id, name, trigger_type, time, event_type, device_id, actions)
-    values (${userId}, ${name}, ${triggerType}, ${time}, ${eventType}, ${deviceId}, ${JSON.stringify(actions)})
-    returning id, name, trigger_type, time, event_type, device_id, actions, enabled, state
+    insert into routines (user_id, name, trigger_type, time, days, event_type, device_id, actions)
+    values (${userId}, ${name}, ${triggerType}, ${time}, ${encodeDays(days)}, ${eventType}, ${deviceId}, ${JSON.stringify(actions)})
+    returning id, name, trigger_type, time, days, event_type, device_id, actions, enabled, state
   `;
   return shapeRoutine(rows[0]);
 }
@@ -30,7 +33,7 @@ export async function createRoutine(userId, { name, triggerType, time = null, ev
 export async function listRoutines(userId, limit = MAX_ROUTINES) {
   const sql = getDb();
   const rows = await sql`
-    select id, name, trigger_type, time, event_type, device_id, actions, enabled, state
+    select id, name, trigger_type, time, days, event_type, device_id, actions, enabled, state
     from routines where user_id = ${userId} order by created_at desc limit ${limit}
   `;
   return rows.map(shapeRoutine);
@@ -56,7 +59,7 @@ export async function deleteRoutineByName(userId, name) {
 export async function dueScheduleRoutines() {
   const sql = getDb();
   const rows = await sql`
-    select r.id, r.user_id, r.name, r.time, r.actions, r.last_run_on, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
+    select r.id, r.user_id, r.name, r.time, r.days, r.actions, r.last_run_on, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
     from routines r
     left join telegram_links l on l.user_id = r.user_id
     join users u on u.id = r.user_id
@@ -68,6 +71,7 @@ export async function dueScheduleRoutines() {
     userId: r.user_id,
     name: r.name,
     time: r.time,
+    days: decodeDays(r.days),
     actions: Array.isArray(r.actions) ? r.actions : [],
     lastRunOn: r.last_run_on ? String(r.last_run_on).slice(0, 10) : null,
     chatId: r.chat_id == null ? null : Number(r.chat_id),
@@ -95,7 +99,7 @@ export async function releaseRoutineDay(id, date) {
 export async function dueEventRoutines() {
   const sql = getDb();
   const rows = await sql`
-    select r.id, r.user_id, r.name, r.event_type, r.device_id, r.actions, r.state, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
+    select r.id, r.user_id, r.name, r.days, r.event_type, r.device_id, r.actions, r.state, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
     from routines r
     left join telegram_links l on l.user_id = r.user_id
     join users u on u.id = r.user_id
@@ -106,6 +110,7 @@ export async function dueEventRoutines() {
     id: String(r.id),
     userId: r.user_id,
     name: r.name,
+    days: decodeDays(r.days),
     eventType: r.event_type,
     deviceId: r.device_id,
     actions: Array.isArray(r.actions) ? r.actions : [],
@@ -125,7 +130,7 @@ export async function setRoutineState(id, state) {
 export async function bootRoutines(deviceId) {
   const sql = getDb();
   const rows = await sql`
-    select r.id, r.user_id, r.name, r.actions, r.state, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
+    select r.id, r.user_id, r.name, r.days, r.actions, r.state, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
     from routines r
     left join telegram_links l on l.user_id = r.user_id
     join users u on u.id = r.user_id
@@ -135,6 +140,7 @@ export async function bootRoutines(deviceId) {
     id: String(r.id),
     userId: r.user_id,
     name: r.name,
+    days: decodeDays(r.days),
     actions: Array.isArray(r.actions) ? r.actions : [],
     state: r.state && typeof r.state === 'object' ? r.state : {},
     chatId: r.chat_id == null ? null : Number(r.chat_id),

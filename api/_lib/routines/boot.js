@@ -10,6 +10,8 @@
 import { createJob } from '../computer/store.js';
 import { enqueue } from '../browser/store.js';
 import { safeHttpsUrl } from '../browser/urls.js';
+import { localParts } from '../connectors/dates.js';
+import { runsOn } from '../../../src/services/weekdays.js';
 import { bootRoutines, markBootPending } from './store.js';
 
 export const BOOT_ACTIONS = ['open_sites', 'say'];
@@ -37,9 +39,17 @@ async function openSites(device, userId, urls) {
 }
 
 // Never throws (the agent's hello must always be answered).
-export async function handleDeviceBoot(device) {
+export async function handleDeviceBoot(device, at = new Date()) {
   try {
     for (const routine of await bootRoutines(device.id)) {
+      // «Solo entre semana»: on the other days the PC starts up and nothing happens.
+      let date = null;
+      try {
+        date = localParts(at.toISOString(), routine.timezone).date;
+      } catch {
+        // unusable time zone: the routine runs rather than staying silent
+      }
+      if (date && !runsOn(routine.days, date)) continue;
       let rest = false;
       for (const action of routine.actions) {
         if (action.type === 'open_sites') await openSites(device, routine.userId, action.urls || []);
