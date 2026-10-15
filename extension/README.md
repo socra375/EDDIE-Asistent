@@ -29,6 +29,10 @@ Todo lo que Eddie abre o usa aparece en un **grupo de pestañas de color cian ll
 
 Nunca mueve una **pestaña fijada** ni una que **tú ya metiste en un grupo tuyo**. Solo usa la API de pestañas y grupos del navegador (¿está fijada?, ¿en qué grupo y ventana?): no lee la dirección, el título ni el contenido de ninguna página para esto. Permiso nuevo: `tabGroups` (sin avisos de Chrome; al ser una extensión descomprimida se aplica al recargarla).
 
+## Su mouse y su teclado (desde la 1.4.0)
+
+En una **tarea de navegador** que tú confirmaste (o en una página de confianza), Eddie maneja **esa pestaña** con el mouse y el teclado, un paso a la vez (`actions.js`): clic, doble clic, clic derecho, arrastrar, escribir, teclas (Enter, Tab, Escape, Retroceso, Suprimir, Espacio, flechas, Inicio, Fin, Re Pág, Av Pág, Ctrl+A y Ctrl+Z), desplazar y esperar. Nada más: ni portapapeles, ni recargar, ni cerrar ventanas. Las capturas van como JPEG. La página de Eddie puede pedirle que empiece de inmediato (mensaje `wake`: solo revisa si hay una tarea; no trae datos). Nunca teclea contraseñas, tarjetas ni códigos de seguridad, y se detiene en el botón **Detener** del ícono.
+
 ## Qué hace y qué no
 
 - Pide solo `alarms` (para abrir cada reunión a su hora) y `storage` (guarda su clave y lo que ya abrió).
@@ -44,6 +48,7 @@ Nunca mueve una **pestaña fijada** ni una que **tú ya metiste en un grupo tuyo
 | `manifest.json` | Permisos, direcciones de Eddie que le pueden hablar y la clave que fija su id (`amdcngcajoekfaljieikbgifmhoigdfb`). |
 | `background.js` | Sondeo, alarmas de reuniones, apertura de pestañas, vínculo con Eddie. |
 | `urls.js` | Qué direcciones se abren. |
+| `actions.js` | El mouse y el teclado de una tarea de navegador (qué teclas, cómo se arrastra, cuánto se espera). |
 | `group.js` | El grupo de pestañas «Eddie» (qué entra, el título según lo que hace). |
 | `popup.html`, `popup.js` | La ventana del ícono: abrir el panel, estado y vínculo manual con código. |
 | `sidepanel.html`, `sidepanel.js` | El panel lateral: marco con Eddie (`/?panel=1`) y el intermediario con la extensión. |

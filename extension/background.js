@@ -16,13 +16,14 @@
 // The one exception: a "browser task" (see runTaskLoop below) the user
 // explicitly confirmed in Eddie's chat. Only for that one tab, only for as
 // long as the task runs, Eddie does look (a screenshot) and does act (a
-// click, a key, some typed text) — through the Chrome DevTools protocol
+// click, a double click, a drag, a key, some typed text) — through the Chrome DevTools protocol
 // (`chrome.debugger`), never a content script, so it never reads page data
 // outside of what a screenshot shows. The user can stop it any time from
 // this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
 import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
 import { joinGroup, setGroupStatus } from './group.js';
+import { performAction } from './actions.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
 const POLL_ALARM = 'eddie-poll';
@@ -141,15 +142,10 @@ async function poll() {
 // (the Chrome DevTools protocol): no content script, nothing read from the
 // page beyond what a screenshot shows. ----
 
-const TASK_STEP_DELAY_MS = 900;
-const CLIENT_MAX_ACTIONS = 30;
-const KEY_DEFS = {
-  Enter: { keyCode: 13, code: 'Enter', key: 'Enter', text: '\r' },
-  Tab: { keyCode: 9, code: 'Tab', key: 'Tab' },
-  Escape: { keyCode: 27, code: 'Escape', key: 'Escape' },
-  Backspace: { keyCode: 8, code: 'Backspace', key: 'Backspace' },
-};
-
+const TASK_STEP_DELAY_MS = 500;
+const CLIENT_MAX_ACTIONS = 40;
+// A JPEG is a fraction of a PNG's size: faster to send, and a big screen no longer goes over the server's limit for a picture.
+const SHOT = { format: 'jpeg', quality: 60 };
 let runningTaskId = null; // guards against starting the same task twice in one worker lifetime
 
 function waitForLoad(tabId) {
@@ -174,35 +170,12 @@ function waitForLoad(tabId) {
 async function imageDims(base64) {
   try {
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
     const dims = { width: bitmap.width, height: bitmap.height };
     bitmap.close();
     return dims;
   } catch {
     return null;
-  }
-}
-
-// chrome.debugger's Input.* coordinates are CSS pixels; the model answers in
-// the screenshot's own pixel grid. `scale` converts one to the other.
-async function performAction(tabId, action, scale) {
-  const target = { tabId };
-  if (action.action === 'click') {
-    const x = (action.x || 0) / scale;
-    const y = (action.y || 0) / scale;
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
-  } else if (action.action === 'type') {
-    await chrome.debugger.sendCommand(target, 'Input.insertText', { text: action.text });
-  } else if (action.action === 'key') {
-    const def = KEY_DEFS[action.key];
-    if (!def) return;
-    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', { type: 'keyDown', windowsVirtualKeyCode: def.keyCode, code: def.code, key: def.key, text: def.text });
-    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: def.keyCode, code: def.code, key: def.key });
-  } else if (action.action === 'scroll') {
-    const x = (action.x || 0) / scale;
-    const y = (action.y || 0) / scale;
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: action.deltaY || 0 });
   }
 }
 
@@ -220,7 +193,7 @@ async function runTaskLoop(task, tabId) {
       let metrics;
       try {
         [shot, metrics] = await Promise.all([
-          chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', { format: 'png' }),
+          chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', SHOT),
           chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics'),
         ]);
       } catch {
@@ -231,7 +204,7 @@ async function runTaskLoop(task, tabId) {
       const scale = dims ? dims.width / cssWidth : 1;
       let resp;
       try {
-        resp = await api('task-step', { taskId: task.id, image: shot.data, width: dims?.width || 0, height: dims?.height || 0, history });
+        resp = await api('task-step', { taskId: task.id, image: shot.data, mimeType: 'image/jpeg', width: dims?.width || 0, height: dims?.height || 0, history });
       } catch {
         break; // offline, or the server said no — either way, stop quietly
       }
@@ -254,9 +227,9 @@ async function runTaskLoop(task, tabId) {
 
 async function maybeStartTask(task) {
   if (!task || runningTaskId === task.id) return;
+  runningTaskId = task.id; // claimed before anything is awaited: the half-minute check and a wake-up can arrive together
   const { activeTask } = await read('activeTask');
   if (activeTask?.id === task.id) return; // a previous worker instance already claimed it
-  runningTaskId = task.id;
   await write({ activeTask: { id: task.id, goal: task.goal, actionCount: 0, maxActions: CLIENT_MAX_ACTIONS }, stopTaskId: null });
   const url = openableUrl(task.startUrl);
   if (!url) {
@@ -406,6 +379,10 @@ async function handle(message, fromPage) {
       return { ok: true };
     case 'state':
       return fromPage ? { ok: false } : state();
+    // Eddie's page just created a browser task: look for it now instead of at the next half minute (only checks; nothing in the message is used).
+    case 'wake':
+      poll();
+      return { ok: true };
     case 'poll-now':
       if (fromPage) return { ok: false };
       await poll();

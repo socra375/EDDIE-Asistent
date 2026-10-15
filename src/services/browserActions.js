@@ -1,13 +1,13 @@
 // Carries out the browser actions Eddie's tools emit: `open_url` (a YouTube
 // page, see the youtube connector), `browser_open` (a page the user's
 // browser should open: their meeting, a document Eddie made, a site they
-// asked for — see the browser connector), `play_video` (the player inside
+// asked for — see the browser connector), `browser_wake` (start a browser task at once), `play_video` (the player inside
 // Eddie, src/player/YouTubePlayer.jsx) and `player_control` (pause / resume /
 // close it). Addresses are re-checked here even though the server already
 // built them — a defence in depth, not a second source of truth: YouTube only
 // for `open_url`, public https pages for `browser_open`.
 import { openableUrl } from '../../extension/urls.js';
-import { bridgeState, openViaExtension } from './browserBridge.js';
+import { askExtension, bridgeState, openViaExtension } from './browserBridge.js';
 import { REMOTE_VIEW_EVENT } from './remoteShare.js';
 
 const HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be']);
@@ -67,6 +67,9 @@ export function applyBrowserActions(actions) {
       if (!url || links.some((l) => l.url === url)) continue;
       const id = /^[0-9a-f-]{36}$/i.test(String(action.id || '')) ? action.id : undefined;
       links.push({ url, label: String(action.label || hostOf(url)).slice(0, 120), opened: openTab(url, id) });
+    } else if (action?.type === 'browser_wake') {
+      // A browser task was just created: the extension looks for it now instead of at its next half-minute check.
+      if (bridgeState().installed) askExtension({ type: 'wake' });
     } else if (action?.type === 'play_video' && VIDEO_ID_RE.test(String(action.videoId || ''))) {
       const url = `https://www.youtube.com/watch?v=${action.videoId}`;
       if (links.some((l) => l.url === url)) continue;
