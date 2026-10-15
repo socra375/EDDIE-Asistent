@@ -6,6 +6,7 @@
 // once the answer is complete (see applyMemoryActions in the app).
 import { normalize } from '../tasks/index.js';
 import { clip } from '../http.js';
+import { looksSecret } from '../../../../src/services/secrets.js';
 
 const CATEGORY_LABEL = {
   profile: 'Perfil',
@@ -16,8 +17,8 @@ const CATEGORY_LABEL = {
   context: 'Contexto temporal',
 };
 
-// Memory is for what helps, not for secrets: passwords, keys, card numbers.
-const SECRET_RE = /contrase[ñn]a|password|passwd|api[ _-]?key|secret|token|clave (de|del|privada)|tarjeta|cvv|iban|\b\d{13,19}\b/i;
+// Memory is for what helps, not for secrets (passwords, keys, card numbers): the same filter the automatic paths use
+// (src/services/secrets.js), so no door lets through what another one stops.
 const MAX_MATCHES = 6;
 
 const words = (s) => normalize(s).split(' ').filter((w) => w.length > 2);
@@ -49,15 +50,37 @@ function remember(args, context) {
   const text = String(args.text || '').replace(/\s+/g, ' ').trim();
   if (!text) return { error: 'Falta qué recordar.' };
   if (text.length > 300) return { error: 'Es demasiado largo para recordarlo (máximo 300 caracteres); resúmelo.' };
-  if (SECRET_RE.test(text) || SECRET_RE.test(args.key || '')) {
+  if (looksSecret(text) || looksSecret(args.key || '') || looksSecret(args.project || '')) {
     return { error: 'No guardo contraseñas, claves ni datos de tarjetas. Dile al usuario que eso no se guarda en la memoria.' };
   }
   const keyed = args.category === 'perfil' || args.category === 'preferencia';
   const key = String(args.key || '').replace(/\s+/g, ' ').trim().slice(0, 60);
   if (keyed && !key) return { error: 'Para perfil y preferencias indica un nombre corto en "key" (por ejemplo "nombre" o "tono").' };
-  context.emit?.({ type: 'memory_add', category: args.category, key: keyed ? key : undefined, text, project: args.project, days: args.days });
+  // A decision that replaces an earlier one: that one stays as history, marked «revocada».
+  const supersedes = args.category === 'decision' && args.replaces ? findMemory((context.memory || []).filter((m) => m.c === 'decisions'), args.replaces).slice(0, 3).map((m) => m.id) : undefined;
+  // The value this fact is about to replace, so Eddie can say so instead of changing it in silence.
+  const previous = keyed ? previousValue(context.memory, args.category, key) : null;
+  // Said by the user in the chat and saved by the tool: it counts as confirmed.
+  context.emit?.({ type: 'memory_add', category: args.category, key: keyed ? key : undefined, text, project: args.project, days: args.days, source: 'chat', confidence: 'confirmado', ...(supersedes?.length ? { supersedes } : {}) });
   const where = { perfil: 'tu perfil', preferencia: 'tus preferencias', decision: 'tus decisiones', conocimiento: 'tus conocimientos', contexto: 'tu contexto temporal' }[args.category];
-  return { saved: true, summary: keyed ? `Guardado en ${where}: ${key} = ${text}` : `Guardado en ${where}: ${text}`, note: 'Se guarda al terminar tu respuesta; avisa al usuario en una frase corta ("Lo recordaré").' };
+  const changed = previous && normalize(previous) !== normalize(text);
+  return {
+    saved: true,
+    summary: keyed ? `Guardado en ${where}: ${key} = ${text}${changed ? ` (antes: ${previous})` : ''}` : `Guardado en ${where}: ${text}`,
+    ...(changed ? { previous } : {}),
+    ...(supersedes?.length ? { replaced_decisions: supersedes.length } : {}),
+    note: changed
+      ? `Se guarda al terminar tu respuesta. Esto cambia un dato anterior («${previous}»): dile al usuario en una frase que lo actualizaste y qué decía antes.`
+      : 'Se guarda al terminar tu respuesta; avisa al usuario en una frase corta ("Lo recordaré").',
+  };
+}
+
+// What a keyed fact (profile, preferences) says right now: the memory sent along lists it as "key: text".
+function previousValue(items, category, key) {
+  const c = category === 'perfil' ? 'profile' : 'preferences';
+  const wanted = normalize(key);
+  const hit = (items || []).find((m) => m.c === c && normalize(String(m.t).split(': ')[0]) === wanted);
+  return hit ? String(hit.t).slice(String(hit.t).indexOf(': ') + 2) : null;
 }
 
 const PROJECT_FIELDS = { status: 'status', stack: 'stack', repo: 'repo', last_change: 'lastChange', next_goal: 'nextGoal' };
@@ -73,8 +96,8 @@ function updateProject(args, context) {
   if (project.repo && !REPO_NAME_RE.test(project.repo)) return { error: 'El repo debe tener la forma "dueño/nombre", por ejemplo "socra375/EDDIE-Asistent".' };
   if (Object.keys(project).length < 2) return { error: 'Indica al menos un dato del proyecto: estado, stack, repo, último cambio o próximo objetivo.' };
   const text = Object.values(project).join(' ');
-  if (SECRET_RE.test(text)) return { error: 'No guardo contraseñas, claves ni tokens en la memoria.' };
-  context.emit?.({ type: 'memory_project', project });
+  if (looksSecret(text)) return { error: 'No guardo contraseñas, claves ni tokens en la memoria.' };
+  context.emit?.({ type: 'memory_project', project, source: 'chat', confidence: 'confirmado' });
   return { saved: true, project, summary: `Proyecto "${name}" guardado en tu memoria.` };
 }
 
@@ -84,7 +107,8 @@ function recall(args, context) {
   const query = String(args.query || '').trim();
   const matches = findMemory(items, query).slice(0, 8);
   if (!matches.length) return { found: 0, note: `No hay nada guardado sobre "${clip(query, 60)}".` };
-  return { found: matches.length, items: matches.map((m) => ({ categoria: CATEGORY_LABEL[m.c] || m.c, texto: m.t })) };
+  // «sin confirmar» = a deduction, not something the user said; «revocada» = a decision since replaced.
+  return { found: matches.length, items: matches.map((m) => ({ categoria: CATEGORY_LABEL[m.c] || m.c, texto: m.t, ...(m.f ? { aviso: m.f } : {}) })) };
 }
 
 function prepareForget(args, context) {
@@ -137,6 +161,7 @@ export default {
             key: { type: 'STRING', description: 'Perfil/preferencia: nombre corto del dato ("nombre", "tono").' },
             project: { type: 'STRING', description: 'Decision: proyecto al que pertenece.' },
             days: { type: 'INTEGER', description: 'Contexto: días de vigencia (7 por defecto, máx. 60).' },
+            replaces: { type: 'STRING', description: 'Decision: texto de la decisión anterior que esta reemplaza (la anterior queda como historial «revocada»).' },
           },
           required: ['category', 'text'],
         },

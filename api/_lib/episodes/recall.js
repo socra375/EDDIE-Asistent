@@ -120,7 +120,7 @@ export async function saveConversation({ userId, messages, conversationId = null
   if (!analysis) return { saved: false, reason: 'nada' };
   const embedding = await embedText(analysis.summary, { taskType: 'RETRIEVAL_DOCUMENT' });
   const episode = await addEpisode(userId, { summary: analysis.summary, embedding, conversationId, source, messageCount: kept.length });
-  const { actions, skills, counts } = itemsToActions(analysis.items);
+  const { actions, skills, counts } = itemsToActions(analysis.items, { source: 'conversacion' });
   // The skills never fail the note: they are a bonus of the analysis.
   const learned = keepLearning && skills.length ? await skillsFn(userId, skills, { sourceTitle: 'Conversación con Eddie' }).catch(() => []) : [];
   return { saved: true, episode, actions, learned, counts };

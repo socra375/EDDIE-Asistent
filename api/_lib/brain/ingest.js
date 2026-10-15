@@ -50,7 +50,7 @@ export async function keepSkills(userId, skills, { embed = (title) => embedder(t
 export async function ingestDocument({ userId, name, text, target }, deps = {}) {
   const { analyze = analyzeDocument, embed = embedder } = deps;
   const analysis = await analyze({ name, text });
-  const { actions, counts } = itemsToActions(analysis.items, { skillsToMemory: target === 'memory' });
+  const { actions, counts } = itemsToActions(analysis.items, { skillsToMemory: target === 'memory', source: 'documento' });
   const base = { target, name: String(name || ''), title: analysis.title, kind: analysis.kind, category: analysis.category, summary: analysis.summary, counts, truncated: analysis.truncated };
 
   if (target === 'memory') {

@@ -72,11 +72,11 @@ export function SettingsProvider({ children }) {
 
   function rememberFact(item) {
     if (!settings.memoryEnabled) return false;
-    return commitMemory(addItem(getMemory(), item));
+    return commitMemory(addItem(getMemory(), { source: 'manual', confidence: 'confirmado', ...item }));
   }
 
   function saveProject(fields) {
-    return commitMemory(upsertProject(getMemory(), fields));
+    return commitMemory(upsertProject(getMemory(), { source: 'manual', confidence: 'confirmado', ...fields }));
   }
 
   function forgetItem(id) {

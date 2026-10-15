@@ -114,7 +114,7 @@ export function sanitizeContext(context) {
     result.memory = context.memory
       .filter((m) => m && typeof m.id === 'string' && MEMORY_CATEGORIES.has(m.c) && typeof m.t === 'string')
       .slice(0, 80)
-      .map((m) => ({ id: m.id.slice(0, 40), c: m.c, t: m.t.slice(0, 220) }));
+      .map((m) => ({ id: m.id.slice(0, 40), c: m.c, t: m.t.slice(0, 220), ...(typeof m.f === 'string' && m.f ? { f: m.f.slice(0, 40) } : {}) }));
   }
   return result;
 }
