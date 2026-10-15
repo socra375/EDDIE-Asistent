@@ -1000,3 +1000,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Páginas de confianza de «Tu navegador» */
+.browserlink__trusted {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.8rem 0;
+}
+
+.browserlink__sites {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browserlink__sites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
