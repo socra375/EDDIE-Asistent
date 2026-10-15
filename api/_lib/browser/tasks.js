@@ -4,8 +4,8 @@
 // executes it and asks again).
 import { getDb } from '../db.js';
 
-export const MAX_ACTIONS_DEFAULT = 25;
-export const TASK_MAX_MINUTES = 4;
+export const MAX_ACTIONS_DEFAULT = 40;
+export const TASK_MAX_MINUTES = 8;
 
 function shapeTask(row) {
   return {

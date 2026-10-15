@@ -93,7 +93,7 @@ async function taskStepRoute(userId, body) {
 
   let image;
   try {
-    image = sanitizeImages([{ mimeType: 'image/png', data: String(body?.image || '') }])[0];
+    image = sanitizeImages([{ mimeType: body?.mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png', data: String(body?.image || '') }])[0];
   } catch (err) {
     return { status: 400, json: { error: err.message } };
   }

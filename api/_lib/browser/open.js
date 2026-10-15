@@ -7,7 +7,7 @@
 import { enqueue, linkByUser } from './store.js';
 import { safeHttpsUrl } from './urls.js';
 
-export const EXTENSION_VERSION = '1.3.0'; // keep equal to extension/manifest.json: the hub offers the download when the installed one is older
+export const EXTENSION_VERSION = '1.4.0'; // keep equal to extension/manifest.json: the hub offers the download when the installed one is older
 
 async function linkOf(context) {
   try {
