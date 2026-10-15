@@ -88,6 +88,7 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
   const connected = connector.status === 'connected';
   const link = connector.details?.browser;
   const latest = connector.details?.latestVersion;
+  const trusted = Array.isArray(connector.details?.trusted) ? connector.details.trusted : [];
   const saved = link?.prefs || { autoMeetings: true, leadMinutes: 1, openCreated: true };
   // A choice shows at once; it counts only while the server's answer is still the one it was made against.
   const [pending, setPending] = useState(null);
@@ -199,6 +200,34 @@ export default function BrowserControls({ connector, signedIn, onConnect, onChan
             <input type="checkbox" checked={prefs.openCreated} disabled={busy === 'prefs'} onChange={(e) => setPref({ openCreated: e.target.checked })} />
             <span>Abrir lo que Eddie cree o edita (documentos, hojas, presentaciones)</span>
           </label>
+        </div>
+        <div className="browserlink__trusted">
+          <p className="connector__meta">
+            <strong>Páginas de confianza</strong>: Eddie las abre y actúa dentro (clics, escribir) sin pedirte permiso cada vez. Para añadir una, dile en el chat «confía en canva.com»; te pedirá confirmar una vez.
+          </p>
+          {trusted.length ? (
+            <ul className="browserlink__sites">
+              {trusted.map((domain) => (
+                <li key={domain}>
+                  <span>{domain}</span>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={Boolean(busy)}
+                    aria-label={`Quitar ${domain} de las páginas de confianza`}
+                    onClick={async () => {
+                      const ok = await run('trusted', () => post('trusted-remove', { domain }));
+                      if (ok) onChanged(true);
+                    }}
+                  >
+                    Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="connector__meta">Todavía ninguna (Google, YouTube y las reuniones ya se abren solas).</p>
+          )}
         </div>
         <div className="probe__actions">
           <button

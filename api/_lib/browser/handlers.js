@@ -8,6 +8,7 @@ import { requireUser } from '../session.js';
 import { upcomingMeetings } from './meetings.js';
 import { consumePairCode, createLink, createPairCode, deleteLink, enqueue, linkByToken, linkByUser, takeCommands, updateHello, updatePrefs, wasTaken } from './store.js';
 import { isMessagingUrl, safeHttpsUrl } from './urls.js';
+import { domainOf, listTrusted, removeTrusted } from './trusted.js';
 import { decideNextAction } from './agentStep.js';
 import { getTask, pendingTaskFor, recordStep, TASK_MAX_MINUTES } from './tasks.js';
 import { sanitizeImages } from '../images.js';
@@ -147,6 +148,12 @@ export async function handleBrowserRoute({ method, path = [], cookies = {}, head
   if (action === 'unlink') {
     await deleteLink(user.id);
     return { status: 200, json: { ok: true } };
+  }
+  if (action === 'trusted-remove') {
+    const { domain, error } = domainOf(body?.domain);
+    if (error) return { status: 400, json: { error } };
+    await removeTrusted(user.id, domain);
+    return { status: 200, json: { ok: true, trusted: await listTrusted(user.id) } };
   }
   if (action === 'prefs') {
     const { prefs, error } = validPrefs(body);

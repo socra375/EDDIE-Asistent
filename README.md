@@ -893,6 +893,16 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **Qué respeta**: las de **hora** (los días en que no toca no se marcan como hechas: simplemente esperan), las de **«cuando termine la descarga»** (una descarga que acaba en un día excluido se ve y se deja pasar) y las de **«cuando encienda el PC»** (en los días excluidos el PC arranca y no pasa nada: ni abre páginas ni dice nada). `list_routines` dice cuándo corre cada una («de lunes a viernes a las 08:00»).
 - **Límites**: sigue sin haber «cada 2 horas» ni «el día 1 de cada mes»; y no se pueden poner horas distintas por día (para eso, dos rutinas: una entre semana y otra de fin de semana).
 
+## Páginas de confianza: abrirlas y actuar dentro sin pedir permiso
+
+- **Qué es**: una lista de sitios (p. ej. `canva.com`, `notion.so`) en los que le das **confianza total** a Eddie. Ahí **se abren al instante** (`open_website`, `open_in_browser`) y, con `browser_task`, Eddie **hace clics y escribe en la página sin la tarjeta de confirmación**. En cualquier otro sitio todo sigue igual: tarjeta. Cubre el dominio y sus subdominios (`canva.com` incluye `app.canva.com`, **no** `notcanva.com` ni `canva.com.evil.io`).
+- **Cómo se añade**: diciéndoselo en el chat («confía en canva.com», «dame acceso a notion.so»). Sale **una tarjeta** (`trust_site`, roja, «Sí, confiar») que confirmas **una vez**; desde entonces no hay más tarjetas en ese sitio. Es una tarjeta a propósito: así **ninguna página, correo o documento puede darse confianza a sí mismo** aunque intente engañar al modelo. Se quita diciendo «ya no confíes en…» (`untrust_site`, sin tarjeta) o con **Quitar** en Conectores → Tu navegador, donde también se ve la lista (`list_trusted_sites`).
+- **Dónde se guarda**: tabla `browser_trusted_sites` (`db/migrations/0035_browser_trusted_sites.sql`, nueva y aditiva), máximo 20 por usuario; la lógica está en `api/_lib/browser/trusted.js`. Cada usuario tiene la suya.
+- **Lo que NO cambia aunque confíes** (elegiste mantener lo mínimo): solo **https y webs públicas** — nada de direcciones internas ni IP, ni `http`, ni enlaces con contraseña dentro; ni siquiera para un sitio de confianza. Tampoco se pueden dar de confianza los sitios compartidos donde cualquiera publica (`vercel.app`, `github.io`, `blogspot.com`, `com.do`, `co.uk`…): hay que dar la página concreta (`mi-sitio.vercel.app`).
+- **Y dentro de la página** siguen las reglas del piloto de la extensión (`agentStep.js`), que no son una confirmación sino lo que Eddie no sabe ni debe hacer: **nunca contraseñas, pagos ni datos personales**, y en redes sociales y mensajería (Instagram, WhatsApp Web…) **solo redacta una respuesta y nunca la envía**, ni vigila conversaciones. Si quieres cambiar alguna de esas reglas, dilo: es otra decisión.
+- **Los límites de siempre**: la tarea se puede detener desde el ícono de la extensión; tiene tope de pasos y de minutos; y lo que Eddie lee en una página son datos, no órdenes (la guía del conector se lo recuerda).
+- **Rutinas**: abrir páginas en una rutina (`open_sites`) ya no pedía tarjeta; no cambia.
+
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
 > **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en
