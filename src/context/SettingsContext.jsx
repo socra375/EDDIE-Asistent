@@ -8,6 +8,7 @@ import {
   clearMemory,
 } from '../utils/storage';
 import { addItem, upsertProject, removeItems, emptyMemory, normalizeMemory } from '../services/memory';
+import { saveBackup } from '../services/memoryBackup';
 import { MEMORY_CHANGED_EVENT } from '../services/memoryActions';
 
 const SettingsContext = createContext(null);
@@ -85,6 +86,12 @@ export function SettingsProvider({ children }) {
   }
 
   function forgetEverything() {
+    // A copy is held for a week so a mistake can be undone (see MemoryTools); it stays on this device only.
+    try {
+      saveBackup(window.localStorage, getMemory());
+    } catch {
+      // without storage there is no copy, and the memory is cleared all the same
+    }
     clearMemory();
     setMemory(emptyMemory());
   }

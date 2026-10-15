@@ -10,7 +10,8 @@
     "build": "node scripts/build-extension.mjs && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "extension": "node scripts/build-extension.mjs"
+    "extension": "node scripts/build-extension.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
