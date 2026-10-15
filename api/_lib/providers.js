@@ -5,6 +5,7 @@
 import { nextThinking, rejectsThinking, thinkingFor } from './geminiThinking.js';
 import { hasImages } from './images.js';
 import { createToolset, intentFromMessages } from './connectors/registry.js';
+import { createDelegator } from './delegation.js';
 import { fetchWithRetry as sharedFetchWithRetry } from './fetchWithRetry.js';
 
 // "-latest" is Google's own rolling alias: it always resolves to Google's
@@ -904,7 +905,12 @@ export async function callProvider({ provider: requestedProvider, model: request
   const provider = plan.primary;
   const model = plan.keepModel ? requestedModel : undefined;
   const startedAt = Date.now();
-  const toolset = createToolset({ disabled: disabledConnectors, context, onStep, intent: intentFromMessages(messages, context.memory) });
+  // The team: a request that touches two specialist areas hands each its part (see delegation.js). It uses whichever
+  // provider the main call is on right now, so `state` follows the fallbacks below.
+  const shared = { actions: [], confirmations: [], steps: [] };
+  const team = { provider, model, chain: plan.backups.map((b) => b.provider) };
+  const delegate = createDelegator({ callOne: callSingleProvider, state: team, base: context, shared, onStep, disabled: disabledConnectors });
+  const toolset = createToolset({ disabled: disabledConnectors, context: { ...context, delegate }, onStep, intent: intentFromMessages(messages, context.memory), shared });
   const withToolOutput = (result) => ({ ...result, actions: toolset.actions, confirmations: toolset.confirmations, steps: toolset.steps });
   // The playbooks of the agents on offer ride on the system prompt, only for providers that can call tools (Claude here has none).
   const systemFor = (p) => (p === 'claude' || !toolset.guide ? system : `${system}\n\n${toolset.guide}`);
@@ -928,6 +934,8 @@ export async function callProvider({ provider: requestedProvider, model: request
       // (a task it created, a card to confirm) is dropped; the backup's own
       // calls queue it again if needed.
       toolset.reset();
+      team.provider = backup.provider;
+      team.model = undefined;
       try {
         const result = await callSingleProvider({ provider: backup.provider, system: systemFor(backup.provider), messages, toolset, onChunk: trackedChunk });
         return { ...withToolOutput(result), fallbackFrom: provider };

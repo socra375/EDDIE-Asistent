@@ -40,6 +40,7 @@ import { PLANNED_CONNECTORS } from './planned.js';
 import { randomUUID } from 'node:crypto';
 import { validateArgs } from './validate.js';
 import { clip } from './http.js';
+import { delegateTool, teamGuide } from './delegate.js';
 
 export const CONNECTORS = [agent, clock, calculator, weather, tasks, reminders, routines, memory, conversations, knowledge, websearch, research, news, wikipedia, currency, gmail, slides, docs, drive, google, github, notion, youtube, media, whatsapp, contacts, business, ledger, reception, browser, marketing, telegram, devices, computer, probe];
 
@@ -101,13 +102,31 @@ function matchesIntent(connector, intent) {
 // connector can name `companions`: others its work needs in the same turn (collecting
 // a debt needs Contactos to write the message, booking needs the Calendar to move or
 // cancel), which would otherwise be offered only if the user happened to say their words.
-function activeConnectors({ disabled = [], env = process.env, intent } = {}) {
-  const off = new Set(disabled);
+// `only` names the connectors outright (a specialist's own set: ignores the topic), `leave` the ones handed to
+// specialists instead (neither they nor the companions only they needed are offered).
+function usable(c, off, env) {
   // Entries without tools (Telegram, the local probe) only describe a channel for the hub.
-  const usable = (c) => c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0;
-  const matched = CONNECTORS.filter((c) => usable(c) && matchesIntent(c, intent));
+  return c.tools.length > 0 && !off.has(c.id) && missingEnv(c, env).length === 0;
+}
+
+function activeConnectors({ disabled = [], env = process.env, intent, only, leave } = {}) {
+  const off = new Set(disabled);
+  const ok = (c) => usable(c, off, env);
+  const matched = only
+    ? CONNECTORS.filter((c) => ok(c) && only.includes(c.id))
+    : CONNECTORS.filter((c) => ok(c) && !leave?.has(c.id) && matchesIntent(c, intent));
   const companions = new Set(matched.flatMap((c) => c.companions || []));
-  return CONNECTORS.filter((c) => matched.includes(c) || (companions.has(c.id) && usable(c)));
+  return CONNECTORS.filter((c) => matched.includes(c) || (companions.has(c.id) && ok(c) && !leave?.has(c.id)));
+}
+
+// The specialists this conversation calls for: those whose topic is in play. Two or more means Eddie works as a
+// team (see connectors/delegate.js); one is just used directly, as always.
+const MIN_TEAM = 2;
+function teamFor({ disabled = [], env = process.env, intent } = {}) {
+  if (intent == null) return [];
+  const off = new Set(disabled);
+  const team = CONNECTORS.filter((c) => c.role && usable(c, off, env) && matchesIntent(c, intent));
+  return team.length >= MIN_TEAM ? team : [];
 }
 
 // The playbooks of the agents on offer: how and when to use their tools. Short on purpose (they ride on every
@@ -256,17 +275,23 @@ async function runTool(tools, name, args, context, hooks) {
 // `onStep` hears every step as it
 // starts and ends (for the live "Eddie está trabajando" list); `steps` keeps
 // the final state of each for the receipt.
-export function createToolset({ disabled = [], context = {}, env = process.env, onStep, intent } = {}) {
-  const connectors = activeConnectors({ disabled, env, intent });
-  const tools = connectors.flatMap((c) => c.tools);
-  const actions = [];
-  const confirmations = [];
-  const steps = [];
+//
+// With `context.delegate` (the main request, not a specialist's own run) and two or more specialist topics in play,
+// the specialists' tools are withheld and replaced by one `delegar` tool; `only` builds a specialist's own toolset,
+// and `shared` makes it write into the main request's actions, cards and steps.
+export function createToolset({ disabled = [], context = {}, env = process.env, onStep, intent, only, shared } = {}) {
+  const team = !only && context.delegate ? teamFor({ disabled, env, intent }) : [];
+  const connectors = activeConnectors({ disabled, env, intent, only, leave: team.length ? new Set(team.map((c) => c.id)) : undefined });
+  const tools = [...connectors.flatMap((c) => c.tools), ...(team.length ? [delegateTool(team)] : [])];
+  const actions = shared?.actions || [];
+  const confirmations = shared?.confirmations || [];
+  const steps = shared?.steps || [];
   // `disabled`: what the user switched off, for a tool that reaches into other connectors' sources (the researcher).
   const toolContext = { ...context, disabled, emit: (action) => actions.push(action) };
   return {
-    offered: connectors.map((c) => c.id),
-    guide: guideFor(connectors),
+    offered: [...connectors.map((c) => c.id), ...team.map((c) => c.id)],
+    team: team.map((c) => c.id),
+    guide: [team.length ? teamGuide(team) : '', guideFor(connectors)].filter(Boolean).join('\n\n'),
     declarations: tools.map((t) => t.declaration),
     execute: (name, args) => runTool(tools, name, args, toolContext, { onStep, confirmations, steps }),
     actions,
