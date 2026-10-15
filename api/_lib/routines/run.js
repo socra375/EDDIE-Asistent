@@ -5,6 +5,7 @@
 import { deliver, telegramSend } from '../reminders/run.js';
 import { sendPush } from '../push/send.js';
 import { localParts } from '../connectors/dates.js';
+import { runsOn } from '../../../src/services/weekdays.js';
 import { devicesByUser } from '../computer/store.js';
 import { runOnDevice } from '../computer/run.js';
 import { mapLimit } from '../pool.js';
@@ -34,6 +35,8 @@ async function runSchedule(routine, now, helpers) {
     return false;
   }
   if (routine.lastRunOn === local.date) return false;
+  // Only on its days («de lunes a viernes»): the rest of the week it simply waits, and nothing is claimed.
+  if (!runsOn(routine.days, local.date)) return false;
   const late = toMinutes(local.time) - toMinutes(routine.time);
   if (late < 0 || late > SCHEDULE_WINDOW_MINUTES) return false;
   if (!(await claimRoutineDay(routine.id, local.date))) return false;
@@ -74,7 +77,16 @@ async function runBoot(routine, helpers) {
   }
 }
 
-async function runEvent(routine, helpers) {
+// Today's date where the user is, or null when their time zone is not usable.
+function localDate(routine, at) {
+  try {
+    return localParts(at.toISOString(), routine.timezone).date;
+  } catch {
+    return null;
+  }
+}
+
+async function runEvent(routine, helpers, at = new Date()) {
   if (routine.eventType === 'device_boot') return runBoot(routine, helpers);
   if (routine.eventType !== 'download_complete') return false;
   const now = await isDownloading(routine.userId, routine.deviceId);
@@ -83,6 +95,9 @@ async function runEvent(routine, helpers) {
   const finished = was === true && now === false;
   if (now !== null && now !== was) await setRoutineState(routine.id, { downloading: now });
   if (!finished) return false;
+  // A download that ends on a day the routine does not run on is seen and let go (the state above is already updated).
+  const date = localDate(routine, at);
+  if (date && !runsOn(routine.days, date)) return false;
   try {
     const text = `✅ ${routine.name}\n\n${await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone })}`;
     return await deliver(routine, text, routinePush(routine, text), helpers);
@@ -111,7 +126,7 @@ export async function runRoutines({ now = new Date(), send = telegramSend, push 
     await dueEventRoutines(),
     PARALLEL,
     async (routine) => {
-      if (await runEvent(routine, helpers)) result.events += 1;
+      if (await runEvent(routine, helpers, now)) result.events += 1;
     },
     { deadline },
   );

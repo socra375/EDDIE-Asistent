@@ -8,6 +8,7 @@ import { pickDevice } from '../../computer/run.js';
 import { createRoutine, deleteRoutineByName, listRoutines } from '../../routines/store.js';
 import { ACTION_TYPES, DEFAULT_SONG, describeActions, validateActions } from '../../routines/actions.js';
 import { clip } from '../http.js';
+import { describeDays, encodeDays, parseDays } from '../../../../src/services/weekdays.js';
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const EVENT_TYPES = ['download_complete', 'device_boot'];
@@ -45,6 +46,16 @@ async function createRoutineTool(args, context) {
   if (!time && !event) return { error: 'Dame la hora (time) para una rutina diaria, o el evento (event) para una por evento.' };
   if (time && event) return { error: 'Una rutina es por hora O por evento, no las dos cosas.' };
 
+  // «De lunes a viernes», «solo los fines de semana», «lunes y jueves»: absent or «todos los días» = every day.
+  let days = null;
+  if (args.days != null && String(args.days).trim()) {
+    // «cada lunes», «solo los martes», «todos los jueves» → «lunes», «martes», «jueves» (a day or a group, not «todos los días»).
+    const said = String(args.days).trim().replace(/^(?:(?:cada|solo|solamente|únicamente|todos|los|las|de)\s+)+(?=(?:lun|mar|mi[eé]|jue|vie|s[aá]b|dom|fin|find|entre|laborables|h[aá]biles))/i, '');
+    const parsed = parseDays(said);
+    if (!parsed) return { error: `No entendí los días «${clip(String(args.days), 60)}». Dilos así: «lunes a viernes», «fines de semana», «lunes, miércoles y viernes» o «todos los días».` };
+    days = parsed;
+  }
+
   const { actions, error: actionsError } = await parseActions(args.actions);
   if (actionsError) return { error: actionsError };
   if (event !== 'device_boot' && actions.some((a) => a.type === 'say')) return { error: 'La acción "say" (decir en voz alta) solo se usa en rutinas de event="device_boot", porque la dice el propio PC.' };
@@ -66,14 +77,15 @@ async function createRoutineTool(args, context) {
   }
 
   const name = clip(String(args.name || '').trim(), 80) || (time ? `Rutina de las ${time}` : event === 'device_boot' ? 'Al encender el PC' : 'Aviso de descarga');
-  const routine = await createRoutine(user.id, { name, triggerType: time ? 'schedule' : 'event', time, eventType: event, deviceId, actions });
+  const routine = await createRoutine(user.id, { name, triggerType: time ? 'schedule' : 'event', time, days, eventType: event, deviceId, actions });
+  const when = encodeDays(days) ? ` ${describeDays(days)}` : '';
   return {
     routine,
     summary: time
-      ? `Rutina «${name}» creada: todos los días a las ${time}, ${describeActions(actions)}.`
+      ? `Rutina «${name}» creada: ${encodeDays(days) ? describeDays(days) : 'todos los días'} a las ${time}, ${describeActions(actions)}.`
       : event === 'device_boot'
-        ? `Rutina «${name}» creada: cuando se encienda «${deviceName}», ${describeActions(actions)}. Se dispara con el inicio de sesión del PC; despertarlo de la suspensión no cuenta.`
-        : `Rutina «${name}» creada: cuando termine una descarga, ${describeActions(actions)}.`,
+        ? `Rutina «${name}» creada: cuando se encienda «${deviceName}»${when}, ${describeActions(actions)}. Se dispara con el inicio de sesión del PC; despertarlo de la suspensión no cuenta.`
+        : `Rutina «${name}» creada: cuando termine una descarga${when}, ${describeActions(actions)}.`,
   };
 }
 
@@ -84,7 +96,10 @@ async function listRoutinesTool(_args, context) {
   if (!routines.length) return { routines: [], summary: 'No tienes ninguna rutina creada.' };
   const described = routines.map((r) => ({
     name: r.name,
-    cuando: r.triggerType === 'schedule' ? `todos los días a las ${r.time}` : r.eventType === 'device_boot' ? 'cuando se encienda el PC' : 'cuando termine una descarga',
+    cuando:
+      r.triggerType === 'schedule'
+        ? `${describeDays(r.days)} a las ${r.time}`
+        : `${r.eventType === 'device_boot' ? 'cuando se encienda el PC' : 'cuando termine una descarga'}${r.days ? `, ${describeDays(r.days)}` : ''}`,
     hace: describeActions(r.actions),
     activa: r.enabled,
   }));
@@ -105,15 +120,15 @@ async function cancelRoutineTool(args, context) {
 export default {
   id: 'routines',
   name: 'Rutinas automáticas',
-  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen") o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto una tarea que Eddie hace solo con sus herramientas (agent), abrir páginas web (open_sites) o, al encender el PC, decir algo en voz alta (say). También cuando se enciende un PC vinculado con EDDIE Prime («cuando encienda la PC, abre YouTube y WhatsApp Web»). Varias rutinas a la misma hora corren a la vez.`,
+  description: `Rutinas que corren solas, por hora del día ("a las 8, dame el resumen"), todos los días o solo en ciertos días ("de lunes a viernes", "los fines de semana", "los lunes y jueves"), o cuando termina una descarga en un equipo vinculado con EDDIE Prime ("avísame cuando termine"). El aviso llega por Telegram o notificación push aunque la app esté cerrada. Acciones posibles: resumen del día, poner música (YouTube en tu navegador, por defecto "${DEFAULT_SONG}"), un aviso de texto una tarea que Eddie hace solo con sus herramientas (agent), abrir páginas web (open_sites) o, al encender el PC, decir algo en voz alta (say). También cuando se enciende un PC vinculado con EDDIE Prime («cuando encienda la PC, abre YouTube y WhatsApp Web»). Varias rutinas a la misma hora corren a la vez.`,
   icon: 'clock',
   category: 'asistente',
-  route: /rutina|autom[aá]tic[oa]|cada d[ií]a|todos los d[ií]as|cada (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|semana|ma[nñ]ana|noche)|todas las (ma[nñ]anas|noches)|cada \d+ horas|cuando termine|cuando acabe|cuando (encienda|prenda|arranque|inicie)|al (encender|prender|arrancar|iniciar)/i,
+  route: /rutina|autom[aá]tic[oa]|cada d[ií]a|todos los d[ií]as|entre semana|fines? de semana|lunes a viernes|d[ií]as (h[aá]biles|laborables)|solo los (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados|domingos)|excepto|menos los|cada (lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|semana|ma[nñ]ana|noche)|todas las (ma[nñ]anas|noches)|cada \d+ horas|cuando termine|cuando acabe|cuando (encienda|prenda|arranque|inicie)|al (encender|prender|arrancar|iniciar)/i,
   guide: `RUTINAS — cómo y cuándo:
 1. Crea una rutina solo cuando el usuario la pida o acepte tu oferta, y confirma con él la hora y qué debe pasar antes de crearla.
 2. Una tarea para ti (acción agent) corre sin nadie delante: no puede preguntar ni confirmar, y lo delicado (enviar, borrar, mover) no se hace. Escríbela completa y con contexto, como para alguien que no puede preguntar.
 3. «Cuando encienda la PC» y «cuando termine la descarga» necesitan un equipo con EDDIE Prime; si hay varios, pregunta cuál.
-4. Las rutinas son diarias (una hora al día) o por evento. Si piden «cada lunes» o «cada 2 horas», dilo y ofrece la diaria.
+4. Una rutina corre a una hora, todos los días o solo en ciertos días (parámetro days: «lunes a viernes», «fines de semana», «lunes, miércoles y viernes»; «cada lunes» es days="lunes"), o por evento. «Durante la semana pero no los fines de semana» = days="lunes a viernes". Si no dicen días, son todos; si dudas, pregúntalo. No hay «cada 2 horas» ni «el día 1 de cada mes»: dilo y ofrece lo más cercano (la diaria, o la de ciertos días).
 5. Al terminar, di en una frase qué hará y a qué hora. Para quitar una, cancel_routine.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
@@ -128,12 +143,13 @@ export default {
       declaration: {
         name: 'create_routine',
         description:
-          `Crea una rutina automática. Por hora: pon time ("08:00"). Por evento: pon event ("download_complete" cuando termine una descarga, o "device_boot" cuando se encienda el PC; ambos necesitan un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), open_sites (necesita urls: arreglo de direcciones https completas, p. ej. YouTube https://www.youtube.com, Google https://www.google.com, WhatsApp Web https://web.whatsapp.com; solo las ABRE, nunca escribe ni envía nada en ellas), say (solo con device_boot; necesita text: lo que dice el PC en voz alta con la voz del sistema), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="device_boot", actions=[{"type":"open_sites","urls":["https://www.youtube.com","https://www.google.com","https://web.whatsapp.com"]}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
+          `Crea una rutina automática. Por hora: pon time ("08:00") y, si no es todos los días, days ("lunes a viernes"). Por evento: pon event ("download_complete" cuando termine una descarga, o "device_boot" cuando se encienda el PC; ambos necesitan un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), open_sites (necesita urls: arreglo de direcciones https completas, p. ej. YouTube https://www.youtube.com, Google https://www.google.com, WhatsApp Web https://web.whatsapp.com; solo las ABRE, nunca escribe ni envía nada en ellas), say (solo con device_boot; necesita text: lo que dice el PC en voz alta con la voz del sistema), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="device_boot", actions=[{"type":"open_sites","urls":["https://www.youtube.com","https://www.google.com","https://web.whatsapp.com"]}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
         parameters: {
           type: 'OBJECT',
           properties: {
             name: { type: 'STRING', description: 'Nombre corto de la rutina (opcional; si no se da, se genera uno).' },
-            time: { type: 'STRING', description: 'Hora local HH:MM para una rutina diaria.' },
+            time: { type: 'STRING', description: 'Hora local HH:MM para una rutina por hora.' },
+            days: { type: 'STRING', description: 'En qué días corre, como lo diría el usuario: "lunes a viernes", "fines de semana", "lunes, miércoles y viernes", "todos los días". Si no se da, corre todos los días. También sirve con event (p. ej. al encender el PC solo entre semana).' },
             event: { type: 'STRING', enum: EVENT_TYPES, description: 'Evento que dispara la rutina.' },
             device: { type: 'STRING', description: 'Equipo a vigilar (solo con event, si hay varios vinculados).' },
             actions: { type: 'STRING', description: 'Arreglo JSON de acciones, como texto. Ej.: [{"type":"summary"}]' },
