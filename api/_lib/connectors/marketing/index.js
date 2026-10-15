@@ -111,6 +111,8 @@ const DEVICE_ARG = { type: 'STRING', description: 'Nombre del equipo (o "windows
 
 export default {
   id: 'marketing',
+  // A specialist: when a request touches two of these, Eddie hands each its part (see delegation/).
+  role: { name: 'Marketing', does: 'los videos y el contenido: cortar, unir, subtitular, reels, guiones y marca' },
   name: 'Marketing y videos',
   description:
     'Eddie piensa tu contenido (guion, texto en pantalla, descripción y hashtags con tu voz y los datos de tu negocio) y edita tus videos en tu PC con ffmpeg, gratis: recortar, unir, pasar a vertical para Reels y TikTok, poner texto, añadir música y aligerar el archivo. No graba ni publica por ti.',

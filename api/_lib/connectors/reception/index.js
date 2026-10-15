@@ -249,13 +249,15 @@ async function messageDone(args, context) {
 
 export default {
   id: 'reception',
+  // A specialist: when a request touches two of these, Eddie hands each its part (see delegation/).
+  role: { name: 'Recepcionista', does: 'las citas y los recados: horario, huecos libres, agendar, mover, recados de quien llamó' },
   name: 'Recepción',
   description:
     'Eddie hace de recepcionista para ti: conoce tu horario de atención, te dice cuándo hay lugar en tu agenda, agenda citas en tu Google Calendar (con tu confirmación) y anota los recados de quien te busca para que no se pierdan. No contesta a tus clientes por su cuenta: trabaja para ti.',
   icon: 'phone',
   category: 'agenda',
   route:
-    /\bcitas?\b|ag[eé]nd(a|ar|e|ame|ale)\b|horario|disponib|hay (lugar|espacio|hueco)|hueco|recados?|recado|dej[oó] (dicho|un mensaje)|me (llam[oó]|busc[oó]|escribi[oó])|lo que (dej[oó]|dijo)|reserv|turno|atenci[oó]n al cliente|recepci[oó]n|recepcionista|cu[aá]ndo (puede|puedo|atiend)|quiere (una )?cita/i,
+    /\bcitas?\b|ag[eé]nd(a|ar|e|ame|ale)\b|horario|disponib|hay (lugar|espacio|hueco)|hueco|recados?|recado|dej[oó] (dicho|un mensaje)|llam[oó](?![a-záéíóúñ])|me (busc[oó]|escribi[oó])|lo que (dej[oó]|dijo)|reserv|turno|atenci[oó]n al cliente|recepci[oó]n|recepcionista|cu[aá]ndo (puede|puedo|atiend)|quiere (una )?cita/i,
   companions: ['contacts', 'google'],
   guide: `RECEPCIÓN — cómo y cuándo:
 1. Sin horario guardado, pregúntalo una sola vez (días, apertura, cierre, descanso) y guárdalo con reception_set_hours; no inventes uno.

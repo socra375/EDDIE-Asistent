@@ -36,6 +36,8 @@ async function researchNow(args, context) {
 
 export default {
   id: 'research',
+  // A specialist: when a request touches two of these, Eddie hands each its part (see delegation/).
+  role: { name: 'Investigador', does: 'buscar y comparar información en la web y en lo que Eddie ya sabe' },
   name: 'Investigador',
   description:
     'Mientras Eddie te responde, un investigador busca por su cuenta en tu memoria (recuerdos, conversaciones, segundo cerebro y negocios) y, si lo que pides es del mundo exterior, en la web; lo que encuentra entra directo en la respuesta, sin que se note. También puedes pedirle: «investiga X y dime».',

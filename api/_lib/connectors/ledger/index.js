@@ -286,13 +286,15 @@ const PERIOD_ARG = { type: 'STRING', enum: PERIODS, description: 'Periodo: hoy, 
 
 export default {
   id: 'ledger',
+  // A specialist: when a request touches two of these, Eddie hands each its part (see delegation/).
+  role: { name: 'Contador', does: 'las cuentas: anotar ingresos y gastos, cuánto entró, salió o te deben, cobros atrasados, borradores de factura' },
   name: 'Cuentas del negocio',
   description:
     'Eddie lleva las cuentas como tu administrador y contador: anota ingresos y gastos cuando se los cuentas, dice cuánto entró, salió y cuánto te deben, avisa quién está atrasado y te prepara un borrador de factura o recibo. No inventa montos ni es asesor fiscal.',
   icon: 'coin',
   category: 'asistente',
   route:
-    /cobr|deb(e|en|o|er[eé])\b|me deben|te debe|gast[eoéa]|ingres|ventas?\b|vend[ií]|factur|recibo|pagu[eé]|pag[oó]|cuenta|balance|ganancia|gané|utilidad|contab|contador|presupuest|dinero|finanza|n[oó]mina|impuesto|cu[aá]nto (gan|gast|me deben|debo|entr|sal)|fiado|abono/i,
+    /c[oó]br|deb(e|en|o|er[eé])\b|me deben|te debe|gast[eoéa]|ingres|ventas?\b|vend[ií]|factur|recibo|pagu[eé]|pag[oó]|cuenta|balance|ganancia|gané|utilidad|contab|contador|presupuest|dinero|finanza|n[oó]mina|impuesto|cu[aá]nto (gan|gast|me deben|debo|entr|sal)|fiado|abono/i,
   companions: ['contacts'],
   guide: `CUENTAS DEL NEGOCIO — cómo y cuándo:
 1. En cuanto el usuario cuente un ingreso o gasto, anótalo con ledger_add sin pedírselo y dilo en una frase corta con monto y concepto. Si falta el monto, pregúntalo; nunca inventes montos, fechas ni moneda.
