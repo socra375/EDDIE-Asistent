@@ -344,6 +344,85 @@ export function mergeMemory(a, b, now = Date.now()) {
   return out;
 }
 
+// ---- Reviewing what is kept ----
+
+const REVIEW_STALE_MS = 30 * DAY_MS;
+const REVIEW_OLD_REVOKED_MS = 90 * DAY_MS;
+const REVIEW_NEAR_FULL = 0.9;
+const REVIEW_MAX_FINDINGS = 30;
+const snippet = (text) => (String(text).length > 120 ? `${String(text).slice(0, 119).trimEnd()}…` : String(text));
+
+// Looks through the memory and PROPOSES what to clean; it never changes anything. Each finding is
+// { kind, category, ids, text, advice }:
+//   secreto      something that looks like a password, key or card number got in (a note from before the filter existed)
+//   repetido     two decisions / knowledge / context items that say the same thing
+//   sin_confirmar a guess that nobody has confirmed for a month
+//   historial    decisions replaced long ago, which only take room
+//   llena        a category close to its limit, where the oldest items are dropped without notice
+export function reviewMemory(memory, now = Date.now()) {
+  const m = normalizeMemory(memory, now);
+  const findings = [];
+  const label = (id) => CATEGORIES.find((c) => c.id === id)?.label || id;
+  const when = (item) => item.updatedAt ?? item.date ?? now;
+
+  for (const { id: category } of CATEGORIES) {
+    for (const item of m[category]) {
+      if (looksSecret(describeItem(category, item))) {
+        findings.push({ kind: 'secreto', category, ids: [item.id], text: snippet(describeItem(category, item)), advice: 'Parece una contraseña, una clave o un dato de tarjeta: conviene borrarlo.' });
+      }
+    }
+  }
+  for (const category of ['decisions', 'knowledge', 'context']) {
+    const list = m[category];
+    const reported = new Set();
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        if (reported.has(list[j].id) || list[i].status === 'revocada' || list[j].status === 'revocada') continue;
+        if (normalizeText(list[i].text) === normalizeText(list[j].text) || nearDuplicate(list[i].text, list[j].text)) {
+          reported.add(list[j].id);
+          findings.push({ kind: 'repetido', category, ids: [list[j].id], text: snippet(list[j].text), advice: `Dice lo mismo que «${snippet(list[i].text)}»: sobra uno.` });
+        }
+      }
+    }
+  }
+  for (const { id: category } of CATEGORIES) {
+    for (const item of m[category]) {
+      if (item.confidence === 'inferido' && now - when(item) > REVIEW_STALE_MS) {
+        findings.push({ kind: 'sin_confirmar', category, ids: [item.id], text: snippet(describeItem(category, item)), advice: 'Eddie lo dedujo y lleva más de un mes sin confirmarse: ¿sigue siendo cierto?' });
+      }
+    }
+  }
+  const old = m.decisions.filter((d) => d.status === 'revocada' && now - d.date > REVIEW_OLD_REVOKED_MS);
+  if (old.length) findings.push({ kind: 'historial', category: 'decisions', ids: old.map((d) => d.id), text: `${old.length} ${old.length === 1 ? 'decisión reemplazada hace tiempo' : 'decisiones reemplazadas hace tiempo'}`, advice: 'Ya no guían a Eddie; solo ocupan lugar.' });
+  for (const { id: category } of CATEGORIES) {
+    const limit = LIMITS[category];
+    if (m[category].length >= Math.ceil(limit * REVIEW_NEAR_FULL)) {
+      findings.push({ kind: 'llena', category, ids: [], text: `${label(category)}: ${m[category].length} de ${limit}`, advice: 'Al llenarse, Eddie descarta lo más viejo sin avisar: conviene dejar espacio.' });
+    }
+  }
+  return findings.slice(0, REVIEW_MAX_FINDINGS);
+}
+
+// The flat list the chat sends along ({ id, c, t, f? }) as a memory, so the server's tool can review it too (it has no
+// dates there, so nothing is called old).
+export function memoryFromFlat(items) {
+  const memory = emptyMemory();
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || typeof item.id !== 'string' || !memory[item.c]) continue;
+    const flags = { ...(String(item.f || '').includes('sin confirmar') ? { confidence: 'inferido' } : {}), ...(String(item.f || '').includes('revocada') ? { status: 'revocada' } : {}) };
+    const text = String(item.t || '');
+    if (item.c === 'profile' || item.c === 'preferences') {
+      const at = text.indexOf(': ');
+      memory[item.c].push({ id: item.id, key: at > 0 ? text.slice(0, at) : text.slice(0, 40), text: at > 0 ? text.slice(at + 2) : text, ...flags });
+    } else if (item.c === 'projects') {
+      memory.projects.push({ id: item.id, name: text.split(' · ')[0], status: text.split(' · ').slice(1).join(' · '), ...flags });
+    } else {
+      memory[item.c].push({ id: item.id, text, ...flags });
+    }
+  }
+  return memory;
+}
+
 // ---- Applying what Eddie's memory tools asked for ----
 
 const CATEGORY_OF = { perfil: 'profile', preferencia: 'preferences', decision: 'decisions', conocimiento: 'knowledge', contexto: 'context' };

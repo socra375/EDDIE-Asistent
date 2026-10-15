@@ -879,6 +879,13 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
 - **«Tienes N recuerdos más»**: el bloque de memoria del prompt termina diciendo cuántos recuerdos se quedaron fuera por no venir al caso (si son 3 o más; las decisiones revocadas no cuentan) y manda a la herramienta `recall` antes de contestar «no lo sé».
 - **Qué no hace**: no busca por significado sin Gemini (las palabras no entienden sinónimos: «cobrar» no encuentra «precio»); y los datos clave-valor del perfil no se comparan por significado (poca cantidad y riesgo de fundir dos hechos distintos con el mismo valor).
 
+## Cuidar la memoria: copia, archivo, revisión y pruebas
+
+- **Copia al borrar todo**: «Borrar toda la memoria» guarda antes una copia **durante 7 días** en este dispositivo (nunca en el servidor). En Memoria → Ajustes aparece «Hay una copia de la memoria que borraste el…» con **Recuperarla** (se suma a lo que haya) y **Descartarla**; pasados 7 días se borra sola. Sin almacenamiento local no hay copia y la memoria se borra igual.
+- **Descargar y sumar desde un archivo** (`src/services/memoryBackup.js`): «Descargar mi memoria» baja un `.json` (con el historial de cada dato y su procedencia). «Sumar desde un archivo» **añade** a lo que ya hay, nunca reemplaza (lo más nuevo gana en los datos con nombre; importar el mismo archivo dos veces no suma nada) y pasa por el mismo filtro de secretos: lo que parezca contraseña o clave se deja fuera y se avisa. Acepta el archivo de Eddie, una memoria suelta y el formato viejo.
+- **Revisar mi memoria** (botón en Ajustes, o «revisa mi memoria» al chat con la herramienta `review_memory`): **propone** sin cambiar nada: datos que parecen contraseñas o claves (por si quedó alguno de antes del filtro), recuerdos repetidos, deducciones sin confirmar de más de un mes, decisiones reemplazadas hace tiempo y categorías casi llenas (donde Eddie descarta lo más viejo sin avisar). En el panel cada propuesta tiene **Olvidar** o **Dejarlo**; en el chat, borrar sigue pidiendo tarjeta. No hay revisión automática semanal: las rutinas son diarias o por evento.
+- **Pruebas en el repositorio**: `npm test` (`tests/*.test.mjs`, `node --test`, sin dependencias nuevas) cubre el filtro de secretos, los cambios con historial y la procedencia, el recuerdo por palabras y los repetidos, la copia, el archivo y la revisión (32 pruebas). Las demás pruebas de Eddie (agentes, delegación, Telegram…) todavía no están aquí.
+
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
 > **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en

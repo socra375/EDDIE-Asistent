@@ -7,6 +7,7 @@
 import { normalize } from '../tasks/index.js';
 import { clip } from '../http.js';
 import { looksSecret } from '../../../../src/services/secrets.js';
+import { memoryFromFlat, reviewMemory } from '../../../../src/services/memory.js';
 
 const CATEGORY_LABEL = {
   profile: 'Perfil',
@@ -111,6 +112,20 @@ function recall(args, context) {
   return { found: matches.length, items: matches.map((m) => ({ categoria: CATEGORY_LABEL[m.c] || m.c, texto: m.t, ...(m.f ? { aviso: m.f } : {}) })) };
 }
 
+// Looks through the memory and proposes what to clean. It changes nothing: the user decides, and forgetting always
+// goes through the confirmation card.
+function review(_args, context) {
+  const items = context.memory || [];
+  if (!items.length) return { found: 0, note: 'La memoria está vacía (o el usuario la apagó): no hay nada que revisar.' };
+  const findings = reviewMemory(memoryFromFlat(items));
+  if (!findings.length) return { found: 0, note: 'Revisé la memoria y no veo nada que limpiar: sin datos sensibles, sin repetidos y sin deducciones viejas.' };
+  return {
+    found: findings.length,
+    findings: findings.slice(0, 8).map((f) => ({ tipo: f.kind, donde: CATEGORY_LABEL[f.category] || f.category, texto: f.text, consejo: f.advice })),
+    note: 'Son propuestas, no cambios. Cuéntaselas al usuario con naturalidad y pregunta qué quiere hacer; para borrar algo usa forget (pide su confirmación). Si hay un dato sensible, empieza por ahí.',
+  };
+}
+
 function prepareForget(args, context) {
   const matches = findMemory(context.memory, args.query);
   if (!matches.length) return { error: `No encontré nada en la memoria sobre "${clip(args.query, 60)}".` };
@@ -210,6 +225,20 @@ export default {
         },
       },
       run: (args, context) => recall(args, context),
+    },
+    {
+      label: 'Revisar la memoria',
+      activity: 'Revisando la memoria…',
+      risk: 'read',
+      sensitive: false,
+      summarize: (result) => (result.found ? `${result.found} cosa(s) por revisar` : 'Nada que limpiar'),
+      declaration: {
+        name: 'review_memory',
+        description:
+          'Revisa lo que hay en la memoria y propone qué limpiar: datos que parecen contraseñas o claves, recuerdos repetidos, deducciones sin confirmar y categorías casi llenas. Úsala cuando el usuario pida «revisa mi memoria», «limpia lo que sabes de mí» o «¿hay algo repetido?». No cambia nada.',
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+      run: (args, context) => review(args, context),
     },
     {
       label: 'Olvidar un recuerdo',

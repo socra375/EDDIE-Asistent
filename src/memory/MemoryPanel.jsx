@@ -12,6 +12,7 @@ import MemoryOrb from './MemoryOrb';
 import KnowledgeCard from './KnowledgeCard';
 import BusinessBrain from './BusinessBrain';
 import BrainDrop from './BrainDrop';
+import MemoryTools from './MemoryTools';
 import './Memory.css';
 
 const EMPTY_FORM = { key: '', text: '', days: '7', project: '', name: '', status: '', stack: '', repo: '', lastChange: '', nextGoal: '' };
@@ -533,6 +534,7 @@ export default function MemoryPanel() {
               </button>
             )}
           </section>
+          <MemoryTools />
           <ConversationSettings episodes={episodes} />
           <WakeWordCard />
           <ClapCard />

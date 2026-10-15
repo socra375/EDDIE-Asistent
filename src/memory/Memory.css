@@ -1253,3 +1253,44 @@
     animation: none;
   }
 }
+
+/* Copia y revisión de la memoria */
+.memory-tools__row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.memory-tools__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-tools__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+}
+
+.memory-tools__item strong {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.memory-tools__item--secreto {
+  border-color: var(--danger);
+}
+
+.memory-tools__item small {
+  opacity: 0.75;
+}
