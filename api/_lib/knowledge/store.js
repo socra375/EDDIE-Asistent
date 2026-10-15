@@ -2,6 +2,7 @@
 import { getDb } from '../db.js';
 import { toVector } from '../episodes/embed.js';
 import { cleanCategory } from '../../../src/services/knowledgeCategories.js';
+import { patternOf } from '../wordsearch.js';
 
 // Past these, Eddie must forget something first: this is a notebook, not an archive.
 export const MAX_TOPICS = 60;
@@ -150,11 +151,7 @@ export async function searchNotes(userId, embedding, { limit = 4, minSimilarity 
 // Without a usable embedding: notes (or topics) that mention any of the words
 // (one case-insensitive regex, so there is a single plain-text parameter).
 export async function searchNotesByWords(userId, words, { limit = 5 } = {}) {
-  const pattern = words
-    .slice(0, 6)
-    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((w) => w.length >= 3)
-    .join('|');
+  const pattern = patternOf(words);
   if (!pattern) return [];
   const sql = getDb();
   const rows = await sql`

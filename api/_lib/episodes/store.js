@@ -1,6 +1,7 @@
 // Database side of conversation memory (see db/migrations/0004_episodes.sql).
 import { getDb } from '../db.js';
 import { toVector } from './embed.js';
+import { patternOf } from '../wordsearch.js';
 
 // Past this many, the oldest are dropped: this is a notebook, not an archive.
 export const MAX_EPISODES = 300;
@@ -49,6 +50,19 @@ export async function searchEpisodes(userId, embedding, { limit = 3, minSimilari
     order by embedding <=> ${v}::vector asc limit ${limit}
   `;
   return rows.map(shape).filter((e) => e.similarity >= minSimilarity);
+}
+
+// Without a usable embedding: the notes that mention any of the words (see wordsearch.js), newest first.
+export async function searchEpisodesByWords(userId, words, { limit = 10 } = {}) {
+  const pattern = patternOf(words);
+  if (!pattern) return [];
+  const sql = getDb();
+  const rows = await sql`
+    select id, summary, source, message_count, created_at
+    from episodes where user_id = ${userId} and summary ~* ${pattern}
+    order by created_at desc limit ${limit}
+  `;
+  return rows.map(shape);
 }
 
 export async function listEpisodes(userId, limit = 100) {
