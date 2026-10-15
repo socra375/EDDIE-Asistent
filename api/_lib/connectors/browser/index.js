@@ -199,7 +199,7 @@ export default {
   icon: 'globe',
   category: 'asistente',
   // Offered to the model only when the conversation touches the topic.
-  route: /abre|abrir|abr[ií]r|navegador|pesta[ñn]a|enlace|\blink\b|p[aá]gina|sitio|reuni[oó]n|videollamada|\bmeet\b|zoom|teams|ll[eé]vame|ens[eé][ñn]ame|canva|dise[ñn]o|\bllen[aeo]|rellen|formulario|plataforma|portal|inscrib|solicitud|\bclic|click|teclado|mouse|rat[oó]n/i,
+  route: /abre|abrir|abr[ií]r|navegador|pesta[ñn]a|enlace|\blink\b|p[aá]gina|sitio|reuni[oó]n|videollamada|\bmeet\b|zoom|teams|ll[eé]vame|ens[eé][ñn]ame|canva|dise[ñn]o|\bllen[aeo]|rellen|formulario|plataforma|portal|inscrib|solicitud|\bclic|click|teclado|mouse|rat[oó]n|https?:\/\/|\bwww\.|\.(com|net|org|edu|gob|io|app|do)\b|actividad(es)?|cuestionario|\bcurso|lecci[oó]n|\bresuelve|\bcompleta/i,
   auth: {
     type: 'browser-link',
     isConnected: (user) => hasLink(user.id),

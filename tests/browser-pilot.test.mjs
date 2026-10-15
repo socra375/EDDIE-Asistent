@@ -173,7 +173,7 @@ const toolset = (text = 'llena el formulario en el portal') => createToolset({ c
 const wakes = (set) => set.actions.filter((a) => a.type === 'browser_wake').length;
 
 t('"llena el formulario en la plataforma" offers the browser tools (it used to offer none)', () => {
-  for (const text of ['llena este formulario en la plataforma', 'rellena la solicitud', 'entra al portal y inscríbeme', 'dale clic al botón azul', 'usa el mouse y el teclado']) {
+  for (const text of ['entra a https://campus.edu.do/curso/12 y hazlo', 'completa las actividades de la lección 3', 'llena este formulario en la plataforma', 'rellena la solicitud', 'entra al portal y inscríbeme', 'dale clic al botón azul', 'usa el mouse y el teclado']) {
     assert.match(text, connector.route, text);
   }
 });
@@ -211,4 +211,12 @@ t('the guide and the tool tell the model to act at once, put the data in the goa
   const tool = connector.tools.find((x) => x.declaration.name === 'browser_task').declaration;
   assert.match(tool.description, /sin poner excusas/);
   assert.match(tool.parameters.properties.goal.description, /todos los datos que debe escribir/);
+});
+
+t('the prompt: "Eso no es conveniente" never refuses a task or invents what a site allows, and a repeated request is done', async () => {
+  const { buildSystemPrompt } = await import(`${root}/src/services/personality.js`);
+  const prompt = buildSystemPrompt({});
+  assert.match(prompt, /nunca lo uses para negarte a una tarea ni para decir qué permite o prohíbe una web o plataforma/);
+  assert.match(prompt, /ya te pidió algo una vez y lo repite, no vuelvas a discutirlo: hazlo/);
+  assert.match(prompt, /usa browser_task de inmediato, con los datos en el objetivo; no digas que no puedes/);
 });
