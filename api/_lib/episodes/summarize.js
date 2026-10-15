@@ -2,6 +2,7 @@
 // whichever AI provider the server has a key for, Gemini first (the same one
 // that makes the embeddings), so it works without the user picking anything.
 import { callCerebras, callGemini, callGroq, callOpenRouter, defaultModelFor } from '../providers.js';
+import { redactSecrets } from '../../../src/services/secrets.js';
 
 const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 1200;
@@ -47,7 +48,7 @@ export function transcriptOf(messages) {
   const lines = (Array.isArray(messages) ? messages : [])
     .slice(-MAX_MESSAGES)
     .filter((m) => m && typeof m.content === 'string' && m.content.trim())
-    .map((m) => `${m.role === 'assistant' ? 'Eddie' : 'Usuario'}: ${m.content.replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE_CHARS)}`);
+    .map((m) => `${m.role === 'assistant' ? 'Eddie' : 'Usuario'}: ${redactSecrets(m.content.replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE_CHARS))}`);
   let text = lines.join('\n');
   if (text.length > MAX_TRANSCRIPT_CHARS) text = text.slice(text.length - MAX_TRANSCRIPT_CHARS);
   return text;
@@ -58,7 +59,7 @@ export async function summarizeConversation(messages, { complete = completeText 
   const transcript = transcriptOf(messages);
   if (!transcript) return null;
   const raw = await complete({ system: SYSTEM, prompt: `Conversación:\n${transcript}` });
-  const summary = raw.replace(/^["“«\s]+|["”»\s]+$/g, '').replace(/\s+/g, ' ').trim();
+  const summary = redactSecrets(raw.replace(/^["“«\s]+|["”»\s]+$/g, '').replace(/\s+/g, ' ').trim());
   if (!summary || /^nada\b\.?$/i.test(summary)) return null;
   return summary.slice(0, MAX_SUMMARY_CHARS);
 }

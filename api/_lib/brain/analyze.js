@@ -9,6 +9,7 @@ import { completeText } from '../episodes/summarize.js';
 import { parseJson } from '../knowledge/learn.js';
 import { KNOWLEDGE_CATEGORIES, cleanCategory } from '../../../src/services/knowledgeCategories.js';
 import { ITEM_KINDS, cleanItems } from '../../../src/services/brainKinds.js';
+import { redactSecrets } from '../../../src/services/secrets.js';
 
 export const MAX_DOCUMENT_CHARS = 120000;
 export const MIN_DOCUMENT_CHARS = 40;
@@ -38,6 +39,7 @@ const KIND_RULES = [
   '- "decision": algo que se decidió. Lleva "text" y, si aplica, "project".',
   '- "conocimiento": hecho estable sobre un tema o el mundo que conviene recordar (no sobre el usuario). Lleva "text".',
   '- "contexto": algo temporal (un viaje, un examen, algo de esta semana). Lleva "text" y "days" (días que vale).',
+  '"confidence" de cada dato: "confirmado" si el usuario lo dijo de forma explícita, "inferido" si lo deduces del contexto (en la duda, "inferido"; un dato inferido no sustituye lo que el usuario ya confirmó).',
   `"category" (solo en habilidades y en el documento entero) es UNA de estas: ${KNOWLEDGE_CATEGORIES.map((c) => `${c.id} (${c.hint})`).join('; ')}.`,
 ].join('\n');
 
@@ -53,7 +55,7 @@ const DOCUMENT_SYSTEM = [
   KIND_RULES,
   `Además del listado, resume el documento: "title" (máx. ${TITLE_CHARS}), "kind" del documento ("habilidad" si enseña a hacer algo, "tema" si es algo que se sabe), "category", "summary" (2 a 4 frases) y "notes": entre 4 y 12 notas esenciales ({"text"}), cada una autosuficiente.`,
   SAFETY,
-  'Responde SOLO con JSON válido, sin texto extra ni bloques de código: {"title":"…","kind":"tema","category":"tecnica","summary":"…","notes":[{"text":"…"}],"items":[{"kind":"dato","key":"ciudad","text":"…"},{"kind":"habilidad","title":"…","text":"…","category":"tecnica"}]}',
+  'Responde SOLO con JSON válido, sin texto extra ni bloques de código: {"title":"…","kind":"tema","category":"tecnica","summary":"…","notes":[{"text":"…"}],"items":[{"kind":"dato","key":"ciudad","text":"…","confidence":"confirmado"},{"kind":"habilidad","title":"…","text":"…","category":"tecnica"}]}',
 ].join('\n');
 
 const CONVERSATION_SYSTEM = [
@@ -63,7 +65,7 @@ const CONVERSATION_SYSTEM = [
   KIND_RULES,
   SAFETY,
   'Si la conversación es solo saludos, pruebas o charla sin nada que valga la pena recordar, responde exactamente {"summary":"NADA","items":[]}.',
-  'Responde SOLO con JSON válido, sin texto extra ni bloques de código: {"summary":"…","items":[{"kind":"preferencia","key":"tono","text":"…"}]}',
+  'Responde SOLO con JSON válido, sin texto extra ni bloques de código: {"summary":"…","items":[{"kind":"preferencia","key":"tono","text":"…","confidence":"confirmado"}]}',
 ].join('\n');
 
 const tidy = (value, max) =>
@@ -131,7 +133,7 @@ export function validateDocumentPiece(data) {
   const notes = [];
   const seen = new Set();
   for (const n of Array.isArray(data.notes) ? data.notes : []) {
-    const text = tidy(typeof n === 'string' ? n : n?.text, NOTE_CHARS);
+    const text = redactSecrets(tidy(typeof n === 'string' ? n : n?.text, NOTE_CHARS));
     const key = text.slice(0, 60).toLowerCase();
     if (text.length < 20 || seen.has(key)) continue;
     seen.add(key);
@@ -139,12 +141,13 @@ export function validateDocumentPiece(data) {
     if (notes.length >= MAX_NOTES) break;
   }
   return {
-    title: tidy(data.title, TITLE_CHARS),
+    title: redactSecrets(tidy(data.title, TITLE_CHARS)),
     kind: data.kind === 'habilidad' ? 'habilidad' : 'tema',
     category: cleanCategory(data.category),
-    summary: tidy(data.summary, SUMMARY_CHARS),
+    summary: redactSecrets(tidy(data.summary, SUMMARY_CHARS)),
     notes,
-    items: cleanItems(data.items, { max: MAX_DOCUMENT_ITEMS }),
+    // What a document says, the user handed over: confirmed unless the AI marks it as a deduction.
+    items: cleanItems(data.items, { max: MAX_DOCUMENT_ITEMS, defaultConfidence: 'confirmado' }),
   };
 }
 
@@ -167,7 +170,7 @@ function mergePieces(pieces) {
     category: first.category,
     summary: pieces.find((p) => p.summary)?.summary || '',
     notes,
-    items: cleanItems(pieces.flatMap((p) => p.items), { max: MAX_DOCUMENT_ITEMS }),
+    items: cleanItems(pieces.flatMap((p) => p.items), { max: MAX_DOCUMENT_ITEMS, defaultConfidence: 'confirmado' }),
   };
 }
 
@@ -175,7 +178,8 @@ function mergePieces(pieces) {
 export async function analyzeDocument({ name = '', text }, { complete = completeText } = {}) {
   const cleaned = cleanDocumentText(text);
   if (cleaned.length < MIN_DOCUMENT_CHARS) throw new BrainError('El documento está casi vacío: no hay nada que analizar.', 'BAD_REQUEST');
-  const { chunks, truncated } = splitDocument(cleaned.slice(0, MAX_DOCUMENT_CHARS));
+  // What looks like a secret never reaches the AI, so it cannot come back as a note, a fact or a summary.
+  const { chunks, truncated } = splitDocument(redactSecrets(cleaned.slice(0, MAX_DOCUMENT_CHARS)));
   const label = tidy(name, 120) || 'documento.md';
   const settled = await Promise.allSettled(
     chunks.map((chunk, i) => ask(complete, DOCUMENT_SYSTEM, `Documento: ${label}${chunks.length > 1 ? ` (parte ${i + 1} de ${chunks.length})` : ''}\n\n${chunk}`)),
@@ -204,7 +208,7 @@ export function transcriptOf(messages) {
   const lines = (Array.isArray(messages) ? messages : [])
     .slice(-MAX_MESSAGES)
     .filter((m) => m && typeof m.content === 'string' && m.content.trim())
-    .map((m) => `${m.role === 'assistant' ? 'Eddie' : 'Usuario'}: ${m.content.replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE_CHARS)}`);
+    .map((m) => `${m.role === 'assistant' ? 'Eddie' : 'Usuario'}: ${redactSecrets(m.content.replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE_CHARS))}`);
   const text = lines.join('\n');
   return text.length > MAX_TRANSCRIPT_CHARS ? text.slice(text.length - MAX_TRANSCRIPT_CHARS) : text;
 }
@@ -216,7 +220,7 @@ export async function analyzeConversation(messages, { complete = completeText } 
   if (!transcript) return null;
   const raw = await ask(complete, CONVERSATION_SYSTEM, `Conversación:\n${transcript}`);
   const data = parseJson(raw);
-  const summary = tidy(data ? data.summary : raw.replace(/^["“«\s]+|["”»\s]+$/g, ''), MAX_SUMMARY_CHARS);
+  const summary = redactSecrets(tidy(data ? data.summary : raw.replace(/^["“«\s]+|["”»\s]+$/g, ''), MAX_SUMMARY_CHARS));
   if (!summary || /^nada\b\.?$/i.test(summary)) return null;
   return { summary, items: data ? cleanItems(data.items, { max: MAX_CONVERSATION_ITEMS }) : [] };
 }

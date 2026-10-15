@@ -13,7 +13,16 @@
 // Tasks live in their own module (Tareas) and conversations in the history;
 // this is what Eddie should *know*, not what it was asked to do.
 
+import { looksSecret } from './secrets.js';
+
 export const MEMORY_VERSION = 2;
+
+// Where a memory came from and how sure it is: told to Eddie in the chat, found by him in a conversation, read from
+// a document or written by hand. «inferido» is a deduction, not something the user said: it is shown to the model as
+// unconfirmed and never overwrites what the user did confirm.
+export const SOURCES = ['chat', 'conversacion', 'documento', 'manual'];
+export const CONFIDENCES = ['confirmado', 'inferido'];
+const HISTORY_MAX = 3;
 
 export const CATEGORIES = [
   { id: 'profile', label: 'Perfil', hint: 'Quién eres: nombre, trabajo, estudios, ciudad.' },
@@ -55,6 +64,32 @@ export function normalizeText(s) {
 const clean = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const isTime = (n) => typeof n === 'number' && Number.isFinite(n);
 
+// {source?, confidence?} of an item or of an incoming fact, only what is valid.
+function provenance(x) {
+  const out = {};
+  if (SOURCES.includes(x?.source)) out.source = x.source;
+  if (CONFIDENCES.includes(x?.confidence)) out.confidence = x.confidence;
+  return out;
+}
+
+// What the item keeps when a new fact meets it: «confirmado» always wins, and a deduction never takes the place of
+// where a confirmed fact came from.
+function mergedProvenance(existing, incoming) {
+  const have = provenance(existing);
+  const next = provenance(incoming);
+  if (next.confidence === 'confirmado' || !have.confidence) return { ...have, ...next };
+  return have;
+}
+
+// The values a keyed item had before (newest first), for «antes decía…».
+function cleanHistory(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((h) => h && typeof h === 'object' && clean(h.text, TEXT_MAX))
+    .slice(0, HISTORY_MAX)
+    .map((h) => ({ text: clean(h.text, TEXT_MAX), at: isTime(h.at) ? h.at : 0 }));
+}
+
 function keepNewest(list, limit) {
   return list.length > limit ? list.slice(list.length - limit) : list;
 }
@@ -69,7 +104,11 @@ function cleanList(category, raw, now) {
     if (category === 'profile' || category === 'preferences') {
       const key = clean(item.key, KEY_MAX);
       const text = clean(item.text, TEXT_MAX);
-      if (key && text) out.push({ id, key, text, updatedAt: isTime(item.updatedAt) ? item.updatedAt : now });
+      if (!key || !text) continue;
+      const entry = { id, key, text, updatedAt: isTime(item.updatedAt) ? item.updatedAt : now, ...provenance(item) };
+      const history = cleanHistory(item.history);
+      if (history.length) entry.history = history;
+      out.push(entry);
     } else if (category === 'projects') {
       const name = clean(item.name, KEY_MAX);
       if (!name) continue;
@@ -82,12 +121,16 @@ function cleanList(category, raw, now) {
         lastChange: clean(item.lastChange, FIELD_MAX),
         nextGoal: clean(item.nextGoal, FIELD_MAX),
         updatedAt: isTime(item.updatedAt) ? item.updatedAt : now,
+        ...provenance(item),
       });
     } else {
       const text = clean(item.text, TEXT_MAX);
       if (!text) continue;
-      const entry = { id, text, date: isTime(item.date) ? item.date : now };
-      if (category === 'decisions') entry.project = clean(item.project, KEY_MAX);
+      const entry = { id, text, date: isTime(item.date) ? item.date : now, ...provenance(item) };
+      if (category === 'decisions') {
+        entry.project = clean(item.project, KEY_MAX);
+        entry.status = item.status === 'revocada' ? 'revocada' : 'vigente';
+      }
       if (category === 'context') {
         entry.expiresAt = isTime(item.expiresAt) ? item.expiresAt : now + DEFAULT_CONTEXT_DAYS * DAY_MS;
         if (entry.expiresAt <= now) continue; // already expired
@@ -141,34 +184,67 @@ function withList(memory, category, list) {
 }
 
 // Adds one fact. Profile and preferences are keyed ("nombre"): saying it again
-// replaces the old value. The rest skip an exact repeat. Returns
-// { memory, changed, label } — `label` is the one-liner the chat shows.
-export function addItem(memory, { category, key, text, project, days }, now = Date.now()) {
+// replaces the old value, and the old one is kept in `history` so the change is never silent. The rest skip an
+// exact repeat. Returns { memory, changed, label } — `label` is the one-liner the chat shows — and, when something
+// was not kept, why: `blocked` (it looked like a secret) or `conflict` (a deduction against a confirmed fact).
+// `source` / `confidence` say where it came from and how sure it is; `supersedes` (decisions) lists the ids of the
+// decisions this one replaces, which stay as history marked «revocada».
+export function addItem(memory, { category, key, text, project, days, source, confidence, supersedes }, now = Date.now()) {
   const value = clean(text, TEXT_MAX);
   if (!value) return { memory, changed: false, label: '' };
+  const incoming = provenance({ source, confidence });
+  // Secrets never get in, whichever door they come through (a chat, a document, a hand-written note).
+  if (looksSecret(value) || looksSecret(key) || looksSecret(project)) return { memory, changed: false, label: '', blocked: true };
 
   if (category === 'profile' || category === 'preferences') {
     const k = clean(key, KEY_MAX);
     if (!k) return { memory, changed: false, label: '' };
     const list = memory[category];
     const existing = list.find((i) => normalizeText(i.key) === normalizeText(k));
-    if (existing && existing.text === value) return { memory, changed: false, label: '' };
+    if (existing && existing.text === value) {
+      // The same thing, now confirmed: it stops being a guess.
+      if (incoming.confidence === 'confirmado' && existing.confidence === 'inferido') {
+        const next = list.map((i) => (i.id === existing.id ? { ...i, ...mergedProvenance(i, incoming), updatedAt: now } : i));
+        return { memory: withList(memory, category, next), changed: true, label: `${k}: ${value} (confirmado)` };
+      }
+      return { memory, changed: false, label: '' };
+    }
+    // A guess does not overwrite what the user said: it is left as it was and the doubt is reported.
+    if (existing && incoming.confidence === 'inferido' && existing.confidence !== 'inferido') {
+      return { memory, changed: false, label: '', conflict: { key: existing.key, kept: existing.text, proposed: value } };
+    }
     const next = existing
-      ? list.map((i) => (i.id === existing.id ? { ...i, text: value, updatedAt: now } : i))
-      : [...list, { id: memoryId(), key: k, text: value, updatedAt: now }];
-    return { memory: withList(memory, category, next), changed: true, label: `${k}: ${value}` };
+      ? list.map((i) =>
+          i.id === existing.id
+            ? { ...i, text: value, updatedAt: now, history: [{ text: existing.text, at: existing.updatedAt }, ...(existing.history || [])].slice(0, HISTORY_MAX), ...provenance(existing), ...incoming }
+            : i,
+        )
+      : [...list, { id: memoryId(), key: k, text: value, updatedAt: now, ...incoming }];
+    return { memory: withList(memory, category, next), changed: true, label: existing ? `${existing.key}: ${value} (antes: ${existing.text})` : `${k}: ${value}`, ...(existing ? { replaced: { key: existing.key, previous: existing.text } } : {}) };
   }
 
   if (category === 'decisions' || category === 'knowledge' || category === 'context') {
     const list = memory[category];
     if (list.some((i) => normalizeText(i.text) === normalizeText(value))) return { memory, changed: false, label: '' };
-    const entry = { id: memoryId(), text: value, date: now };
-    if (category === 'decisions') entry.project = clean(project, KEY_MAX);
+    const entry = { id: memoryId(), text: value, date: now, ...incoming };
+    let base = list;
+    let revoked = 0;
+    if (category === 'decisions') {
+      entry.project = clean(project, KEY_MAX);
+      entry.status = 'vigente';
+      const old = new Set(Array.isArray(supersedes) ? supersedes : []);
+      base = list.map((d) => {
+        if (!old.has(d.id) || d.status === 'revocada') return d;
+        revoked += 1;
+        return { ...d, status: 'revocada' };
+      });
+    }
     if (category === 'context') {
       const d = Math.min(Math.max(Math.round(Number(days)) || DEFAULT_CONTEXT_DAYS, 1), MAX_CONTEXT_DAYS);
       entry.expiresAt = now + d * DAY_MS;
     }
-    return { memory: withList(memory, category, [...list, entry]), changed: true, label: value };
+    const label = revoked ? `${value} (reemplaza ${revoked === 1 ? 'una decisión anterior' : `${revoked} decisiones anteriores`})` : value;
+    return { memory: withList(memory, category, [...base, entry]), changed: true, label };
   }
 
   return { memory, changed: false, label: '' };
@@ -185,14 +261,16 @@ export function upsertProject(memory, fields, now = Date.now()) {
   if (fields.repo != null) patch.repo = clean(fields.repo, 100);
   if (fields.lastChange != null) patch.lastChange = clean(fields.lastChange, FIELD_MAX);
   if (fields.nextGoal != null) patch.nextGoal = clean(fields.nextGoal, FIELD_MAX);
+  if (looksSecret(name) || Object.values(patch).some(looksSecret)) return { memory, changed: false, label: '', blocked: true };
+  const incoming = provenance(fields);
   const existing = memory.projects.find((p) => normalizeText(p.name) === normalizeText(name));
   if (existing) {
     const same = Object.entries(patch).every(([k, v]) => existing[k] === v);
     if (same) return { memory, changed: false, label: '' };
-    const next = memory.projects.map((p) => (p.id === existing.id ? { ...p, ...patch, updatedAt: now } : p));
+    const next = memory.projects.map((p) => (p.id === existing.id ? { ...p, ...patch, updatedAt: now, ...mergedProvenance(p, incoming) } : p));
     return { memory: withList(memory, 'projects', next), changed: true, label: `Proyecto ${existing.name} actualizado` };
   }
-  const project = { id: memoryId(), name, status: '', stack: '', repo: '', lastChange: '', nextGoal: '', ...patch, updatedAt: now };
+  const project = { id: memoryId(), name, status: '', stack: '', repo: '', lastChange: '', nextGoal: '', ...patch, updatedAt: now, ...incoming };
   return { memory: withList(memory, 'projects', [...memory.projects, project]), changed: true, label: `Proyecto ${name} guardado` };
 }
 
@@ -230,12 +308,16 @@ export function mergeMemory(a, b, now = Date.now()) {
   }
   out.projects = keepNewest([...projects.values()], LIMITS.projects);
   for (const category of ['decisions', 'knowledge', 'context']) {
-    const seen = new Set();
+    const seen = new Map();
     const merged = [];
     for (const item of [...left[category], ...right[category]].sort((x, y) => x.date - y.date)) {
       const k = normalizeText(item.text);
-      if (seen.has(k)) continue;
-      seen.add(k);
+      if (seen.has(k)) {
+        // A decision revoked on one side stays revoked: it was replaced, whichever copy is read first.
+        if (category === 'decisions' && item.status === 'revocada') merged[seen.get(k)] = { ...merged[seen.get(k)], status: 'revocada' };
+        continue;
+      }
+      seen.set(k, merged.length);
       merged.push(item);
     }
     out[category] = keepNewest(merged, LIMITS[category]);
@@ -254,15 +336,23 @@ const CATEGORY_OF = { perfil: 'profile', preferencia: 'preferences', decision: '
 export function applyActions(memory, actions, now = Date.now()) {
   let current = memory;
   const applied = [];
+  let skipped = 0;
+  const conflicts = [];
   for (const action of Array.isArray(actions) ? actions : []) {
     let result = null;
     if (action?.type === 'memory_add') {
       const category = CATEGORY_OF[action.category] || action.category;
-      result = addItem(current, { category, key: action.key, text: action.text, project: action.project, days: action.days }, now);
+      result = addItem(current, { category, key: action.key, text: action.text, project: action.project, days: action.days, source: action.source, confidence: action.confidence, supersedes: action.supersedes }, now);
       if (result.changed) applied.push(`Recordé: ${result.label}`);
+      if (result.blocked) skipped += 1;
+      if (result.conflict) {
+        conflicts.push(result.conflict);
+        applied.push(`Sin cambiar «${result.conflict.key}»: sigue «${result.conflict.kept}» (en la conversación parecía «${result.conflict.proposed}»; dime si cambió)`);
+      }
     } else if (action?.type === 'memory_project') {
-      result = upsertProject(current, action.project || {}, now);
+      result = upsertProject(current, { ...(action.project || {}), source: action.source ?? action.project?.source, confidence: action.confidence ?? action.project?.confidence }, now);
       if (result.changed) applied.push(result.label);
+      if (result.blocked) skipped += 1;
     } else if (action?.type === 'memory_forget' && Array.isArray(action.ids)) {
       const out = removeItems(current, action.ids);
       result = { memory: out.memory, changed: out.removed > 0 };
@@ -270,7 +360,7 @@ export function applyActions(memory, actions, now = Date.now()) {
     }
     if (result?.changed) current = result.memory;
   }
-  return { memory: current, applied };
+  return { memory: current, applied, skipped, conflicts };
 }
 
 // ---- Readable forms ----
@@ -293,6 +383,22 @@ export function describeItem(category, item) {
   return item.text;
 }
 
+const SOURCE_LABEL = { chat: 'dicho a Eddie', conversacion: 'de una conversación', documento: 'de un documento', manual: 'escrito por ti' };
+
+// «de una conversación · sin confirmar · antes: Santiago»: where an item came from, how sure it is and what it
+// said before, for the Memoria panel. Empty for the items saved before this was tracked.
+export function provenanceLabel(item) {
+  const parts = [];
+  if (SOURCE_LABEL[item?.source]) parts.push(SOURCE_LABEL[item.source]);
+  if (item?.confidence === 'inferido') parts.push('sin confirmar');
+  if (item?.status === 'revocada') parts.push('revocada');
+  if (item?.history?.length) parts.push(`antes: ${item.history[0].text}`);
+  return parts.join(' · ');
+}
+
+// Marks that change how much to trust a memory, for the model: a guess, or a decision since replaced.
+const flagsOf = (item) => `${item.confidence === 'inferido' ? ' (sin confirmar)' : ''}${item.status === 'revocada' ? ' [revocada]' : ''}`;
+
 // A flat, size-capped list for the chat request's `context`, so the server's
 // memory tools (recall, forget) can search what the user has saved.
 const CONTEXT_ITEMS = 80;
@@ -300,7 +406,7 @@ export function memoryForContext(memory, now = Date.now()) {
   const live = pruneExpired(memory, now);
   const items = [];
   for (const { id: category } of CATEGORIES) {
-    for (const item of live[category]) items.push({ id: item.id, c: category, t: describeItem(category, item).slice(0, 220) });
+    for (const item of live[category]) items.push({ id: item.id, c: category, t: describeItem(category, item).slice(0, 220), ...(flagsOf(item) ? { f: flagsOf(item).trim() } : {}) });
   }
   return items.slice(0, CONTEXT_ITEMS);
 }
@@ -340,7 +446,7 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
   const sections = [];
 
   const keyed = (title, list) => {
-    if (list.length) sections.push({ title, lines: list.slice(-12).map((i) => `${i.key}: ${i.text}`) });
+    if (list.length) sections.push({ title, lines: list.slice(-12).map((i) => `${i.key}: ${i.text}${flagsOf(i)}`) });
   };
   keyed('Perfil', live.profile);
   keyed('Preferencias', live.preferences);
@@ -365,9 +471,10 @@ export function formatMemoryForPrompt(memory, query = '', { budget = 1600, now =
       .map((s) => fmt(s.item));
   };
   // Decisions carry their date, so Eddie can say "me dijiste el 12 de sep que…" when they weigh on a request.
-  const decisions = relevant(live.decisions, 6, (d) => `${d.text}${d.project ? ` (${d.project})` : ''}${d.date ? ` — ${fmtDate(d.date)}` : ''}`);
+  // (A decision since replaced is history, not guidance: it does not go to the model.)
+  const decisions = relevant(live.decisions.filter((d) => d.status !== 'revocada'), 6, (d) => `${d.text}${d.project ? ` (${d.project})` : ''}${d.date ? ` — ${fmtDate(d.date)}` : ''}${flagsOf(d)}`);
   if (decisions.length) sections.push({ title: 'Decisiones relacionadas', lines: decisions });
-  const knowledge = relevant(live.knowledge, 6, (k) => k.text);
+  const knowledge = relevant(live.knowledge, 6, (k) => `${k.text}${flagsOf(k)}`);
   if (knowledge.length) sections.push({ title: 'Conocimientos relacionados', lines: knowledge });
 
   if (live.context.length) {

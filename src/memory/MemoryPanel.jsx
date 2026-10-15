@@ -6,7 +6,8 @@ import { useWakeWord } from '../context/wakeWordState';
 import { SENSITIVITY, cleanSensitivity } from '../services/clap';
 import { cleanWakeWord, cleanFollowUpSeconds, DEFAULT_WAKE_WORD, DEFAULT_FOLLOW_UP_SECONDS, MAX_FOLLOW_UP_SECONDS } from '../services/wakeWord';
 import Icon from '../layout/Icon';
-import { CATEGORIES, countItems, pruneExpired } from '../services/memory';
+import { CATEGORIES, countItems, provenanceLabel, pruneExpired } from '../services/memory';
+import { looksSecret } from '../services/secrets';
 import MemoryOrb from './MemoryOrb';
 import KnowledgeCard from './KnowledgeCard';
 import BusinessBrain from './BusinessBrain';
@@ -47,7 +48,7 @@ function orbItemsOf(memory, episodes) {
         category: c.id,
         label: c.label,
         text: orbText(c.id, item),
-        meta: c.id === 'context' ? `vigente hasta ${fmtDate(item.expiresAt)}` : '',
+        meta: [c.id === 'context' ? `vigente hasta ${fmtDate(item.expiresAt)}` : '', provenanceLabel(item)].filter(Boolean).join(' · '),
         kind: 'memory',
         forgettable: true,
         ...(c.id === 'projects' ? { title: item.name, rows: projectRows(item), editable: true, raw: item } : {}),
@@ -382,6 +383,10 @@ export default function MemoryPanel() {
   function submit(e) {
     e.preventDefault();
     let saved = false;
+    if (looksSecret([form.key, form.text, form.name, form.status, form.stack, form.lastChange, form.nextGoal, form.project].join(' '))) {
+      setNotice('No guardo contraseñas, claves ni datos de tarjetas en la memoria.');
+      return;
+    }
     if (category === 'projects') {
       saved = saveProject({ name: form.name, status: form.status, stack: form.stack, repo: form.repo, lastChange: form.lastChange, nextGoal: form.nextGoal });
     } else {

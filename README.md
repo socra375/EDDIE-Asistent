@@ -862,6 +862,15 @@ seguidas, y la decisión final siempre es tuya. No humilla ni manipula ni morali
   También se leen mejor las respuestas en streaming: saltos de línea `\r\n`, un último evento sin su línea en blanco y cuerpos JSON simples; y un **error dentro de un stream que ya empezó**
   (p. ej. «el modelo está sobrecargado», que Gemini manda con estado 200) se reintenta una vez y, si persiste, se muestra tal cual (y pasa al respaldo automático) en vez de contarse como «vacío».
 
+## La memoria no guarda secretos, no cambia en silencio y dice de dónde viene
+
+- **Un solo filtro de secretos** (`src/services/secrets.js`) para todas las puertas: la herramienta `remember`, lo que anota el analizador de conversaciones y de documentos, el formulario del panel Memoria y la memoria de Telegram. Rechaza contraseñas, claves de API (`sk-…`, `AIza…`, `ghp_…`, `nak_live_…`), tokens `Bearer`, tarjetas y cadenas largas con letras y números. Antes solo la herramienta `remember` lo hacía; lo automático dependía de pedirle al modelo que no lo guardara.
+- **El modelo ni lo ve**: antes de que una conversación o un documento llegue a la IA que lo resume, los valores secretos se tapan con «[dato sensible omitido]» (la frase «preguntó cómo cambiar su contraseña» sigue entera). Lo que vuelve (resumen, notas, datos) se limpia otra vez y se descarta cualquier dato que hable de un secreto.
+- **Un dato que cambia no desaparece**: perfil y preferencias guardan los tres valores anteriores (`history`). El chat muestra «Recordé: ciudad: Santo Domingo (antes: Santiago)» y la herramienta le dice a Eddie qué decía antes para que lo comente. Una decisión que reemplaza a otra (`replaces`) deja la anterior como **«revocada»**: no llega al prompt, pero queda como historial.
+- **Una deducción no pisa lo que dijiste**: cada dato lleva `source` (dicho a Eddie, de una conversación, de un documento, escrito por ti) y `confidence` (**confirmado** / **inferido**). Si una conversación sugiere «Santiago» y tú habías confirmado «Santo Domingo», no se cambia; se avisa («Sin cambiar «ciudad»: sigue «Santo Domingo»…»). Lo inferido llega al modelo marcado «(sin confirmar)». Lo guardado antes de este cambio cuenta como confirmado.
+- **En el panel Memoria** cada recuerdo muestra su procedencia, si es una deducción, si es una decisión revocada y qué decía antes. Los textos de la memoria que ya tenías se leen igual que antes.
+- **Qué no hace**: no revisa lo que ya estaba guardado (si hay una clave vieja en la memoria, bórrala a mano); no detecta duplicados por significado ni respalda las conversaciones sin Gemini (eso es la parte 2 del plan); y el filtro es estricto a propósito, así que una frase con la palabra «token» o «tarjeta» tampoco se guarda.
+
 ## Documentos .md y conversaciones clasificadas (los dos cerebros)
 
 > **Cómo encuentra Eddie lo que hay en tus documentos** (corregido: antes a veces no lo mencionaba). Lo de un `.md` soltado en
