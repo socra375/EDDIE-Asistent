@@ -60,8 +60,8 @@ function TickBridge() {
 }
 
 export function AutoReadBridge() {
-  const { messages, status, lastReply, liveSteps } = useChat();
-  const { speakWithSettings, streamWithSettings } = useVoice();
+  const { messages, status, lastReply, liveSteps, companion } = useChat();
+  const { speakWithSettings, streamWithSettings, stopSpeaking, listening } = useVoice();
   const { settings } = useSettings();
   const inCall = useCallActive();
   const autoRead = settings.voice.autoRead || inCall; // in a call Eddie always answers out loud
@@ -70,6 +70,22 @@ export function AutoReadBridge() {
   // for it to end instead of cutting it off.
   const fillerRef = useRef({ spoken: false, busy: false, pending: null });
   const [fillerTick, setFillerTick] = useState(0);
+  // The company lines (services/companion.js) said while a long request runs. They never hold the answer back: when it
+  // starts, a line still being said is cut off.
+  const companionRef = useRef({ speaking: false });
+  useEffect(() => {
+    if (status === 'processing' || !companionRef.current.speaking) return;
+    companionRef.current.speaking = false;
+    stopSpeaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+  useEffect(() => {
+    if (!companion || !autoRead || listening || fillerRef.current.busy || companionRef.current.speaking || settings.language !== 'es') return;
+    const mine = companionRef.current;
+    mine.speaking = true;
+    speakWithSettings(companion.text, () => { mine.speaking = false; }, { filler: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companion?.id]);
 
   // The answer being written: the last message while Eddie is responding.
   const writing = status === 'responding' ? messages.at(-1) : null;

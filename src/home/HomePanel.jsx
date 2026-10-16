@@ -53,7 +53,7 @@ function initialChatOpen() {
 }
 
 export default function HomePanel({ onOpenTasks, focusOrb = false }) {
-  const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, resolveConfirmation, resetConversation } = useChat();
+  const { status, sendMessage, lastReply, errorMessage, messages, activity, liveSteps, companion, resolveConfirmation, resetConversation } = useChat();
   const wake = useWakeWord();
   const vision = useVision();
   const { settings, updateVoiceSettings } = useSettings();
@@ -218,6 +218,8 @@ export default function HomePanel({ onOpenTasks, focusOrb = false }) {
         <div className="home__transcript" aria-live="polite">
           {live ? (
             <p className="home__live">“{live}”</p>
+          ) : status === 'processing' && companion ? (
+            <p className="home__companion" key={companion.id}>{companion.text}</p>
           ) : status === 'processing' && (activity || liveSteps.length > 0) ? null : reply ? (
             <>
               <p className="home__reply">{replyPreview}</p>

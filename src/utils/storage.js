@@ -50,6 +50,7 @@ export const DEFAULT_SETTINGS = {
     perf: 'auto',
     core: 'cyan', // colour of the orb: cyan | blue | green | amber
     boot: true, // the start-up animation
+    companion: true, // while a long request runs, Eddie says a joke, a fact or a tip (services/companion.js)
     topicList: false, // show the list of topics under the Segundo cerebro (the brain works the same either way)
   },
   // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).
