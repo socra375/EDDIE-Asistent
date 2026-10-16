@@ -6,6 +6,7 @@ import sys
 import unittest
 from unittest import mock
 
+sys.dont_write_bytecode = True  # no dejar .pyc dentro de public/
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 spec = importlib.util.spec_from_file_location("eddie_agent", os.path.join(ROOT, "public", "eddie_agent.py"))
 agent = importlib.util.module_from_spec(spec)
@@ -162,7 +163,7 @@ class GoodMorning(unittest.TestCase):
     def test_it_says_everything_in_order_and_then_the_checkup(self):
         done, said, started = self.run_it()
         self.assertEqual(said, ["Buenos días, Ana.", "Hoy tienes 1 evento: a las 9, clase.", "Revisé tu equipo y está bien."])
-        self.assertEqual(done, {"dicho": 2, "navegador": True, "chequeo": True})
+        self.assertEqual(done, {"dicho": 2, "navegador": True, "chequeo": True, "ajuste": "off"})
         self.assertEqual(started, [1], "the browser was closed: it is started so the extension can show the pages")
 
     def test_it_does_not_start_a_browser_that_is_already_open_or_not_needed(self):
@@ -226,7 +227,7 @@ class GoodMorning(unittest.TestCase):
 class Catalog(unittest.TestCase):
     def test_version_and_tool(self):
         major, minor, _ = (int(n) for n in agent.VERSION.split("."))
-        self.assertGreaterEqual((major, minor), (1, 11))
+        self.assertGreaterEqual((major, minor), (1, 12))
         tool = next(t for t in agent.catalog({}) if t["name"] == "morning_brief")
         self.assertEqual(tool["risk"], "confirm", "it is never a plain read: only a routine starts it")
         self.assertLessEqual(len(agent.catalog({})), 24)

@@ -15,6 +15,7 @@ import { hasLink } from '../browser/store.js';
 import { safeHttpsUrl } from '../browser/urls.js';
 
 export const DEFAULT_SONG = 'Creed - Lonely';
+export const TUNE_MODES = ['off', 'ensayo', 'activo'];
 export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'say', 'morning'];
 // A task given to Eddie to carry out on his own (see runAgent): how long he gets before it is reported as unfinished.
 const AGENT_TIMEOUT_MS = 40_000;
@@ -38,7 +39,9 @@ export function validateActions(actions) {
       clean.push({ type: 'open_sites', urls: [...new Set(urls)].slice(0, 8) });
     } else if (a.type === 'morning') {
       // The good-morning said by the computer itself: agenda, mail and tasks out loud, the pages opening meanwhile and the checkup of the equipment.
-      clean.push({ type: 'morning', pages: a.pages !== false, checkup: a.checkup !== false });
+      // tune: what it does about the equipment's performance — 'off', 'ensayo' (says what it would do, touches nothing) or 'activo'
+      // (does the safe things). It is only ever 'activo' after the user asked for it (routines/tuning.js).
+      clean.push({ type: 'morning', pages: a.pages !== false, checkup: a.checkup !== false, tune: TUNE_MODES.includes(a.tune) ? a.tune : 'off' });
     } else if (a.type === 'say') {
       const text = String(a.text || '').replace(/\s+/g, ' ').trim();
       if (!text) return { error: 'La acción "say" necesita text: lo que dirá en voz alta.' };
@@ -65,7 +68,7 @@ export function describeActions(actions) {
       if (a.type === 'summary') return 'el resumen del día';
       if (a.type === 'open_sites') return `abre ${a.urls.map((u) => new URL(u).hostname.replace(/^www\./, '')).join(', ')}`;
       if (a.type === 'say') return `dice en voz alta «${a.text}»`;
-      if (a.type === 'morning') return `te saluda en voz alta con tu agenda, correos y tareas${a.pages === false ? '' : ' (abre Gmail y el calendario mientras habla y los cierra al terminar)'}${a.checkup === false ? '' : ' y te cuenta cómo está el equipo'}`;
+      if (a.type === 'morning') return `te saluda en voz alta con tu agenda, correos y tareas${a.pages === false ? '' : ' (abre Gmail y el calendario mientras habla y los cierra al terminar)'}${a.checkup === false ? '' : ' y te cuenta cómo está el equipo'}${a.tune === 'ensayo' ? '; además ensaya optimizar el equipo (dice qué haría, no toca nada)' : a.tune === 'activo' ? '; además optimiza el equipo en segundo plano (solo baja prioridad y suelta memoria; nunca cierra apps)' : ''}`;
       if (a.type === 'agent') return `Eddie hace solo: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? '…' : ''}»`;
       if (a.type === 'play_music') return `pone "${a.query || DEFAULT_SONG}"`;
       return `avisa "${a.text}"`;

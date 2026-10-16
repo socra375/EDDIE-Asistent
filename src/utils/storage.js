@@ -1,6 +1,7 @@
 // Small localStorage wrapper. Every read/write is guarded so a disabled or
 // full storage never crashes the app — it just behaves as if memory is empty.
 import { normalizeMemory, emptyMemory } from '../services/memory';
+import { isPanelMode } from '../services/panelMode';
 
 const KEYS = {
   settings: 'eddie.settings',
@@ -119,9 +120,14 @@ export function conversationTitle(messages) {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
 
+// The browser panel (/?panel=1) keeps its own conversations: what the user talks about with Eddie beside a website is
+// not the day's chat in Eddie's window, and mixing the two confuses both. Same rules, other keys.
+const chatKey = (key) => (isPanelMode() ? `${key}.panel` : key);
+
 export function getConversations() {
-  const stored = read(KEYS.conversations, null);
+  const stored = read(chatKey(KEYS.conversations), null);
   if (stored) return stored;
+  if (isPanelMode()) return []; // the panel never inherits the old single chat
 
   const legacy = read(LEGACY_CONVERSATION_KEY, []);
   if (legacy.length === 0) return [];
@@ -140,15 +146,15 @@ export function getConversations() {
 }
 
 export function saveConversations(conversations) {
-  write(KEYS.conversations, conversations);
+  write(chatKey(KEYS.conversations), conversations);
 }
 
 export function getActiveConversationId() {
-  return read(KEYS.activeConversationId, null);
+  return read(chatKey(KEYS.activeConversationId), null);
 }
 
 export function setActiveConversationId(id) {
-  write(KEYS.activeConversationId, id);
+  write(chatKey(KEYS.activeConversationId), id);
 }
 
 export function getTasks() {

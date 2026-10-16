@@ -176,6 +176,18 @@ export async function claimBriefJob(deviceId, jobId) {
   return rows[0] ? rows[0].args || {} : null;
 }
 
+// The agent's report of what it did about the equipment, once per good-morning, after it was served (and for an hour).
+export async function claimTuneReport(deviceId, jobId) {
+  const sql = getDb();
+  const rows = await sql`
+    update computer_jobs set args = args || '{"reported": true}'::jsonb
+    where id = ${jobId} and device_id = ${deviceId} and tool = 'morning_brief' and status in ('running', 'done')
+      and args->>'served' = 'true' and created_at > now() - interval '60 minutes' and coalesce(args->>'reported', '') <> 'true'
+    returning args
+  `;
+  return rows[0] ? rows[0].args || {} : null;
+}
+
 export async function jobState(jobId) {
   const sql = getDb();
   const rows = await sql`select status, result, error from computer_jobs where id = ${jobId}`;

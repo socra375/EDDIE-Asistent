@@ -162,3 +162,29 @@ export async function claimBootPending(id) {
   const rows = await sql`update routines set state = state - 'pending' - 'written' where id = ${id} and state->>'pending' = 'true' returning id`;
   return rows.length > 0;
 }
+
+// The user's start-up routines that carry the good-morning (action «morning»), on any of their computers.
+export async function morningRoutines(userId) {
+  const sql = getDb();
+  const rows = await sql`
+    select id, name, trigger_type, time, days, event_type, device_id, actions, enabled, state
+    from routines where user_id = ${userId} and trigger_type = 'event' and event_type = 'device_boot'
+  `;
+  return rows.map(shapeRoutine).filter((r) => r.actions.some((a) => a.type === 'morning'));
+}
+
+export async function setRoutineActions(userId, id, actions) {
+  const sql = getDb();
+  const rows = await sql`update routines set actions = ${JSON.stringify(actions)} where id = ${id} and user_id = ${userId} returning id`;
+  return rows.length > 0;
+}
+
+// One more rehearsal of the equipment tuning done on this routine. → the new count.
+export async function bumpRehearsals(id) {
+  const sql = getDb();
+  const rows = await sql`
+    update routines set state = state || jsonb_build_object('rehearsals', coalesce((state->>'rehearsals')::int, 0) + 1)
+    where id = ${id} returning state
+  `;
+  return Number(rows[0]?.state?.rehearsals || 0);
+}

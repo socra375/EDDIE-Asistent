@@ -60,9 +60,12 @@ export async function serveBrief(device, jobId, now = new Date(), deps = {}) {
     }
   }
 
+  // What to do about the equipment's performance: the routine's own setting, never more than the user allowed.
+  const tune = routine.actions.find((a) => a.type === 'morning')?.tune;
   return {
     status: 200,
     json: {
+      tune: tune === 'ensayo' || tune === 'activo' ? tune : 'off',
       pieces: brief.pieces,
       seconds: brief.seconds,
       pages,

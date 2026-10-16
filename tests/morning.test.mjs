@@ -101,8 +101,8 @@ t('speakable: links, emoji and symbols out; length capped at a word', () => {
 
 // ---------------- the routine ----------------
 t('the «morning» action: valid, boot-only, described', () => {
-  assert.deepEqual(A.validateActions([{ type: 'morning' }]).actions, [{ type: 'morning', pages: true, checkup: true }]);
-  assert.deepEqual(A.validateActions([{ type: 'morning', pages: false, checkup: false }]).actions, [{ type: 'morning', pages: false, checkup: false }]);
+  assert.deepEqual(A.validateActions([{ type: 'morning' }]).actions, [{ type: 'morning', pages: true, checkup: true, tune: 'off' }]);
+  assert.deepEqual(A.validateActions([{ type: 'morning', pages: false, checkup: false }]).actions, [{ type: 'morning', pages: false, checkup: false, tune: 'off' }]);
   assert.match(A.describeActions([{ type: 'morning', pages: true, checkup: true }]), /te saluda en voz alta.*abre Gmail y el calendario mientras habla y los cierra.*cómo está el equipo/);
   assert.doesNotMatch(A.describeActions([{ type: 'morning', pages: false, checkup: false }]), /abre|equipo/);
 });
