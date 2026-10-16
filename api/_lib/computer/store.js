@@ -162,6 +162,20 @@ export async function finishJob(deviceId, jobId, { ok, result, error }) {
   return rows.length > 0;
 }
 
+// The good-morning job (routines/boot.js) is the agent's pass to ask for the day's words (agent/brief): once, for the
+// computer that took it, soon after. → its args, or null.
+const BRIEF_PASS_MINUTES = 15;
+export async function claimBriefJob(deviceId, jobId) {
+  const sql = getDb();
+  const rows = await sql`
+    update computer_jobs set args = args || '{"served": true}'::jsonb
+    where id = ${jobId} and device_id = ${deviceId} and tool = 'morning_brief' and status = 'running'
+      and created_at > now() - make_interval(mins => ${BRIEF_PASS_MINUTES}) and coalesce(args->>'served', '') <> 'true'
+    returning args
+  `;
+  return rows[0] ? rows[0].args || {} : null;
+}
+
 export async function jobState(jobId) {
   const sql = getDb();
   const rows = await sql`select status, result, error from computer_jobs where id = ${jobId}`;

@@ -150,14 +150,15 @@ export async function bootRoutines(deviceId) {
 }
 
 // A start-up that still has its other actions (summary, notice…) to run: the next cron tick does them.
-export async function markBootPending(id) {
+// `written`: the good-morning could not be said by the computer (an older agent), so the summary goes out written.
+export async function markBootPending(id, { written = false } = {}) {
   const sql = getDb();
-  await sql`update routines set state = state || '{"pending": true}'::jsonb where id = ${id}`;
+  await sql`update routines set state = state || ${written ? '{"pending": true, "written": true}' : '{"pending": true}'}::jsonb where id = ${id}`;
 }
 
 // True for the one tick that takes the pending start-up (so it runs once).
 export async function claimBootPending(id) {
   const sql = getDb();
-  const rows = await sql`update routines set state = state - 'pending' where id = ${id} and state->>'pending' = 'true' returning id`;
+  const rows = await sql`update routines set state = state - 'pending' - 'written' where id = ${id} and state->>'pending' = 'true' returning id`;
   return rows.length > 0;
 }

@@ -29,6 +29,10 @@ Todo lo que Eddie abre o usa aparece en un **grupo de pestañas de color cian ll
 
 Nunca mueve una **pestaña fijada** ni una que **tú ya metiste en un grupo tuyo**. Solo usa la API de pestañas y grupos del navegador (¿está fijada?, ¿en qué grupo y ventana?): no lee la dirección, el título ni el contenido de ninguna página para esto. Permiso nuevo: `tabGroups` (sin avisos de Chrome; al ser una extensión descomprimida se aplica al recargarla).
 
+## Páginas de un momento (desde la 1.5.0)
+
+Algunas páginas Eddie las abre solo para que las veas mientras te habla —el correo y la agenda del «buenos días» al encender el PC— y **las cierra él mismo**: cada una llega con los segundos que le quedan (`closeIn`) y, al cumplirse (un temporizador y una alarma de respaldo), `background.js` cierra la pestaña **solo si sigue en el grupo «Eddie» y no está fijada**. Para quedarte con una, arrástrala fuera del grupo. La lista de cierres se vacía al abrir el navegador (los números de pestaña no valen entre sesiones) y un cierre que se atrasó más de 5 minutos se olvida. Las páginas que Eddie abre para quedarse (un documento que creó, una reunión) no traen hora de cierre y nunca se cierran.
+
 ## Su mouse y su teclado (desde la 1.4.0)
 
 En una **tarea de navegador** que tú confirmaste (o en una página de confianza), Eddie maneja **esa pestaña** con el mouse y el teclado, un paso a la vez (`actions.js`): clic, doble clic, clic derecho, arrastrar, escribir, teclas (Enter, Tab, Escape, Retroceso, Suprimir, Espacio, flechas, Inicio, Fin, Re Pág, Av Pág, Ctrl+A y Ctrl+Z), desplazar y esperar. Nada más: ni portapapeles, ni recargar, ni cerrar ventanas. Las capturas van como JPEG. La página de Eddie puede pedirle que empiece de inmediato (mensaje `wake`: solo revisa si hay una tarea; no trae datos). Nunca teclea contraseñas, tarjetas ni códigos de seguridad, y se detiene en el botón **Detener** del ícono.
@@ -49,7 +53,7 @@ En una **tarea de navegador** que tú confirmaste (o en una página de confianza
 | `background.js` | Sondeo, alarmas de reuniones, apertura de pestañas, vínculo con Eddie. |
 | `urls.js` | Qué direcciones se abren. |
 | `actions.js` | El mouse y el teclado de una tarea de navegador (qué teclas, cómo se arrastra, cuánto se espera). |
-| `group.js` | El grupo de pestañas «Eddie» (qué entra, el título según lo que hace). |
+| `group.js` | El grupo de pestañas «Eddie» (qué entra, el título según lo que hace, si una pestaña sigue siendo suya). |
 | `popup.html`, `popup.js` | La ventana del ícono: abrir el panel, estado y vínculo manual con código. |
 | `sidepanel.html`, `sidepanel.js` | El panel lateral: marco con Eddie (`/?panel=1`) y el intermediario con la extensión. |
 | `panel.js` | Atajo, clic derecho y la lectura de la página (con sus límites). |

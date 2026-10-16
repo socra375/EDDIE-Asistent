@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -556,20 +556,247 @@ def t_say_text(args, _cfg):
     text = re.sub(r"\s+", " ", str(args.get("text") or "")).strip()[:300]
     if not text:
         raise ValueError("Dime qué decir.")
-    if IS_WINDOWS:
-        ps = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak($env:EDDIE_SAY)"
-        argv = ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps]
-    elif detect_platform() == "mac":
-        argv = ["say", text]
-    else:
-        tool = shutil.which("spd-say") or shutil.which("espeak")
-        if not tool:
-            raise ValueError("Este equipo no tiene voz instalada (spd-say o espeak).")
-        argv = [tool, text]
-    env = dict(os.environ, EDDIE_SAY=text)
-    kwargs = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if IS_WINDOWS else {"start_new_session": True}
-    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, **kwargs)
+    speak(text)
     return {"dicho": text, "summary": "Lo dije en voz alta"}
+
+
+# ------------------------------------------------------- buenos días al encender
+# Lo que hace el equipo cuando la rutina «al encender» lleva la acción «morning» (agente 1.11+): pide a Eddie las
+# palabras del día (agenda, correos, tareas), las dice con la voz del sistema —mientras el navegador muestra tu correo y
+# tu agenda, que la extensión cierra al terminar— y al final cuenta cómo está el equipo. SOLO MIRA: aquí no se cierra
+# nada ni se borra nada (optimizar es otra herramienta, con su modo de ensayo).
+
+SPEAK_TIMEOUT_S = 150  # una frase larga no debería tardar más; si el motor de voz se cuelga, se corta
+AGENT_STARTED = time.time()
+
+# Nombres de procesos que ni se mencionan como «gastones» ni se tocan nunca: el sistema, el antivirus, los controladores,
+# el escritorio y Eddie mismo. Cerrar uno de estos es lo que deja un equipo sin sonido, sin red o sin escritorio.
+PROTECTED_NAMES = frozenset(
+    n.strip()
+    for n in """
+system idle process|system|registry|smss|csrss|wininit|services|lsass|lsm|svchost|winlogon|dwm|explorer|fontdrvhost|sihost|ctfmon|
+taskhostw|runtimebroker|searchhost|searchindexer|startmenuexperiencehost|shellexperiencehost|textinputhost|applicationframehost|
+securityhealthservice|securityhealthsystray|msmpeng|nissrv|mpdefendercoreservice|memory compression|spoolsv|audiodg|wudfhost|
+conhost|dllhost|taskmgr|wlanext|dashost|lockapp|userinit|
+init|systemd|kthreadd|dbus-daemon|pipewire|pulseaudio|xorg|xwayland|gnome-shell|kwin_x11|kwin_wayland|plasmashell|sshd|networkmanager|
+launchd|kernel_task|windowserver|loginwindow|finder|dock|systemuiserver|coreaudiod|mds|mds_stores|
+python|python3|pythonw|eddie_agent|eddie
+""".replace("\n", "").split("|")
+    if n.strip()
+)
+
+FRIENDLY_NAMES = {
+    "chrome": "Chrome", "google chrome": "Chrome", "msedge": "Edge", "firefox": "Firefox", "brave": "Brave", "opera": "Opera",
+    "code": "Visual Studio Code", "teams": "Teams", "ms-teams": "Teams", "spotify": "Spotify", "discord": "Discord",
+    "slack": "Slack", "onedrive": "OneDrive", "zoom": "Zoom", "whatsapp": "WhatsApp", "telegram": "Telegram",
+    "outlook": "Outlook", "excel": "Excel", "winword": "Word", "powerpnt": "PowerPoint", "steam": "Steam",
+    "epicgameslauncher": "Epic Games", "dropbox": "Dropbox", "notion": "Notion", "figma": "Figma",
+}
+
+
+def process_key(name):
+    """«Chrome.exe» → «chrome»: el nombre sin .exe y en minúsculas, para compararlo."""
+    key = str(name or "").strip().lower()
+    return key[:-4] if key.endswith(".exe") else key
+
+
+def is_protected(name):
+    return process_key(name) in PROTECTED_NAMES
+
+
+def friendly_name(name):
+    key = process_key(name)
+    return FRIENDLY_NAMES.get(key) or key.replace("-", " ").replace("_", " ").title()
+
+
+def speech_command(text, plat=None, wait=False):
+    """(argv, env) para decir `text` con la voz del propio sistema; ValueError si el equipo no tiene voz."""
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not text:
+        raise ValueError("Dime qué decir.")
+    plat = plat or detect_platform()
+    env = dict(os.environ, EDDIE_SAY=text)
+    if plat == "windows":
+        ps = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak($env:EDDIE_SAY)"
+        return ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps], env
+    if plat == "mac":
+        return ["say", text], env
+    spd = shutil.which("spd-say")
+    if spd:
+        return ([spd, "-w", text] if wait else [spd, text]), env
+    espeak = shutil.which("espeak")
+    if espeak:
+        return [espeak, text], env
+    raise ValueError("Este equipo no tiene voz instalada (spd-say o espeak).")
+
+
+def speak(text, wait=False):
+    """Dice `text`. Con wait=True vuelve cuando termina de hablar (para saber cuándo cerrar las páginas)."""
+    argv, env = speech_command(text, wait=wait)
+    kwargs = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if IS_WINDOWS else {"start_new_session": True}
+    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, **kwargs)
+    if wait:
+        try:
+            proc.wait(timeout=SPEAK_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    return env["EDDIE_SAY"]
+
+
+BROWSER_PROCESSES = frozenset(["chrome", "google chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "chromium", "chromium-browser", "safari"])
+
+
+def browser_running(names=None):
+    """¿Hay un navegador abierto? Si no, hay que abrirlo para que la extensión muestre las páginas."""
+    if names is None:
+        if psutil is None:
+            return False
+        names = []
+        for p in psutil.process_iter(["name"]):
+            try:
+                names.append(p.info.get("name") or "")
+            except Exception:
+                continue
+    return any(process_key(n) in BROWSER_PROCESSES for n in names)
+
+
+def heavy_apps(procs=None, limit=3, min_mb=300):
+    """Las apps (no los procesos sueltos: Chrome son decenas) que más memoria usan, solo del usuario y sin las del sistema.
+    `procs`: [(nombre, bytes)] ya filtrados por dueño; sin él se lee de psutil."""
+    if procs is None:
+        need_psutil()
+        procs = []
+        for p in psutil.process_iter(["name", "memory_info"]):
+            try:
+                if not _is_mine(p):
+                    continue
+                procs.append((p.info.get("name") or "", p.info["memory_info"].rss))
+            except Exception:
+                continue
+    total = {}
+    for name, rss in procs:
+        if not name or is_protected(name):
+            continue
+        key = friendly_name(name)
+        total[key] = total.get(key, 0) + int(rss or 0)
+    ranked = sorted(total.items(), key=lambda kv: kv[1], reverse=True)
+    return [{"nombre": n, "mb": round(b / (1024 * 1024))} for n, b in ranked if b >= min_mb * 1024 * 1024][:limit]
+
+
+def spoken_size(mb):
+    return f"{round(mb / 1024, 1):g} gigas".replace(".", " coma ") if mb >= 1024 else f"{round(mb, -1):g} megas"
+
+
+def build_checkup(m):
+    """Cómo está el equipo, en pocas frases habladas. Puro: recibe las medidas y devuelve qué decir (se prueba sin equipo).
+    m: ram_percent, cpu_percent, disk_free_gb, disk_free_percent, uptime_hours, session_minutes, battery {percent, cargando}, heavy [{nombre, mb}]."""
+    findings = []
+    heavy = m.get("heavy") or []
+    names = " y ".join(h["nombre"] for h in heavy[:2])
+    ram = m.get("ram_percent")
+    if ram is not None and ram >= 85:
+        findings.append(("warn", "ram", f"La memoria está al {round(ram)} por ciento{', sobre todo por ' + names if names else ''}. Conviene cerrar lo que no uses."))
+    elif ram is not None and ram >= 70:
+        findings.append(("info", "ram", f"La memoria va al {round(ram)} por ciento{', con ' + names + ' como lo que más usa' if names else ''}."))
+    cpu = m.get("cpu_percent")
+    if cpu is not None and cpu >= 60:
+        if (m.get("session_minutes") or 0) < 8:
+            findings.append(("info", "cpu", f"El procesador está al {round(cpu)} por ciento porque el equipo aún termina de arrancar."))
+        elif cpu >= 85:
+            findings.append(("warn", "cpu", f"El procesador está muy cargado, al {round(cpu)} por ciento."))
+    free_gb, free_pct = m.get("disk_free_gb"), m.get("disk_free_percent")
+    if free_gb is not None and (free_gb < 10 or (free_pct is not None and free_pct < 8)):
+        findings.append(("warn", "disk", f"Solo te quedan {round(free_gb)} gigas libres en el disco."))
+    elif free_pct is not None and free_pct < 15:
+        findings.append(("info", "disk", f"El disco va justo: quedan {round(free_gb)} gigas libres."))
+    up = m.get("uptime_hours")
+    if up is not None and up >= 24 * 7:
+        days = int(up // 24)
+        findings.append(("warn" if days >= 14 else "info", "uptime", f"Llevas {days} días sin reiniciar el equipo del todo. Reiniciarlo hoy, y no solo apagarlo, ayuda."))
+    bat = m.get("battery")
+    if bat and bat.get("percent") is not None and bat["percent"] <= 20 and not bat.get("cargando"):
+        findings.append(("warn", "battery", f"La batería está al {bat['percent']} por ciento; conecta el cargador."))
+    findings.sort(key=lambda f: 0 if f[0] == "warn" else 1)
+    out = [{"level": lv, "key": key, "text": text} for lv, key, text in findings]
+    if out:
+        spoken = "Revisé tu equipo. " + " ".join(f["text"] for f in out[:2])
+        if heavy and any(f["key"] == "ram" and f["level"] == "warn" for f in out):
+            spoken += " Si quieres, dime qué cerrar y lo hago."
+    else:
+        parts = []
+        if ram is not None:
+            parts.append(f"la memoria va al {round(ram)} por ciento")
+        if free_gb is not None:
+            parts.append(f"quedan {round(free_gb)} gigas libres en el disco")
+        spoken = "Revisé tu equipo y está bien" + (": " + " y ".join(parts) + "." if parts else ".")
+    return {"findings": out, "spoken": spoken, "summary": spoken}
+
+
+def gather_metrics():
+    need_psutil()
+    vm = psutil.virtual_memory()
+    du = shutil.disk_usage(HOME)
+    return {
+        "ram_percent": vm.percent,
+        "cpu_percent": psutil.cpu_percent(interval=1.0),
+        "disk_free_gb": gb(du.free),
+        "disk_free_percent": round(du.free / du.total * 100, 1) if du.total else None,
+        "uptime_hours": round((time.time() - psutil.boot_time()) / 3600, 1),
+        "session_minutes": round((time.time() - AGENT_STARTED) / 60, 1),
+        "battery": _battery(),
+        "heavy": heavy_apps(),
+    }
+
+
+def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, measure=None):
+    """El saludo completo. Las piezas externas se pueden cambiar para probarlo. → qué pasó (para el registro)."""
+    opts = opts or {}
+    ask = ask or (lambda: api(cfg, "agent/brief", {"job": job_id}, timeout=60))
+    say = say or (lambda text: speak(text, wait=True))
+    start_browser = start_browser or (lambda: webbrowser.open("about:blank"))
+    measure = measure or (lambda: build_checkup(gather_metrics()))
+    brief = ask()
+    done = {"dicho": 0, "navegador": False, "chequeo": False}
+    if brief.get("launch_browser") and not browser_running():
+        try:
+            start_browser()  # la extensión toma las páginas en cuanto el navegador arranca
+            done["navegador"] = True
+        except Exception as e:
+            log("No pude abrir el navegador:", e)
+    for piece in brief.get("pieces") or []:
+        say(piece)
+        done["dicho"] += 1
+    if brief.get("checkup", True) and opts.get("checkup", True):
+        try:
+            say(measure()["spoken"])
+            done["chequeo"] = True
+        except Exception as e:  # el saludo ya está dicho; un fallo al medir no lo estropea
+            log("No pude revisar el equipo:", e)
+    return done
+
+
+_MORNING_LOCK = threading.Lock()
+
+
+def t_morning_brief(args, cfg):
+    """Lo pone en marcha la rutina «al encender» (con un pase de un solo uso); no se usa a mano."""
+    job_id = str(args.get("_job") or "")
+    if not job_id:
+        raise ValueError("Este saludo solo lo pide la rutina de encendido.")
+    if not _MORNING_LOCK.acquire(blocking=False):
+        return {"summary": "Ya estoy dándote los buenos días."}
+
+    def work():
+        try:
+            log("Buenos días:", json.dumps(run_morning(cfg, job_id, args), ensure_ascii=False))
+        except Exception as e:
+            log("El saludo no pudo completarse:", e)
+        finally:
+            _MORNING_LOCK.release()
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"iniciado": True, "summary": "Empecé a darte los buenos días"}
+
 
 
 PARTIAL_DOWNLOAD_EXT = (".crdownload", ".part", ".download", ".tmp")
@@ -1409,6 +1636,7 @@ TOOLS = {
     "scan_network": (t_scan_network, "Dispositivos en tu red", "Qué hay conectado a la misma red (IP, MAC y el nombre que cada uno anuncia). Solo mira; no ataca ni escanea puertos.", "read", {}),
     "open_urls": (t_open_urls, "Abrir páginas web", "Abre una o varias páginas https en el navegador predeterminado, aunque el navegador esté cerrado.", "confirm", {"urls": S("Direcciones https separadas por espacios o saltos de línea.")}),
     "say_text": (t_say_text, "Decir algo en voz alta", "Dice un texto en voz alta con la voz del sistema.", "confirm", {"text": S("Qué decir (máx. 300 caracteres).")}),
+    "morning_brief": (t_morning_brief, "Buenos días al encender", "Lo pide la rutina «al encender»: dice en voz alta tu agenda, correos y tareas (mientras tu navegador muestra el correo y la agenda) y cuenta cómo está el equipo. Solo mira; no cierra ni borra nada.", "confirm", {}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
     "video_info": (t_video_info, "Ver videos y ffmpeg", "Dice si ffmpeg está instalado; con una ruta, la duración y el tamaño de un video; sin ruta, tus videos recientes.", "read", {"path": S("Video o audio: nombre (ej. clip.mp4) o ruta dentro de tu carpeta personal (opcional).")}),
     "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, vertical 9:16, poner texto, añadir música, aligerarlo o hacer un reel completo en un paso.", "confirm", {
@@ -1476,6 +1704,8 @@ def drain(cfg):
             return
         name, args = job.get("tool"), job.get("args") or {}
         log("Trabajo:", name, json.dumps(args, ensure_ascii=False))
+        if name == "morning_brief":
+            args = dict(args, _job=job["id"])  # el pase para pedir las palabras del día
         try:
             result = run_tool(name, args, cfg)
             payload = {"id": job["id"], "ok": True, "result": result}

@@ -14,6 +14,8 @@ const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const EVENT_TYPES = ['download_complete', 'device_boot'];
 // The first agent that also notices a start-up after being switched off (Windows' fast startup keeps the boot time) — public/eddie_agent.py.
 const BOOT_AGENT = [1, 8, 1];
+// The first agent that can say the good-morning itself (action «morning»).
+const MORNING_AGENT = [1, 11, 0];
 const versionAtLeast = (version, min) => {
   const parts = String(version || '').split('.').map((n) => Number.parseInt(n, 10) || 0);
   for (let i = 0; i < 3; i += 1) if ((parts[i] || 0) !== min[i]) return (parts[i] || 0) > min[i];
@@ -58,10 +60,11 @@ async function createRoutineTool(args, context) {
 
   const { actions, error: actionsError } = await parseActions(args.actions);
   if (actionsError) return { error: actionsError };
-  if (event !== 'device_boot' && actions.some((a) => a.type === 'say')) return { error: 'La acción "say" (decir en voz alta) solo se usa en rutinas de event="device_boot", porque la dice el propio PC.' };
+  if (event !== 'device_boot' && actions.some((a) => a.type === 'say' || a.type === 'morning')) return { error: 'Las acciones "say" y "morning" (hablar en voz alta) solo se usan en rutinas de event="device_boot", porque las dice el propio PC.' };
 
   let deviceId = null;
   let deviceName = '';
+  let note = '';
   if (event) {
     const devices = await devicesByUser(user.id);
     const picked = pickDevice(devices, args.device);
@@ -74,6 +77,9 @@ async function createRoutineTool(args, context) {
     }
     deviceId = picked.device.id;
     deviceName = picked.device.name;
+    if (event === 'device_boot' && actions.some((a) => a.type === 'morning') && !versionAtLeast(picked.device.version, MORNING_AGENT)) {
+      note = ` Ojo: el agente de «${deviceName}» es de la versión ${picked.device.version || 'desconocida'} y todavía no puede hablar: por ahora el resumen te llegará escrito. ${updateHint}`;
+    }
   }
 
   const name = clip(String(args.name || '').trim(), 80) || (time ? `Rutina de las ${time}` : event === 'device_boot' ? 'Al encender el PC' : 'Aviso de descarga');
@@ -84,7 +90,7 @@ async function createRoutineTool(args, context) {
     summary: time
       ? `Rutina «${name}» creada: ${encodeDays(days) ? describeDays(days) : 'todos los días'} a las ${time}, ${describeActions(actions)}.`
       : event === 'device_boot'
-        ? `Rutina «${name}» creada: cuando se encienda «${deviceName}»${when}, ${describeActions(actions)}. Se dispara con el inicio de sesión del PC; despertarlo de la suspensión no cuenta.`
+        ? `Rutina «${name}» creada: cuando se encienda «${deviceName}»${when}, ${describeActions(actions)}. Se dispara con el inicio de sesión del PC; despertarlo de la suspensión no cuenta.${note}`
         : `Rutina «${name}» creada: cuando termine una descarga${when}, ${describeActions(actions)}.`,
   };
 }
@@ -129,7 +135,8 @@ export default {
 2. Una tarea para ti (acción agent) corre sin nadie delante: no puede preguntar ni confirmar, y lo delicado (enviar, borrar, mover) no se hace. Escríbela completa y con contexto, como para alguien que no puede preguntar.
 3. «Cuando encienda la PC» y «cuando termine la descarga» necesitan un equipo con EDDIE Prime; si hay varios, pregunta cuál.
 4. Una rutina corre a una hora, todos los días o solo en ciertos días (parámetro days: «lunes a viernes», «fines de semana», «lunes, miércoles y viernes»; «cada lunes» es days="lunes"), o por evento. «Durante la semana pero no los fines de semana» = days="lunes a viernes". Si no dicen días, son todos; si dudas, pregúntalo. No hay «cada 2 horas» ni «el día 1 de cada mes»: dilo y ofrece lo más cercano (la diaria, o la de ciertos días).
-5. Al terminar, di en una frase qué hará y a qué hora. Para quitar una, cancel_routine.`,
+5. Al terminar, di en una frase qué hará y a qué hora. Para quitar una, cancel_routine.
+6. «Cuando encienda la PC, salúdame y dime qué hay hoy» = event="device_boot" con la acción morning (él la dice en voz alta con la voz del sistema; no hace falta que escribas el texto). Dile al usuario lo que hará: saluda, lee agenda, correos y tareas de hoy, abre Gmail y el calendario mientras habla y los cierra al terminar (solo si tiene la extensión de Eddie) y cuenta cómo está el equipo. Si su agente es viejo, el resumen le llega escrito y debe actualizar el agente. Optimizar el PC (cerrar apps, borrar archivos) NO lo hace esta rutina: solo mira y recomienda.`,
   auth: null,
   requiredEnv: ['DATABASE_URL'],
   note: 'Las rutinas solo pueden hacer lo de esta lista (resumen, música, un aviso de texto o una tarea de Eddie): nada sensible se ejecuta, porque nadie confirma una tarjeta cuando corren solas; lo que necesite permiso se te avisa como pendiente.',
@@ -143,7 +150,7 @@ export default {
       declaration: {
         name: 'create_routine',
         description:
-          `Crea una rutina automática. Por hora: pon time ("08:00") y, si no es todos los días, days ("lunes a viernes"). Por evento: pon event ("download_complete" cuando termine una descarga, o "device_boot" cuando se encienda el PC; ambos necesitan un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), open_sites (necesita urls: arreglo de direcciones https completas, p. ej. YouTube https://www.youtube.com, Google https://www.google.com, WhatsApp Web https://web.whatsapp.com; solo las ABRE, nunca escribe ni envía nada en ellas), say (solo con device_boot; necesita text: lo que dice el PC en voz alta con la voz del sistema), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="device_boot", actions=[{"type":"open_sites","urls":["https://www.youtube.com","https://www.google.com","https://web.whatsapp.com"]}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
+          `Crea una rutina automática. Por hora: pon time ("08:00") y, si no es todos los días, days ("lunes a viernes"). Por evento: pon event ("download_complete" cuando termine una descarga, o "device_boot" cuando se encienda el PC; ambos necesitan un equipo de EDDIE Prime vinculado; con varios, indica cuál en device) — usa SOLO una de las dos. actions es un arreglo JSON de pasos, cada uno {"type": uno de [${ACTION_TYPES.join(', ')}], ...}: summary (el resumen del día, sin más datos), play_music (opcional query, si no se da usa "${DEFAULT_SONG}"), notify (necesita text, el aviso a mandar), open_sites (necesita urls: arreglo de direcciones https completas, p. ej. YouTube https://www.youtube.com, Google https://www.google.com, WhatsApp Web https://web.whatsapp.com; solo las ABRE, nunca escribe ni envía nada en ellas), say (solo con device_boot; necesita text: lo que dice el PC en voz alta con la voz del sistema), morning (solo con device_boot; el PC saluda en voz alta y cuenta la agenda, los correos importantes y las tareas de HOY con datos reales; mientras habla abre Gmail y el calendario en el navegador y los cierra al terminar; al final cuenta cómo está el equipo, memoria, disco, batería; opcionales pages=false para no abrir páginas y checkup=false para no revisar el equipo; necesita el agente EDDIE Prime 1.11 o más nuevo, y las páginas solo se abren si el usuario tiene la extensión de Eddie en su navegador; NO cierra apps ni borra nada), agent (necesita prompt: una tarea que TÚ harás sola con tus herramientas cuando llegue la hora, p. ej. «revisa el clima y dime si llevo paraguas»; el resultado le llega como aviso; sin permiso para nada delicado, y si el usuario no la pidió a una hora concreta usa un recordatorio en su lugar). Ej.: time="08:00", actions=[{"type":"summary"},{"type":"play_music"}]. Ej.: event="device_boot", actions=[{"type":"morning"}] (saludo hablado completo al encender el PC). Ej.: event="device_boot", actions=[{"type":"open_sites","urls":["https://www.youtube.com","https://www.google.com","https://web.whatsapp.com"]}]. Ej.: event="download_complete", actions=[{"type":"notify","text":"Tu descarga terminó."}].`,
         parameters: {
           type: 'OBJECT',
           properties: {
