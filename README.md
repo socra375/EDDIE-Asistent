@@ -762,6 +762,26 @@ Dile a Eddie: **«cuando encienda la PC, salúdame y dime qué hay hoy»**. Crea
 - **Pruebas**: `tests/morning.test.mjs` (guion, rutina, pase y cola) y `tests/agent/test_morning.py` (el agente: chequeo, procesos protegidos, voz y el saludo completo; lo corre el mismo test de Node). El cierre de pestañas se probó con la extensión real en Chromium.
 - **Límites a propósito**: no hay horario de silencio (si enciendes el PC de madrugada, hablará); la voz es la del sistema, no la de Eddie.
 
+### Optimizar el PC con seguridad (agente 1.12, «ensayo» primero)
+
+Pídele a Eddie *«optimiza mi PC cuando lo encienda»* (o añade `tune: "ensayo"` al saludo). **Lo que hace y lo que jamás hace:**
+
+- **Solo dos cosas, las dos reversibles**: (1) **bajar la prioridad** de una app que se come el procesador en segundo plano (≥ 25 % sin que la uses) y (2) **soltar la memoria** de una app parada (≥ 200 MB y casi 0 % de uso; Windows se la devuelve sola si la app despierta). **Nunca cierra una app, nunca mata un proceso, nunca borra un archivo**: una prueba revisa el código de la optimización y falla si aparece `kill`, `terminate`, `suspend`, `os.remove`, `rmtree`…
+- **Lo que nunca toca**: procesos que no son tuyos, el sistema (`svchost`, `explorer`, `csrss`…), el antivirus, controladores, los **navegadores** (para dormir pestañas está el «Ahorro de memoria» de Chrome, y Eddie te lo recomienda cuando el navegador es lo que más memoria usa), llamadas y reuniones (Zoom, Teams, Discord…), grabación y música, VPN, escritorio remoto, gestores de contraseñas, nubes de respaldo, el propio agente y cualquier `python`; **tampoco la app que estás usando** (la ventana de delante) ni una que lleve menos de 30 s abierta. Máximo 6 ajustes por encendido.
+- **Comprobación de último momento**: antes de tocar cada proceso se vuelve a mirar que sea el mismo (mismo nombre y misma hora de arranque, por si uno cerró y otro tomó su número) y que no esté delante. Si algo falla, ese proceso se omite y los demás siguen.
+- **Solo Windows por ahora**: en otros sistemas el agente no sabe qué ventana está delante y sin eso **no toca nada**.
+- **Entrenamiento antes de activar**: empieza en **ensayo**: en cada encendido dice (y te escribe por Telegram o notificación) qué *habría* hecho, sin tocar nada, y cuenta el ensayo. **«Activo» solo con tres ensayos hechos y si tú lo pides** (`set_pc_tuning`, con tarjeta de confirmación); `create_routine` nunca lo crea activo. Después de cada encendido activo te escribe exactamente qué ajustó. Para apagarla: `set_pc_tuning` con `off`.
+- **Deshacer**: *«deshaz la optimización»* → `pc_tune_undo` devuelve la prioridad que tenían las apps que siguen siendo las mismas (la prioridad baja también se pierde al reiniciar la app).
+- **Sin esperar al encendido**: `pc_tune_plan` (solo mira) y `pc_tune_run` (con confirmación) desde el chat.
+- **El informe**: el agente lo manda a `agent/tune-report` (un solo uso por saludo, `claimTuneReport`); **el modo que cuenta es el de la rutina, no lo que diga el agente**: en ensayo, aunque el agente dijera que hizo algo, el informe no lo da por hecho. El texto se limpia (tipos conocidos, 8 elementos, textos cortos).
+- **Pruebas**: `tests/tune.test.mjs` (la compuerta, el informe, la limpieza) y `tests/agent/test_tune.py` (32 casos del agente con procesos falsos que *explotan* si alguien intenta cerrarlos). **No probado en un Windows real**: el cambio de prioridad y `EmptyWorkingSet` (`ctypes`), y cuál es la ventana de delante, solo se ven en tu PC; por eso empieza en ensayo.
+
+### Conversación nueva cada 24 horas
+
+- Cuando la conversación que tienes delante cumple **24 horas desde su primer mensaje**, Eddie abre una **vacía** (al abrir la app, al volver a la pestaña o con un chequeo de cada minuto, y nunca en medio de una respuesta). La anterior sigue en el **historial**; si abres una vieja desde ahí a propósito, se queda abierta (`src/services/conversationRotation.js`).
+- **El chat del panel del navegador es otro**: la barra lateral de la extensión (`/?panel=1`) guarda **sus propias conversaciones** (`eddie.conversations.panel`), separadas de las de Eddie, cada una con la misma regla de 24 horas. Lo que hablas con Eddie al lado de una web ya no se mezcla con el chat del día.
+- Pruebas: `tests/conversation-rotation.test.mjs`.
+
 ### Cuando enciendas el PC (rutinas «device_boot»)
 
 - Dile a Eddie: **«cuando encienda la PC, abre YouTube, Google y WhatsApp Web»**. Crea una rutina por evento `device_boot` con la acción `open_sites`

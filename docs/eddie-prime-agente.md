@@ -63,6 +63,9 @@ vacío «job» (ya no manda `Cache: no`). Cuesta unas 6 peticiones por minuto a 
 | `kill_process {pid}` | confirmación | cierra un proceso **de tu usuario** (nunca el 1 ni el propio agente) |
 | `scan_network` | lectura | qué dispositivos hay en tu red local: IP, MAC y el nombre que cada uno anuncia (ver «Red local») |
 | `morning_brief` | confirmación (solo la lanza la rutina «al encender», con un pase) | dice en voz alta tu agenda, correos y tareas del día (con datos que pide a Eddie por `agent/brief`) y cuenta cómo está el equipo; solo mira (ver README → «Buenos días al encender el PC») |
+| `pc_tune_plan` | lectura | qué apps del usuario se comen el procesador en segundo plano o tienen memoria parada y qué se podría ajustar; no cambia nada |
+| `pc_tune_run` | confirmación | baja la prioridad / suelta la memoria de esas apps (máx. 6). **Nunca cierra apps ni borra archivos**; nunca toca el sistema, el antivirus, navegadores ni la app en uso. Solo Windows (ver README → «Optimizar el PC con seguridad») |
+| `pc_tune_undo` | confirmación | devuelve la prioridad normal a las apps que se habían bajado |
 | `check_downloads` | lectura | si hay una descarga a medias en tu carpeta Descargas y qué llegó hace poco; la usan las rutinas automáticas (ver `docs/eddie-2-arquitectura.md` o el README) |
 | `video_info {path}` | lectura | si ffmpeg está instalado; con `path`, duración, tamaño y audio de un video; sin él, tus videos recientes (ver «Videos con ffmpeg») |
 | `edit_video {operation, path, second, start, end, text}` | confirmación | edita un video con ffmpeg y deja uno **nuevo** en `Videos/Eddie` (ver «Videos con ffmpeg») |
@@ -207,6 +210,7 @@ Todas las rutas son `POST` bajo `/api/connectors/computer/agent/` con JSON; toda
 | `hello` | `{ version, tools, name? }` | `{ ok, name, topic, ntfy, tools }`; actualiza el catálogo al arrancar |
 | `next` | `{}` | `{ job: { id, tool, args } }` o `{ job: null }` |
 | `result` | `{ id, ok: true, result }` o `{ id, ok: false, error }` | `{ ok }`; 409 si el trabajo caducó o no es tuyo |
+| `tune-report` | `{ job, mode, plan, applied, skipped }` | `{ ok, mode, rehearsals, delivered }`; 403 si no hay saludo servido sin informe (un solo uso) |
 | `brief` | `{ job }` (el id de un trabajo `morning_brief` que el agente está ejecutando) | `{ pieces, seconds, pages, launch_browser, checkup }`; 403 si el pase ya se usó, es de otro equipo o caducó |
 
 `tools` es una lista de `{ name, label, description, risk: "read"|"confirm", parameters: { properties: { arg: { type:

@@ -23,6 +23,7 @@ import { applyWhatsappActions } from '../services/whatsappActions';
 import { applyMessageActions } from '../services/messageActions';
 import { callBridge } from '../services/callState';
 import { panelContext } from '../services/panelMode';
+import { CHECK_EVERY_MS, isStale, restoreActive } from '../services/conversationRotation';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
@@ -100,15 +101,10 @@ export function ChatProvider({ children }) {
   const { location } = useLocation();
   const { user } = useAuth();
   const [conversations, setConversations] = useState(() => getConversations());
-  const [conversationId, setConversationId] = useState(() => {
-    const activeId = getActiveConversationId();
-    return activeId || nextId();
-  });
-  const [messages, setMessages] = useState(() => {
-    const activeId = getActiveConversationId();
-    const found = activeId && getConversations().find((c) => c.id === activeId);
-    return found ? found.messages : [];
-  });
+  // The conversation Eddie opens with: the one in progress, unless it is already a day old (then a blank one).
+  const [initial] = useState(() => restoreActive({ activeId: getActiveConversationId(), conversations: getConversations(), newId: nextId }));
+  const [conversationId, setConversationId] = useState(initial.id);
+  const [messages, setMessages] = useState(initial.messages);
   const [status, setStatus] = useState('idle'); // idle | processing | responding | error
   const [errorMessage, setErrorMessage] = useState('');
   const [lastReply, setLastReply] = useState(null);
@@ -588,10 +584,37 @@ export function ChatProvider({ children }) {
     setErrorMessage('');
   }, []);
 
+  // A new conversation every 24 hours: while Eddie stays open, once the one in front is a day old and Eddie is not in
+  // the middle of an answer, a blank one takes its place (the old one stays in the history).
+  // A day-old conversation the user opened from the history on purpose stays open (`keepRef`).
+  const statusRef = useRef(status);
+  const idRef = useRef(conversationId);
+  const keepRef = useRef(null);
+  useEffect(() => {
+    statusRef.current = status;
+    idRef.current = conversationId;
+  }, [status, conversationId]);
+  useEffect(() => {
+    const rotate = () => {
+      if (statusRef.current === 'processing' || statusRef.current === 'responding') return;
+      if (idRef.current !== keepRef.current && isStale(messagesRef.current)) resetConversation();
+    };
+    const onVisible = () => document.visibilityState === 'visible' && rotate();
+    const timer = window.setInterval(rotate, CHECK_EVERY_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', rotate);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', rotate);
+    };
+  }, [resetConversation]);
+
   const loadConversation = useCallback(
     (id) => {
       const target = conversations.find((c) => c.id === id);
       if (!target) return;
+      keepRef.current = id;
       setConversationId(id);
       setMessages(target.messages);
       setStatus('idle');

@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -695,7 +695,7 @@ def build_checkup(m):
     names = " y ".join(h["nombre"] for h in heavy[:2])
     ram = m.get("ram_percent")
     if ram is not None and ram >= 85:
-        findings.append(("warn", "ram", f"La memoria está al {round(ram)} por ciento{', sobre todo por ' + names if names else ''}. Conviene cerrar lo que no uses."))
+        findings.append(("warn", "ram", f"La memoria está al {round(ram)} por ciento{', sobre todo por ' + names if names else ''}. {'Conviene dormir las pestañas que no uses: activa el Ahorro de memoria en la configuración de rendimiento del navegador.' if heavy and process_key(heavy[0]['nombre']) in BROWSER_PROCESSES else 'Conviene cerrar lo que no uses.'}"))
     elif ram is not None and ram >= 70:
         findings.append(("info", "ram", f"La memoria va al {round(ram)} por ciento{', con ' + names + ' como lo que más usa' if names else ''}."))
     cpu = m.get("cpu_percent")
@@ -748,15 +748,258 @@ def gather_metrics():
     }
 
 
-def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, measure=None):
+# ------------------------------------------------------- optimizar el equipo con seguridad
+# Optimizar sin romper nada. Reglas que no se negocian:
+#   · NUNCA se cierra ni se mata un proceso, ni se borra un archivo. Solo dos cosas, las dos reversibles:
+#       bajar la prioridad de una app que se come el procesador en segundo plano (vuelve a la normal al reiniciarla,
+#       o con «deshacer»), y soltar la memoria de una app parada (Windows la vuelve a pedir sola si la app despierta).
+#   · Solo procesos del usuario, nunca los del sistema, el antivirus, el escritorio, los navegadores (para eso está el
+#       «Ahorro de memoria» de Chrome), las llamadas, la grabación, las VPN ni el propio agente.
+#   · Nunca la app que se está usando ahora (la ventana de delante).
+#   · Se vuelve a comprobar cada proceso justo antes de tocarlo (por si cerró y otro tomó su número).
+#   · Por ahora solo en Windows: en otros sistemas no se sabe qué ventana está delante, y sin eso no se toca nada.
+# Dos modos: «ensayo» (dice qué haría, no hace nada) y «activo» (lo hace). Eddie solo pasa a «activo» si el usuario lo
+# pide y el ensayo ya se hizo varias veces (ver el servidor: routines/tuning.js).
+
+TUNE_STATE_PATH = os.path.join(CONFIG_DIR, "tune.json")
+TUNE_MAX_ACTIONS = 6
+TUNE_MIN_AGE_S = 30  # una app que acaba de abrirse todavía está arrancando
+TUNE_CPU_BUSY = 25.0  # % del procesador entero, medido unos segundos
+TUNE_IDLE_CPU = 1.0
+TUNE_IDLE_MB = 200
+
+# Además de PROTECTED_NAMES (sistema, antivirus, escritorio, Eddie): lo que nunca se toca aunque parezca ocioso o pesado.
+TUNE_SKIP_NAMES = frozenset(
+    n.strip()
+    for n in """
+chrome|google chrome|msedge|firefox|brave|opera|vivaldi|chromium|safari|iexplore|
+zoom|teams|ms-teams|skype|discord|slack|webex|ptoneclk|whatsapp|telegram|signal|
+obs|obs64|obs-studio|streamlabs|spotify|vlc|mpv|audacity|
+anydesk|teamviewer|rustdesk|parsec|mstsc|
+openvpn|wireguard|nordvpn|expressvpn|protonvpn|tailscale|
+keepass|keepassxc|bitwarden|1password|lastpass|
+onedrive|dropbox|googledrivefs|backup|veeam|
+nvcontainer|nvidia share|nvdisplay.container|amdrsserv|radeonsoftware|igfxem|rtkaudservice64|
+dwm|csrss|lsass
+""".replace("\n", "").split("|")
+    if n.strip()
+)
+
+
+def tune_skips(name):
+    key = process_key(name)
+    return is_protected(name) or key in TUNE_SKIP_NAMES or key.startswith(("eddie", "python"))
+
+
+def plan_tuning(procs, foreground_pid=None, own_pids=(), windows=True, max_actions=TUNE_MAX_ACTIONS):
+    """Qué se podría hacer, sin hacer nada. Puro: recibe los procesos ya medidos y devuelve la lista.
+    procs: [{pid, name, rss_mb, cpu (% del procesador entero), age_s, mine, low (ya tiene prioridad baja)}]
+    → [{kind: 'lower_priority' | 'trim_memory', pid, name, create_time, detail}], de mayor a menor efecto."""
+    if not windows or foreground_pid is None:
+        return []  # sin saber qué ventana está delante no se toca nada
+    candidates = []
+    for p in procs:
+        pid = p.get("pid")
+        if not p.get("mine") or pid in own_pids or pid == foreground_pid or tune_skips(p.get("name")):
+            continue
+        if (p.get("age_s") or 0) < TUNE_MIN_AGE_S:
+            continue
+        name = friendly_name(p["name"])
+        base = {"pid": pid, "name": name, "create_time": p.get("create_time")}
+        cpu, mb = p.get("cpu") or 0.0, p.get("rss_mb") or 0
+        if cpu >= TUNE_CPU_BUSY and not p.get("low"):
+            candidates.append((cpu, {**base, "kind": "lower_priority", "detail": f"usa el {round(cpu)} por ciento del procesador sin que la estés usando"}))
+        elif cpu < TUNE_IDLE_CPU and mb >= TUNE_IDLE_MB:
+            candidates.append((mb / 100.0, {**base, "kind": "trim_memory", "detail": f"tiene {spoken_size(mb)} de memoria y está parada"}))
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    return [c[1] for c in candidates[:max_actions]]
+
+
+def foreground_pid():
+    """El proceso de la ventana que se está usando ahora (Windows); None si no se sabe."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        pid = ctypes.c_ulong(0)
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return None
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return int(pid.value) or None
+    except Exception:
+        return None
+
+
+def collect_processes(sample=3.0):
+    """Los procesos del usuario con su uso del procesador durante `sample` segundos."""
+    need_psutil()
+    cores = psutil.cpu_count() or 1
+    procs = []
+    for p in psutil.process_iter(["pid", "name", "memory_info", "create_time"]):
+        try:
+            if not _is_mine(p):
+                continue
+            p.cpu_percent(None)
+            procs.append(p)
+        except Exception:
+            continue
+    time.sleep(sample)
+    low = {getattr(psutil, "BELOW_NORMAL_PRIORITY_CLASS", None), getattr(psutil, "IDLE_PRIORITY_CLASS", None)} - {None}
+    out = []
+    now = time.time()
+    for p in procs:
+        try:
+            out.append({
+                "pid": p.pid, "name": p.info.get("name") or "", "rss_mb": round(p.info["memory_info"].rss / (1024 * 1024)),
+                "cpu": p.cpu_percent(None) / cores, "age_s": now - p.info["create_time"], "create_time": p.info["create_time"],
+                "mine": True, "low": (p.nice() in low) if IS_WINDOWS else False,
+            })
+        except Exception:
+            continue
+    return out
+
+
+def _win_trim(pid):
+    import ctypes
+    handle = ctypes.windll.kernel32.OpenProcess(0x0100 | 0x0400, False, pid)  # SET_QUOTA | QUERY_INFORMATION
+    if not handle:
+        raise OSError("sin permiso")
+    try:
+        if not ctypes.windll.psapi.EmptyWorkingSet(handle):
+            raise OSError("no pudo")
+    finally:
+        ctypes.windll.kernel32.CloseHandle(handle)
+
+
+def read_tune_state():
+    try:
+        with open(TUNE_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_tune_state(state):
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(TUNE_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+    except OSError:
+        pass
+
+
+def apply_tuning(plan, lookup=None, fg=None, trim=None, state_io=None):
+    """Hace lo del plan, de a uno, comprobando cada proceso otra vez justo antes. → {hecho: [...], omitido: [...]}.
+    Jamás cierra nada: solo baja prioridad o suelta memoria. `lookup(pid)` devuelve el proceso (psutil.Process)."""
+    need_psutil()
+    lookup = lookup or psutil.Process
+    trim = trim or _win_trim
+    current_fg = fg() if fg else foreground_pid()
+    state = (state_io or (read_tune_state, write_tune_state))
+    saved = state[0]()
+    done, skipped = [], []
+    for item in plan[:TUNE_MAX_ACTIONS]:
+        try:
+            proc = lookup(item["pid"])
+            same = abs(proc.create_time() - item["create_time"]) < 1 and friendly_name(proc.name()) == item["name"]
+            if not same or tune_skips(proc.name()) or not _is_mine(proc) or current_fg is None or item["pid"] in (current_fg, os.getpid()):
+                skipped.append({**item, "motivo": "ya no cumple (cambió o está en uso)"})
+                continue
+            if item["kind"] == "lower_priority":
+                before = proc.nice()
+                below = getattr(psutil, "BELOW_NORMAL_PRIORITY_CLASS", None)
+                proc.nice(below if below is not None else min(before + 10, 19))
+                saved.setdefault("priorities", []).append({"pid": item["pid"], "create_time": item["create_time"], "name": item["name"], "before": before})
+            elif item["kind"] == "trim_memory":
+                trim(item["pid"])
+            else:
+                skipped.append({**item, "motivo": "acción desconocida"})
+                continue
+            done.append(item)
+        except Exception as e:  # un proceso que falla no frena a los demás
+            skipped.append({**item, "motivo": str(e)[:80] or "no se pudo"})
+    state[1](saved)
+    return {"hecho": done, "omitido": skipped}
+
+
+def undo_tuning(lookup=None, state_io=None):
+    """Devuelve la prioridad que tenían las apps (solo las que siguen siendo las mismas)."""
+    need_psutil()
+    lookup = lookup or psutil.Process
+    state = (state_io or (read_tune_state, write_tune_state))
+    saved = state[0]()
+    restored, gone = [], []
+    for item in saved.get("priorities", []):
+        try:
+            proc = lookup(item["pid"])
+            if abs(proc.create_time() - item["create_time"]) >= 1:
+                gone.append(item["name"])
+                continue
+            proc.nice(item["before"])
+            restored.append(item["name"])
+        except Exception:
+            gone.append(item["name"])
+    saved["priorities"] = []
+    state[1](saved)
+    return {"restauradas": restored, "ya_no_estaban": gone}
+
+
+def describe_plan(plan, applied=False):
+    """Lo que se dice en voz alta (corto) y lo que se escribe (completo)."""
+    if not plan:
+        return {"spoken": "", "lines": []}
+    lines = [f"{'Bajé la prioridad de' if i['kind'] == 'lower_priority' else 'Solté la memoria de'} {i['name']} ({i['detail']})." if applied
+             else f"{'Bajaría la prioridad de' if i['kind'] == 'lower_priority' else 'Soltaría la memoria de'} {i['name']} ({i['detail']})." for i in plan]
+    names = " y ".join(dict.fromkeys(i["name"] for i in plan[:3]))
+    if applied:
+        spoken = f"Optimicé el equipo en segundo plano: ajusté {names}. No cerré nada."
+    else:
+        spoken = f"En ensayo: podría ajustar {names}. No he tocado nada."
+    return {"spoken": spoken, "lines": lines}
+
+
+def t_pc_tune_plan(_args, _cfg):
+    need_psutil()
+    plan = plan_tuning(collect_processes(), foreground_pid(), (os.getpid(), os.getppid()), IS_WINDOWS)
+    d = describe_plan(plan)
+    return {"plan": plan, "lineas": d["lines"], "summary": (f"Podría ajustar {len(plan)} app{'s' if len(plan) != 1 else ''}" if plan else "No hay nada que valga la pena ajustar (o este sistema aún no lo permite)")}
+
+
+def t_pc_tune_run(_args, _cfg):
+    need_psutil()
+    plan = plan_tuning(collect_processes(), foreground_pid(), (os.getpid(), os.getppid()), IS_WINDOWS)
+    out = apply_tuning(plan)
+    d = describe_plan(out["hecho"], applied=True)
+    return {**out, "lineas": d["lines"], "summary": f"Ajusté {len(out['hecho'])} app{'s' if len(out['hecho']) != 1 else ''}; no cerré nada"}
+
+
+def t_pc_tune_undo(_args, _cfg):
+    out = undo_tuning()
+    return {**out, "summary": f"Devolví la prioridad normal a {len(out['restauradas'])} app{'s' if len(out['restauradas']) != 1 else ''}"}
+
+
+
+def run_tuning(mode):
+    """Ensayo (solo mira) o activo (hace lo seguro). → qué se planeó, qué se hizo y qué se omitió."""
+    plan = plan_tuning(collect_processes(), foreground_pid(), (os.getpid(), os.getppid()), IS_WINDOWS)
+    out = apply_tuning(plan) if mode == "activo" else {"hecho": [], "omitido": []}
+    return {"mode": mode, "plan": plan, "applied": out["hecho"], "skipped": out["omitido"]}
+
+
+def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, measure=None, tuner=None, report=None):
     """El saludo completo. Las piezas externas se pueden cambiar para probarlo. → qué pasó (para el registro)."""
     opts = opts or {}
     ask = ask or (lambda: api(cfg, "agent/brief", {"job": job_id}, timeout=60))
     say = say or (lambda text: speak(text, wait=True))
     start_browser = start_browser or (lambda: webbrowser.open("about:blank"))
     measure = measure or (lambda: build_checkup(gather_metrics()))
+    tuner = tuner or run_tuning
+    report = report or (lambda payload: api(cfg, "agent/tune-report", payload, timeout=30))
     brief = ask()
-    done = {"dicho": 0, "navegador": False, "chequeo": False}
+    done = {"dicho": 0, "navegador": False, "chequeo": False, "ajuste": "off"}
     if brief.get("launch_browser") and not browser_running():
         try:
             start_browser()  # la extensión toma las páginas en cuanto el navegador arranca
@@ -772,6 +1015,21 @@ def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, 
             done["chequeo"] = True
         except Exception as e:  # el saludo ya está dicho; un fallo al medir no lo estropea
             log("No pude revisar el equipo:", e)
+    mode = brief.get("tune") if brief.get("tune") in ("ensayo", "activo") else "off"
+    if mode != "off":
+        # En segundo plano y sin riesgo: lo que falle aquí se anota y ya.
+        try:
+            result = tuner(mode)
+            done["ajuste"] = mode
+            shown = result["applied"] if mode == "activo" else result["plan"]
+            line = describe_plan(shown, applied=(mode == "activo"))["spoken"]
+            if line:
+                say(line)
+            brief_item = lambda i: {"kind": i["kind"], "name": i["name"], "detail": i["detail"]}  # noqa: E731
+            report({"job": job_id, "mode": mode, "plan": [brief_item(i) for i in result["plan"]],
+                    "applied": [brief_item(i) for i in result["applied"]], "skipped": len(result["skipped"])})
+        except Exception as e:
+            log("No pude ajustar el equipo:", e)
     return done
 
 
@@ -1637,6 +1895,9 @@ TOOLS = {
     "open_urls": (t_open_urls, "Abrir páginas web", "Abre una o varias páginas https en el navegador predeterminado, aunque el navegador esté cerrado.", "confirm", {"urls": S("Direcciones https separadas por espacios o saltos de línea.")}),
     "say_text": (t_say_text, "Decir algo en voz alta", "Dice un texto en voz alta con la voz del sistema.", "confirm", {"text": S("Qué decir (máx. 300 caracteres).")}),
     "morning_brief": (t_morning_brief, "Buenos días al encender", "Lo pide la rutina «al encender»: dice en voz alta tu agenda, correos y tareas (mientras tu navegador muestra el correo y la agenda) y cuenta cómo está el equipo. Solo mira; no cierra ni borra nada.", "confirm", {}),
+    "pc_tune_plan": (t_pc_tune_plan, "Qué se puede optimizar", "Mira qué apps del usuario se comen el procesador en segundo plano o tienen memoria parada, y dice qué se podría ajustar. NO cambia nada, ni cierra nada.", "read", {}),
+    "pc_tune_run": (t_pc_tune_run, "Optimizar el equipo", "Hace lo seguro: baja la prioridad de las apps que se comen el procesador en segundo plano y suelta la memoria de las paradas. NUNCA cierra apps ni borra archivos; nunca toca el sistema, el antivirus, los navegadores ni la app que se está usando. Solo Windows.", "confirm", {}),
+    "pc_tune_undo": (t_pc_tune_undo, "Deshacer la optimización", "Devuelve la prioridad normal a las apps cuya prioridad se bajó.", "confirm", {}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
     "video_info": (t_video_info, "Ver videos y ffmpeg", "Dice si ffmpeg está instalado; con una ruta, la duración y el tamaño de un video; sin ruta, tus videos recientes.", "read", {"path": S("Video o audio: nombre (ej. clip.mp4) o ruta dentro de tu carpeta personal (opcional).")}),
     "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, vertical 9:16, poner texto, añadir música, aligerarlo o hacer un reel completo en un paso.", "confirm", {
