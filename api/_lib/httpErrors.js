@@ -1,4 +1,6 @@
 export function errorToStatus(err) {
+  // A provider that went silent and was cut off (a DOMException: its own `code` is a small number, not ours).
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return 503;
   switch (err.code) {
     case 'UNAUTHORIZED':
       return 401;

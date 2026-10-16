@@ -3,6 +3,7 @@
 // GROQ_API_KEY never leaves the server. Groq exposes Whisper through the
 // OpenAI-compatible /audio/transcriptions endpoint (multipart upload).
 import { fetchWithRetry } from './fetchWithRetry.js';
+import { withMessage } from './errorMessage.js';
 
 const GROQ_TRANSCRIBE_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 // Turbo is the faster and cheaper one and is plenty for short commands;
@@ -128,7 +129,7 @@ export async function transcribeAudio({ audio, mimeType, language, apiKey = proc
   }
   if (lastError.code === 'MODEL_MISSING') {
     lastError.code = 'PROVIDER_ERROR';
-    lastError.message = 'Groq no ofrece ninguno de los modelos Whisper conocidos. Configura GROQ_STT_MODEL en Vercel con un modelo vigente.';
+    lastError = withMessage(lastError, 'Groq no ofrece ninguno de los modelos Whisper conocidos. Configura GROQ_STT_MODEL en Vercel con un modelo vigente.');
   }
   throw lastError;
 }
