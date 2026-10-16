@@ -3,6 +3,7 @@
 // an onChunk(text) callback as it's generated, instead of buffering the
 // whole thing — see docs/javascript.md for why (perceived latency).
 import { nextThinking, rejectsThinking, thinkingFor } from './geminiThinking.js';
+import { withMessage } from './errorMessage.js';
 import { hasImages } from './images.js';
 import { createToolset, intentFromMessages } from './connectors/registry.js';
 import { createDelegator } from './delegation.js';
@@ -37,6 +38,7 @@ const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 // default is its largest general model with tool support. CEREBRAS_MODEL
 // overrides it (Cerebras' lineup changes over time, like Groq's).
 const CEREBRAS_DEFAULT_MODEL = 'llama-3.3-70b';
+
 
 export function defaultModelFor(provider) {
   if (provider === 'claude') return CLAUDE_DEFAULT_MODEL;
@@ -940,8 +942,7 @@ export async function callProvider({ provider: requestedProvider, model: request
         const result = await callSingleProvider({ provider: backup.provider, system: systemFor(backup.provider), messages, toolset, onChunk: trackedChunk });
         return { ...withToolOutput(result), fallbackFrom: provider };
       } catch (backupErr) {
-        backupErr.message = `${err.message} (El respaldo ${backup.name} también falló: ${backupErr.message})`;
-        err = backupErr;
+        err = withMessage(backupErr, `${err.message} (El respaldo ${backup.name} también falló: ${backupErr?.message})`);
       }
     }
     throw err;
