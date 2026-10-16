@@ -188,6 +188,18 @@ export async function claimTuneReport(deviceId, jobId) {
   return rows[0] ? rows[0].args || {} : null;
 }
 
+// The agent could not speak the good-morning (no Spanish voice on the computer): it says so once, with the words to write.
+export async function claimVoiceReport(deviceId, jobId) {
+  const sql = getDb();
+  const rows = await sql`
+    update computer_jobs set args = args || '{"voiceReported": true}'::jsonb
+    where id = ${jobId} and device_id = ${deviceId} and tool = 'morning_brief' and status in ('running', 'done')
+      and args->>'served' = 'true' and created_at > now() - interval '60 minutes' and coalesce(args->>'voiceReported', '') <> 'true'
+    returning args
+  `;
+  return rows[0] ? rows[0].args || {} : null;
+}
+
 export async function jobState(jobId) {
   const sql = getDb();
   const rows = await sql`select status, result, error from computer_jobs where id = ${jobId}`;

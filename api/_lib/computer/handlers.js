@@ -1,14 +1,14 @@
 // /api/connectors/computer/*. Two audiences:
 //   the app (signed-in user):   pair-code, installer (the one-click Windows installer, with a code inside), unlink, test
 //   the agent (bearer token):   agent/pair (with the code), agent/hello,
-//                               agent/next, agent/result, agent/brief, agent/tune-report
+//                               agent/next, agent/result, agent/brief, agent/tune-report, agent/voice-report
 // The agent's token is created at pairing, shown to it once and kept only as
 // a hash; it can only fetch and answer this user's computer jobs.
 import { requireUser } from '../session.js';
 import { isOwner, ownerEmails } from '../connectors/github/index.js';
 import { plainText, sanitizeCatalog } from './catalog.js';
 import { handleDeviceBoot } from '../routines/boot.js';
-import { serveBrief } from '../routines/morning.js';
+import { reportVoice, serveBrief } from '../routines/morning.js';
 import { reportTuning } from '../routines/tuning.js';
 import { claimBoot, claimStart, consumePairCode, createDevice, createPairCode, deleteDevice, deviceByToken, devicesByUser, finishJob, takeJob, updateCatalog } from './store.js';
 import { ntfyBase, runOnComputer } from './run.js';
@@ -89,6 +89,8 @@ async function agentRoute(action, { method, headers, body }) {
   if (action === 'brief') return serveBrief(device, body?.job);
   // What it did (or would do) about the equipment's performance, once per good-morning (routines/tuning.js).
   if (action === 'tune-report') return reportTuning(device, body);
+  // No Spanish voice on the computer: the greeting goes in writing instead (routines/morning.js).
+  if (action === 'voice-report') return reportVoice(device, body);
   if (action === 'result') {
     const id = String(body?.id || '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return { status: 400, json: { error: 'Falta el id del trabajo.' } };

@@ -125,6 +125,12 @@ const joined = (r) => ({ id: r.id, user_id: r.user_id, name: r.name, days: r.day
 installNeon([
   [/^select r\.id, r\.user_id, r\.name, r\.days, r\.actions, r\.state, l\.chat_id/, ([deviceId]) => routines.filter((r) => r.enabled && r.event_type === 'device_boot' && r.device_id === deviceId).map(joined)],
   [/^update routines set state = state \|\| (.+)::jsonb where id/, ([json, id]) => { pending.push({ id, state: JSON.parse(json) }); return []; }],
+  [/^update routines set state = state \|\| jsonb_build_object\('morningOn'/, ([date, id]) => {
+    const r = routines.find((x) => x.id === id);
+    if (!r || r.state.morningOn === date) return [];
+    r.state.morningOn = date;
+    return [{ id }];
+  }],
   [/^delete from computer_jobs where created_at/, () => []],
   [/^select id, user_id, name, topic, tools, agent_version, platform, last_seen_at from computer_devices where user_id/, () => [{ id: 'dev1', user_id: USER.id, name: 'PC', topic: 't', tools: [], agent_version: agentVersion, platform: 'windows', last_seen_at: new Date().toISOString() }]],
   [/^insert into routines/, ([user_id, name, trigger_type, time, days, event_type, device_id, actionsJson]) => [{ id: 'new1', name, trigger_type, time, days, event_type, device_id, actions: JSON.parse(actionsJson), enabled: true, state: {} }]],
@@ -189,7 +195,7 @@ const deps = (over = {}) => ({
   loadUserContext: async () => ({ settings: { disabledConnectors: [] }, tasks: [{ title: 'Estudiar', priority: 'alta' }] }),
   collectToday: async () => ({ calendar: { status: 'ok', events }, mail, news: { status: 'off' } }),
   listPendingReminders: async () => [],
-  hasLink: async () => true,
+  linkByUser: async () => ({ name: 'Chrome en Windows', version: '1.5.0' }),
   ...over,
 });
 const running = async () => {
@@ -235,7 +241,7 @@ t('the pass is only good for that computer, for a running morning job', async ()
 
 t('without the browser extension nothing is opened (he never opens what he cannot put away) and he says why', async () => {
   const job = await running();
-  const out = await serveBrief(device, job.id, NOW, deps({ hasLink: async () => false }));
+  const out = await serveBrief(device, job.id, NOW, deps({ linkByUser: async () => null }));
   assert.equal(out.status, 200);
   assert.deepEqual(out.json.pages, []);
   assert.equal(out.json.launch_browser, false);
@@ -270,6 +276,108 @@ t('a routine deleted meanwhile, or a switched-off Gmail, are handled', async () 
   let asked;
   await serveBrief(device, job2.id, NOW, deps({ loadUserContext: async () => ({ settings: { disabledConnectors: ['gmail'] }, tasks: [] }), collectToday: async (o) => { asked = o.disabled; return { calendar: { status: 'off' }, mail: { status: 'off' } }; } }));
   assert.deepEqual(asked, ['gmail'], 'a connector the user switched off is not asked');
+});
+
+// ---------------- once a day ----------------
+t('the greeting is for the FIRST start-up of the day: the second time the PC is switched on, nothing is said', async () => {
+  routines.length = 0; jobs.length = 0; pending.length = 0;
+  addRoutine([{ type: 'morning', pages: true, checkup: true, tune: 'off' }]);
+  await handleDeviceBoot(device, new Date('2026-10-14T12:30:00Z')); // 8:30 in Santo Domingo
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1, 'the first start-up greets');
+  await handleDeviceBoot(device, new Date('2026-10-14T15:00:00Z')); // 11:00, same day
+  await handleDeviceBoot(device, new Date('2026-10-14T23:00:00Z')); // 19:00, still the same day there
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1, 'later start-ups the same day stay quiet');
+  await handleDeviceBoot(device, new Date('2026-10-15T12:30:00Z')); // the next morning
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 2, 'the next day it greets again');
+});
+
+t('the day is the user\'s day: 9 pm at night and 9 am next morning are different days there, though not in UTC', async () => {
+  routines.length = 0; jobs.length = 0;
+  addRoutine([{ type: 'morning', pages: false, checkup: false, tune: 'off' }]);
+  await handleDeviceBoot(device, new Date('2026-10-14T23:30:00Z')); // 19:30 on the 14th in Santo Domingo
+  await handleDeviceBoot(device, new Date('2026-10-15T01:30:00Z')); // 21:30 on the 14th (already the 15th in UTC)
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1, 'same local day');
+});
+
+t('two routines with the good-morning (the user asked twice) still greet once, and each counts the day as done', async () => {
+  routines.length = 0; jobs.length = 0;
+  addRoutine([{ type: 'morning', pages: true, checkup: true, tune: 'off' }, { type: 'play_music', query: 'Creep' }]);
+  addRoutine([{ type: 'morning', pages: true, checkup: true, tune: 'off' }]);
+  await handleDeviceBoot(device, new Date('2026-10-14T12:30:00Z'));
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1, 'one greeting, not two');
+  await handleDeviceBoot(device, new Date('2026-10-14T16:00:00Z'));
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1, 'and none on the second start-up, from either routine');
+});
+
+t('the other actions of the routine are not limited to once a day', async () => {
+  routines.length = 0; jobs.length = 0;
+  addRoutine([{ type: 'morning', pages: false, checkup: false, tune: 'off' }, { type: 'open_sites', urls: ['https://www.youtube.com/'] }]);
+  await handleDeviceBoot(device, new Date('2026-10-14T12:30:00Z'));
+  await handleDeviceBoot(device, new Date('2026-10-14T16:00:00Z'));
+  assert.equal(jobs.filter((j) => j.tool === 'open_urls').length, 2);
+  assert.equal(jobs.filter((j) => j.tool === 'morning_brief').length, 1);
+});
+
+t('an older agent: the written summary is also only for the first start-up of the day', async () => {
+  routines.length = 0; jobs.length = 0; pending.length = 0;
+  addRoutine([{ type: 'morning', pages: true, checkup: true, tune: 'off' }]);
+  const old = { ...device, tools: [{ name: 'say_text' }] };
+  await handleDeviceBoot(old, new Date('2026-10-14T12:30:00Z'));
+  await handleDeviceBoot(old, new Date('2026-10-14T16:00:00Z'));
+  assert.equal(pending.length, 1);
+});
+
+// ---------------- the browser that has the extension ----------------
+const M = await import(`${root}/api/_lib/routines/morning.js`);
+
+t('browserKind: the agent starts the browser the extension linked from, not the system default', () => {
+  assert.equal(M.browserKind('Chrome en Windows'), 'chrome');
+  assert.equal(M.browserKind('Microsoft Edge en Windows'), 'edge');
+  assert.equal(M.browserKind('Brave'), 'brave');
+  assert.equal(M.browserKind(''), 'chrome');
+  assert.equal(M.browserKind(undefined), 'chrome');
+});
+
+t('the pass names that browser, and an old extension is told (it opens the pages but cannot close them)', async () => {
+  let job = await running();
+  const fresh = await serveBrief(device, job.id, NOW, deps());
+  assert.equal(fresh.json.browser, 'chrome');
+  assert.equal(fresh.json.note, undefined);
+  job = await running();
+  const old = await serveBrief(device, job.id, NOW, deps({ linkByUser: async () => ({ name: 'Chrome en Windows', version: '1.2.1' }) }));
+  assert.match(old.json.note, /extensión .* vieja .* no cerrará las páginas/);
+  assert.deepEqual(old.json.pages, ['Tu correo', 'Tu agenda'], 'the pages are still queued');
+  job = await running();
+  const edge = await serveBrief(device, job.id, NOW, deps({ linkByUser: async () => ({ name: 'Edge en Windows', version: '1.5.0' }) }));
+  assert.equal(edge.json.browser, 'edge');
+  job = await running();
+  const none = await serveBrief(device, job.id, NOW, deps({ linkByUser: async () => null }));
+  assert.equal(none.json.browser, undefined);
+  assert.match(none.json.note, /sin la extensión/, 'now it is said aloud too, not dropped');
+});
+
+// ---------------- no Spanish voice: in writing ----------------
+t('no Spanish voice on the computer: the greeting arrives written, once, with how to install a voice', async () => {
+  const sent = [];
+  const routine = { id: 'r1', userId: USER.id, chatId: 555, actions: [{ type: 'morning' }] };
+  let claims = 0;
+  const depsV = {
+    claimVoiceReport: async () => ((claims += 1) === 1 ? { routine: 'r1', served: true } : null),
+    bootRoutines: async () => [routine],
+    deliver: async (r, text, notification) => { sent.push({ text, notification }); return true; },
+    send: async () => ({ ok: true }),
+    push: async () => ({ sent: 1 }),
+  };
+  const body = { job: 'j', problem: 'no_spanish_voice', pieces: ['Buenos días, Ana. Hoy es miércoles 14 de octubre.', 'Hoy tienes 1 evento: a las 9, clase.', ...Array(20).fill('x'.repeat(500))] };
+  const out = await M.reportVoice(device, body, depsV);
+  assert.equal(out.status, 200);
+  assert.match(sent[0].text, /no tiene una voz en español/);
+  assert.match(sent[0].text, /Buenos días, Ana\. Hoy es miércoles 14 de octubre\./);
+  assert.match(sent[0].text, /Hora e idioma → Voz/);
+  assert.ok(sent[0].text.length < 3500, 'the pieces are limited');
+  assert.equal(sent[0].notification.title, 'Tu saludo del día');
+  assert.equal((await M.reportVoice(device, body, depsV)).status, 403, 'a second report with the same pass is refused');
+  assert.equal(sent.length, 1);
 });
 
 // ---------------- the page queue: closing time ----------------

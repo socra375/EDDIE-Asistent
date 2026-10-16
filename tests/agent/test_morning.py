@@ -114,14 +114,46 @@ class Voice(unittest.TestCase):
         self.assertIn("Remove-Item", env["EDDIE_SAY"])
         self.assertIn("$env:EDDIE_SAY", argv[-1])
 
-    def test_mac_and_linux(self):
-        self.assertEqual(agent.speech_command("hola   mundo\n", plat="mac")[0], ["say", "hola mundo"])
+    def test_windows_picks_a_spanish_voice_and_can_insist_on_it(self):
+        argv, env = agent.speech_command("hola", plat="windows")
+        script = argv[-1]
+        self.assertIn("Culture.Name -like 'es*'", script)
+        self.assertIn("SelectVoice", script)
+        self.assertIn("exit 3", script, "no Spanish voice: a code the agent understands")
+        self.assertEqual(env["EDDIE_NEED_ES"], "0")
+        self.assertEqual(agent.speech_command("hola", plat="windows", require_spanish=True)[1]["EDDIE_NEED_ES"], "1")
+
+    def test_mac_uses_a_spanish_voice(self):
+        with mock.patch.object(agent, "mac_spanish_voice", return_value="Monica"):
+            self.assertEqual(agent.speech_command("hola   mundo\n", plat="mac")[0], ["say", "-v", "Monica", "hola mundo"])
+        with mock.patch.object(agent, "mac_spanish_voice", return_value=None):
+            self.assertEqual(agent.speech_command("hola", plat="mac")[0], ["say", "hola"], "best effort for a plain say_text")
+            with self.assertRaises(agent.NoSpanishVoice):
+                agent.speech_command("hola", plat="mac", require_spanish=True)
+
+    def test_mac_voice_list_is_read(self):
+        listing = "Alex                en_US    # Most people recognize me by my voice.\nMonica              es_ES    # Hola, me llamo Mónica.\nPaulina             es_MX    # Hola, me llamo Paulina.\n"
+        fake = mock.Mock(return_value=mock.Mock(stdout=listing))
+        self.assertEqual(agent.mac_spanish_voice(run=fake), "Monica")
+        self.assertIsNone(agent.mac_spanish_voice(run=mock.Mock(return_value=mock.Mock(stdout="Alex  en_US  # hi\n"))))
+        self.assertIsNone(agent.mac_spanish_voice(run=mock.Mock(side_effect=OSError("no say"))))
+
+    def test_linux_speaks_spanish(self):
         with mock.patch.object(agent.shutil, "which", side_effect=lambda n: "/usr/bin/" + n if n == "spd-say" else None):
-            self.assertEqual(agent.speech_command("hola", plat="linux", wait=True)[0], ["/usr/bin/spd-say", "-w", "hola"])
-            self.assertEqual(agent.speech_command("hola", plat="linux")[0], ["/usr/bin/spd-say", "hola"])
+            self.assertEqual(agent.speech_command("hola", plat="linux", wait=True)[0], ["/usr/bin/spd-say", "-l", "es", "-w", "hola"])
+            self.assertEqual(agent.speech_command("hola", plat="linux")[0], ["/usr/bin/spd-say", "-l", "es", "hola"])
+        with mock.patch.object(agent.shutil, "which", side_effect=lambda n: "/usr/bin/" + n if n == "espeak" else None):
+            self.assertEqual(agent.speech_command("hola", plat="linux")[0], ["/usr/bin/espeak", "-v", "es", "hola"])
         with mock.patch.object(agent.shutil, "which", return_value=None):
             with self.assertRaisesRegex(ValueError, "no tiene voz"):
                 agent.speech_command("hola", plat="linux")
+
+    def test_no_spanish_voice_on_windows_is_noticed_through_the_exit_code(self):
+        proc = mock.Mock(returncode=3)
+        with mock.patch.object(agent.subprocess, "Popen", return_value=proc), mock.patch.object(agent, "detect_platform", return_value="windows"):
+            with self.assertRaises(agent.NoSpanishVoice):
+                agent.speak("hola", wait=True, require_spanish=True)
+            agent.speak("hola", wait=True)  # without insisting it is just best effort
 
     def test_nothing_to_say_is_an_error(self):
         for empty in ["", "   ", None]:
@@ -130,7 +162,8 @@ class Voice(unittest.TestCase):
 
     def test_speak_waits_only_when_asked(self):
         proc = mock.Mock()
-        with mock.patch.object(agent.subprocess, "Popen", return_value=proc) as popen, mock.patch.object(agent, "detect_platform", return_value="mac"):
+        with mock.patch.object(agent.subprocess, "Popen", return_value=proc) as popen, mock.patch.object(agent, "detect_platform", return_value="mac"), \
+             mock.patch.object(agent, "mac_spanish_voice", return_value=None):
             agent.speak("hola")
             proc.wait.assert_not_called()
             agent.speak("hola", wait=True)
@@ -155,7 +188,7 @@ class GoodMorning(unittest.TestCase):
                 {}, "job1", opts,
                 ask=lambda: brief or self.BRIEF,
                 say=say or said.append,
-                start_browser=start_browser or (lambda: started.append(1)),
+                start_browser=start_browser or (lambda: started.append(1) or True),
                 measure=measure or (lambda: {"spoken": "Revisé tu equipo y está bien."}),
             )
         return done, said, started
@@ -163,7 +196,7 @@ class GoodMorning(unittest.TestCase):
     def test_it_says_everything_in_order_and_then_the_checkup(self):
         done, said, started = self.run_it()
         self.assertEqual(said, ["Buenos días, Ana.", "Hoy tienes 1 evento: a las 9, clase.", "Revisé tu equipo y está bien."])
-        self.assertEqual(done, {"dicho": 2, "navegador": True, "chequeo": True, "ajuste": "off"})
+        self.assertEqual(done, {"dicho": 3, "navegador": True, "chequeo": True, "ajuste": "off", "voz": "ok"})
         self.assertEqual(started, [1], "the browser was closed: it is started so the extension can show the pages")
 
     def test_it_does_not_start_a_browser_that_is_already_open_or_not_needed(self):
@@ -224,10 +257,67 @@ class GoodMorning(unittest.TestCase):
         self.assertEqual(seen[1], ("say_text", {"text": "hola"}))
 
 
+class BrowserAndVoiceInTheMorning(unittest.TestCase):
+    BRIEF = {"pieces": ["Buenos días.", "Hoy no tienes nada."], "checkup": False, "launch_browser": True, "browser": "chrome"}
+
+    def go(self, brief=None, say=None, running=False, launch=None):
+        said, voice, launched = [], [], []
+        agent.run_morning({}, "j1", {}, ask=lambda: brief or self.BRIEF, say=say or said.append,
+                          start_browser=launch or (lambda: launched.append(1) or True), is_running=lambda: running, voice_report=voice.append)
+        return said, voice, launched
+
+    def test_it_starts_the_browser_that_has_the_extension_when_it_is_closed(self):
+        self.assertEqual(self.go()[2], [1])
+        self.assertEqual(self.go(running=True)[2], [])
+
+    def test_running_means_that_browser_not_any_browser(self):
+        self.assertFalse(agent.browser_running(["msedge.exe", "explorer.exe"], kind="chrome"), "Edge open, the extension lives in Chrome")
+        self.assertTrue(agent.browser_running(["chrome.exe"], kind="chrome"))
+        self.assertTrue(agent.browser_running(["msedge.exe"], kind="edge"))
+        self.assertTrue(agent.browser_running(["msedge.exe"]), "no kind: any browser")
+        self.assertFalse(agent.browser_running(["msedge.exe"], kind="brave"))
+
+    def test_launch_browser_runs_the_right_program_not_the_default_one(self):
+        popen = mock.Mock()
+        found = agent.launch_browser("chrome", finder=lambda name: ["C:/Chrome/chrome.exe"] if name == "chrome" else None, popen=popen)
+        self.assertTrue(found)
+        self.assertEqual(popen.call_args[0][0], ["C:/Chrome/chrome.exe"])
+        with mock.patch.object(agent.webbrowser, "open") as default:
+            self.assertFalse(agent.launch_browser("chrome", finder=lambda name: None, popen=popen), "not installed: say so, do not open another browser")
+            default.assert_not_called()
+            agent.launch_browser(None)
+            default.assert_called_once()
+
+    def test_a_browser_that_cannot_be_found_does_not_stop_the_greeting(self):
+        said, _, _ = self.go(launch=lambda: False)
+        self.assertEqual(said, self.BRIEF["pieces"])
+
+    def test_the_server_note_is_said_once_after_the_words(self):
+        said, _, _ = self.go(brief={**self.BRIEF, "note": "Tu extensión es antigua."})
+        self.assertEqual(said[-1], "Tu extensión es antigua.")
+
+    def test_without_a_spanish_voice_it_stops_talking_and_reports_in_writing_once(self):
+        calls = []
+
+        def say(text):
+            calls.append(text)
+            raise agent.NoSpanishVoice()
+
+        said, voice, _ = self.go(say=say)
+        self.assertEqual(calls, ["Buenos días."], "it does not insist on every sentence")
+        self.assertEqual(len(voice), 1)
+        self.assertEqual(voice[0]["problem"], "no_spanish_voice")
+        self.assertEqual(voice[0]["pieces"], self.BRIEF["pieces"], "the whole greeting goes in writing")
+
+    def test_with_a_voice_nothing_is_reported(self):
+        _, voice, _ = self.go()
+        self.assertEqual(voice, [])
+
+
 class Catalog(unittest.TestCase):
     def test_version_and_tool(self):
         major, minor, _ = (int(n) for n in agent.VERSION.split("."))
-        self.assertGreaterEqual((major, minor), (1, 12))
+        self.assertGreaterEqual((major, minor), (1, 13))
         tool = next(t for t in agent.catalog({}) if t["name"] == "morning_brief")
         self.assertEqual(tool["risk"], "confirm", "it is never a plain read: only a routine starts it")
         self.assertLessEqual(len(agent.catalog({})), 24)

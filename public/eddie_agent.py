@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.12.0"
+VERSION = "1.13.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -609,30 +609,59 @@ def friendly_name(name):
     return FRIENDLY_NAMES.get(key) or key.replace("-", " ").replace("_", " ").title()
 
 
-def speech_command(text, plat=None, wait=False):
-    """(argv, env) para decir `text` con la voz del propio sistema; ValueError si el equipo no tiene voz."""
+class NoSpanishVoice(Exception):
+    """El equipo no tiene ninguna voz en español: leer español con una voz en inglés suena a inglés."""
+
+
+def mac_spanish_voice(run=subprocess.run):
+    """El nombre de una voz en español de macOS (`say -v ?` lista «Monica  es_ES  # Hola…»), o None."""
+    try:
+        out = run(["say", "-v", "?"], capture_output=True, text=True, timeout=10).stdout
+    except Exception:
+        return None
+    for line in out.splitlines():
+        m = re.match(r"^(.+?)\s{2,}(es_[A-Za-z]+)\b", line)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+WINDOWS_SPEECH = (
+    "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+    "$es = $s.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -like 'es*' } | Select-Object -First 1; "
+    "if ($es) { $s.SelectVoice($es.VoiceInfo.Name) } elseif ($env:EDDIE_NEED_ES -eq '1') { exit 3 }; "
+    "$s.Speak($env:EDDIE_SAY)"
+)
+
+
+def speech_command(text, plat=None, wait=False, require_spanish=False):
+    """(argv, env) para decir `text` con una voz EN ESPAÑOL del propio sistema.
+    Con require_spanish, si no hay voz en español: Windows sale con código 3, Mac/Linux lanzan NoSpanishVoice (mejor callar
+    y avisar por escrito que leer español con una voz inglesa). ValueError si el equipo no tiene voz."""
     text = re.sub(r"\s+", " ", str(text or "")).strip()
     if not text:
         raise ValueError("Dime qué decir.")
     plat = plat or detect_platform()
-    env = dict(os.environ, EDDIE_SAY=text)
+    env = dict(os.environ, EDDIE_SAY=text, EDDIE_NEED_ES="1" if require_spanish else "0")
     if plat == "windows":
-        ps = "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak($env:EDDIE_SAY)"
-        return ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps], env
+        return ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", WINDOWS_SPEECH], env
     if plat == "mac":
-        return ["say", text], env
+        voice = mac_spanish_voice()
+        if not voice and require_spanish:
+            raise NoSpanishVoice()
+        return (["say", "-v", voice, text] if voice else ["say", text]), env
     spd = shutil.which("spd-say")
     if spd:
-        return ([spd, "-w", text] if wait else [spd, text]), env
+        return ([spd, "-l", "es"] + (["-w"] if wait else []) + [text]), env
     espeak = shutil.which("espeak")
     if espeak:
-        return [espeak, text], env
+        return [espeak, "-v", "es", text], env
     raise ValueError("Este equipo no tiene voz instalada (spd-say o espeak).")
 
 
-def speak(text, wait=False):
+def speak(text, wait=False, require_spanish=False):
     """Dice `text`. Con wait=True vuelve cuando termina de hablar (para saber cuándo cerrar las páginas)."""
-    argv, env = speech_command(text, wait=wait)
+    argv, env = speech_command(text, wait=wait, require_spanish=require_spanish)
     kwargs = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if IS_WINDOWS else {"start_new_session": True}
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, **kwargs)
     if wait:
@@ -640,14 +669,24 @@ def speak(text, wait=False):
             proc.wait(timeout=SPEAK_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             proc.kill()
+        if require_spanish and proc.returncode == 3:
+            raise NoSpanishVoice()
     return env["EDDIE_SAY"]
 
 
-BROWSER_PROCESSES = frozenset(["chrome", "google chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "chromium", "chromium-browser", "safari"])
+BROWSER_PROCESSES = frozenset(["chrome", "google chrome", "msedge", "microsoft edge", "firefox", "brave", "brave browser", "opera", "vivaldi", "chromium", "chromium-browser", "safari"])
+# El navegador que tiene la extensión de Eddie (el servidor lo deduce del nombre del vínculo) y cómo se llama cada uno.
+BROWSER_KINDS = {
+    "chrome": {"process": ("chrome", "google chrome"), "apps": ("chrome", "google chrome")},
+    "edge": {"process": ("msedge", "microsoft edge"), "apps": ("msedge", "edge")},
+    "brave": {"process": ("brave", "brave browser"), "apps": ("brave", "brave browser")},
+    "opera": {"process": ("opera",), "apps": ("opera",)},
+    "vivaldi": {"process": ("vivaldi",), "apps": ("vivaldi",)},
+}
 
 
-def browser_running(names=None):
-    """¿Hay un navegador abierto? Si no, hay que abrirlo para que la extensión muestre las páginas."""
+def browser_running(names=None, kind=None):
+    """¿Está abierto ese navegador (o cualquiera, si no se dice cuál)? La extensión solo trabaja en el navegador donde está."""
     if names is None:
         if psutil is None:
             return False
@@ -657,7 +696,29 @@ def browser_running(names=None):
                 names.append(p.info.get("name") or "")
             except Exception:
                 continue
-    return any(process_key(n) in BROWSER_PROCESSES for n in names)
+    wanted = set(BROWSER_KINDS[kind]["process"]) if kind in BROWSER_KINDS else BROWSER_PROCESSES
+    return any(process_key(n) in wanted for n in names)
+
+
+def launch_browser(kind, finder=None, popen=None):
+    """Abre el navegador donde está la extensión de Eddie (no el predeterminado: si es otro, la extensión no despierta y las
+    páginas del saludo nunca se abren). → True si lo lanzó. Sin `kind` usa el predeterminado."""
+    if kind not in BROWSER_KINDS:
+        return bool(webbrowser.open("about:blank"))
+    finder = finder or _find_app
+    popen = popen or subprocess.Popen
+    for name in BROWSER_KINDS[kind]["apps"]:
+        argv = finder(name)
+        if not argv:
+            continue
+        exe = argv[0]
+        if IS_WINDOWS and str(exe).lower().endswith(".lnk"):
+            os.startfile(exe)  # type: ignore[attr-defined]
+            return True
+        kwargs = {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if IS_WINDOWS else {"start_new_session": True}
+        popen(list(argv), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
+        return True
+    return False
 
 
 def heavy_apps(procs=None, limit=3, min_mb=300):
@@ -989,29 +1050,50 @@ def run_tuning(mode):
     return {"mode": mode, "plan": plan, "applied": out["hecho"], "skipped": out["omitido"]}
 
 
-def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, measure=None, tuner=None, report=None):
+def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, measure=None, tuner=None, report=None, voice_report=None, is_running=None):
     """El saludo completo. Las piezas externas se pueden cambiar para probarlo. → qué pasó (para el registro)."""
     opts = opts or {}
     ask = ask or (lambda: api(cfg, "agent/brief", {"job": job_id}, timeout=60))
-    say = say or (lambda text: speak(text, wait=True))
-    start_browser = start_browser or (lambda: webbrowser.open("about:blank"))
+    say = say or (lambda text: speak(text, wait=True, require_spanish=True))
     measure = measure or (lambda: build_checkup(gather_metrics()))
     tuner = tuner or run_tuning
     report = report or (lambda payload: api(cfg, "agent/tune-report", payload, timeout=30))
+    voice_report = voice_report or (lambda payload: api(cfg, "agent/voice-report", payload, timeout=30))
     brief = ask()
-    done = {"dicho": 0, "navegador": False, "chequeo": False, "ajuste": "off"}
-    if brief.get("launch_browser") and not browser_running():
+    kind = brief.get("browser") if brief.get("browser") in BROWSER_KINDS else None
+    start_browser = start_browser or (lambda: launch_browser(kind))
+    is_running = is_running or (lambda: browser_running(kind=kind))
+    done = {"dicho": 0, "navegador": False, "chequeo": False, "ajuste": "off", "voz": "ok"}
+    if brief.get("launch_browser") and not is_running():
         try:
-            start_browser()  # la extensión toma las páginas en cuanto el navegador arranca
-            done["navegador"] = True
+            done["navegador"] = bool(start_browser())  # la extensión toma las páginas en cuanto ese navegador arranca
+            if not done["navegador"]:
+                log("No encontré el navegador donde está la extensión de Eddie:", kind or "predeterminado")
         except Exception as e:
             log("No pude abrir el navegador:", e)
+
+    def talk(text):
+        """Dice una frase; sin voz en español, deja de hablar y avisa una vez por escrito."""
+        if done["voz"] != "ok":
+            return
+        try:
+            say(text)
+            done["dicho"] += 1
+        except NoSpanishVoice:
+            done["voz"] = "sin_voz_en_español"
+            log("Este equipo no tiene una voz en español: el saludo irá por escrito.")
+            try:
+                voice_report({"job": job_id, "problem": "no_spanish_voice", "pieces": list(brief.get("pieces") or [])})
+            except Exception as e:
+                log("No pude avisar de la voz:", e)
+
     for piece in brief.get("pieces") or []:
-        say(piece)
-        done["dicho"] += 1
+        talk(piece)
+    if brief.get("note"):
+        talk(brief["note"])
     if brief.get("checkup", True) and opts.get("checkup", True):
         try:
-            say(measure()["spoken"])
+            talk(measure()["spoken"])
             done["chequeo"] = True
         except Exception as e:  # el saludo ya está dicho; un fallo al medir no lo estropea
             log("No pude revisar el equipo:", e)
@@ -1024,7 +1106,7 @@ def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, 
             shown = result["applied"] if mode == "activo" else result["plan"]
             line = describe_plan(shown, applied=(mode == "activo"))["spoken"]
             if line:
-                say(line)
+                talk(line)
             brief_item = lambda i: {"kind": i["kind"], "name": i["name"], "detail": i["detail"]}  # noqa: E731
             report({"job": job_id, "mode": mode, "plan": [brief_item(i) for i in result["plan"]],
                     "applied": [brief_item(i) for i in result["applied"]], "skipped": len(result["skipped"])})
