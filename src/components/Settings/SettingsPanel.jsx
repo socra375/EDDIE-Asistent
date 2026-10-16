@@ -397,6 +397,10 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Animación de inicio al abrir Eddie</span>
         </label>
         <label className="settings-toggle">
+          <input type="checkbox" checked={settings.display?.companion !== false} onChange={(e) => updateDisplaySettings({ companion: e.target.checked })} />
+          <span>Que Eddie me acompañe en las tareas largas (una broma, un dato o un consejo mientras trabaja; en voz alta si tienes la voz activada)</span>
+        </label>
+        <label className="settings-toggle">
           <input type="checkbox" checked={settings.display?.topicList === true} onChange={(e) => updateDisplaySettings({ topicList: e.target.checked })} />
           <span>Mostrar la lista de temas del Segundo cerebro en Memoria (el cerebro funciona igual aunque esté oculta)</span>
         </label>

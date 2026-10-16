@@ -450,6 +450,25 @@
   font-style: italic;
 }
 
+.home__companion {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-dim, var(--text));
+  font-style: italic;
+  animation: home-companion-in 0.5s ease both;
+}
+
+@keyframes home-companion-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home__companion { animation: none; }
+}
+
 .home__activity {
   margin: 0;
   font-size: 0.78rem;

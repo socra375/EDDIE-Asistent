@@ -24,6 +24,7 @@ import { applyMessageActions } from '../services/messageActions';
 import { callBridge } from '../services/callState';
 import { panelContext } from '../services/panelMode';
 import { CHECK_EVERY_MS, isStale, restoreActive } from '../services/conversationRotation';
+import { MAX_LINES, delayFor, pickLine } from '../services/companion';
 import { BUSINESS_CHANGED_EVENT } from '../services/businessApi';
 import { isSleepCommand } from '../services/wakeWord';
 import { isSeeQuestion, parseHudCommand, parseNotesCommand, parseVigilanceCommand } from '../services/commands';
@@ -113,6 +114,35 @@ export function ChatProvider({ children }) {
   const [liveSteps, setLiveSteps] = useState([]);
   // What Eddie is doing right now, for the one-line status ("Buscando en internet…").
   const activity = useMemo(() => [...liveSteps].reverse().find((s) => s.status === 'running')?.activity || '', [liveSteps]);
+  // Company while a long request runs: after a few seconds Eddie says something (a joke, a fact, a tip — about what he is
+  // doing when he has a line for it) every little while, until the answer starts. Spanish only; off with the setting.
+  const [companionLine, setCompanionLine] = useState(null);
+  const companionContext = useRef('');
+  useEffect(() => {
+    companionContext.current = [activity, ...liveSteps.map((s) => s.label)].filter(Boolean).join(' ');
+  }, [activity, liveSteps]);
+  const companionOn = settings.display?.companion !== false && (settings.language || 'es') === 'es';
+  useEffect(() => {
+    if (status !== 'processing' || !companionOn) return undefined;
+    const used = new Set();
+    let count = 0;
+    let timer;
+    const tick = () => {
+      const line = pickLine({ context: companionContext.current, used, count });
+      if (!line) return;
+      used.add(line.text);
+      setCompanionLine({ id: `${Date.now()}-${count}`, ...line });
+      count += 1;
+      if (count < MAX_LINES) timer = setTimeout(tick, delayFor(count));
+    };
+    timer = setTimeout(tick, delayFor(0));
+    return () => {
+      clearTimeout(timer);
+      setCompanionLine(null);
+    };
+  }, [status, companionOn]);
+  const companion = status === 'processing' ? companionLine : null;
+
   // Latest messages for callbacks that run later (a card being confirmed).
   const messagesRef = useRef(messages);
   useEffect(() => {
@@ -658,6 +688,7 @@ export function ChatProvider({ children }) {
       lastReply,
       activity,
       liveSteps,
+      companion,
       resolveConfirmation,
       setStatus,
       conversations,
@@ -666,7 +697,7 @@ export function ChatProvider({ children }) {
       deleteConversation,
       clearAllConversations,
     }),
-    [messages, status, errorMessage, sendMessage, addNote, resetConversation, lastReply, activity, liveSteps, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
+    [messages, status, errorMessage, sendMessage, addNote, resetConversation, lastReply, activity, liveSteps, companion, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

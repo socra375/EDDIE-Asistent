@@ -28,7 +28,7 @@ const QUICK_STARTS = [
 
 // `embedded`: inside Inicio's Conversación panel, which has its own Limpiar button.
 export default function ChatPanel({ showCore = true, embedded = false }) {
-  const { messages, status, sendMessage, resetConversation, resolveConfirmation } = useChat();
+  const { messages, status, companion, sendMessage, resetConversation, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -443,6 +443,7 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
             <div className="bubble bubble--assistant bubble--pending">
               <span className="bubble__author">Eddie</span>
               <p className="bubble__text">Eddie está trabajando en ello…</p>
+              {companion && <p className="bubble__text bubble__companion" key={companion.id}>{companion.text}</p>}
             </div>
           )}
         </div>

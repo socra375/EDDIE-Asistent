@@ -776,6 +776,16 @@ Pídele a Eddie *«optimiza mi PC cuando lo encienda»* (o añade `tune: "ensayo
 - **El informe**: el agente lo manda a `agent/tune-report` (un solo uso por saludo, `claimTuneReport`); **el modo que cuenta es el de la rutina, no lo que diga el agente**: en ensayo, aunque el agente dijera que hizo algo, el informe no lo da por hecho. El texto se limpia (tipos conocidos, 8 elementos, textos cortos).
 - **Pruebas**: `tests/tune.test.mjs` (la compuerta, el informe, la limpieza) y `tests/agent/test_tune.py` (32 casos del agente con procesos falsos que *explotan* si alguien intenta cerrarlos). **No probado en un Windows real**: el cambio de prioridad y `EmptyWorkingSet` (`ctypes`), y cuál es la ventana de delante, solo se ven en tu PC; por eso empieza en ensayo.
 
+### Eddie te acompaña en las tareas largas
+
+Mientras una petición tarda (buscar en internet, investigar, varias herramientas), Eddie **no te deja en el aire**: a los ~7 s dice algo —una broma, un dato curioso o un consejo, **sobre lo que está haciendo** cuando tiene una frase para eso (correo, agenda, documentos, video, cuentas, código, búsqueda…)— y luego otra cada ~13 s (un poco más espaciadas), hasta **8 por petición** y sin repetir ninguna.
+
+- **Dónde se ve y se oye**: como una línea debajo del orbe y en la burbuja «Eddie está trabajando…» del chat (también en el panel del navegador). **En voz alta** solo si tienes la lectura de respuestas activada (o en una llamada), nunca con el micrófono abierto, y **nunca retrasa la respuesta**: en cuanto ésta empieza, la frase que se esté diciendo se corta. No queda en la conversación ni en la memoria.
+- **Sin IA**: las frases están escritas en `src/services/companion.js` (60 en total: bromas, datos comprobables y consejos), así que funciona cuando el proveedor de IA es justo lo que va lento, no gasta cuota y se prueba (`tests/companion.test.mjs`). Solo en español.
+- **Se apaga** en Configuración → Pantalla → «Que Eddie me acompañe en las tareas largas» (`display.companion`).
+- **Límite**: cubre lo que pasa mientras Eddie prepara una respuesta. Una tarea de navegador que sigue corriendo minutos después de que Eddie contestó (`browser_task`) no habla por su cuenta; te avisa al terminar.
+- Probado con un navegador real (una respuesta lenta simulada: aparecen dos frases en ~23 s, desaparecen al llegar la respuesta, y apagado no sale ninguna). **No probado**: la voz en voz alta de verdad.
+
 ### Conversación nueva cada 24 horas
 
 - Cuando la conversación que tienes delante cumple **24 horas desde su primer mensaje**, Eddie abre una **vacía** (al abrir la app, al volver a la pestaña o con un chequeo de cada minuto, y nunca en medio de una respuesta). La anterior sigue en el **historial**; si abres una vieja desde ahí a propósito, se queda abierta (`src/services/conversationRotation.js`).

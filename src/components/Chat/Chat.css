@@ -486,3 +486,20 @@
   font-size: 0.85rem;
   color: var(--text-dim);
 }
+
+/* A joke, a fact or a tip while Eddie works (services/companion.js). */
+.bubble__companion {
+  margin-top: 0.4rem;
+  font-style: italic;
+  opacity: 0.85;
+  animation: bubble-companion-in 0.5s ease both;
+}
+
+@keyframes bubble-companion-in {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble__companion { animation: none; }
+}
