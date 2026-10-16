@@ -188,3 +188,15 @@ export async function bumpRehearsals(id) {
   `;
   return Number(rows[0]?.state?.rehearsals || 0);
 }
+
+// The good-morning is for the FIRST start-up of the day: true once per local date (false if it already greeted today).
+// Atomic, so two hellos at once cannot both win.
+export async function claimMorningDay(id, date) {
+  const sql = getDb();
+  const rows = await sql`
+    update routines set state = state || jsonb_build_object('morningOn', ${date}::text)
+    where id = ${id} and coalesce(state->>'morningOn', '') <> ${date}
+    returning id
+  `;
+  return rows.length > 0;
+}

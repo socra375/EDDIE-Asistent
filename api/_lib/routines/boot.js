@@ -12,7 +12,7 @@ import { enqueue } from '../browser/store.js';
 import { safeHttpsUrl } from '../browser/urls.js';
 import { localParts } from '../connectors/dates.js';
 import { runsOn } from '../../../src/services/weekdays.js';
-import { bootRoutines, markBootPending } from './store.js';
+import { bootRoutines, claimMorningDay, markBootPending } from './store.js';
 
 // `morning` is only done by the computer when its agent can (1.11+); an older one leaves it to the written summary.
 export const BOOT_ACTIONS = ['open_sites', 'say', 'morning'];
@@ -42,6 +42,8 @@ async function openSites(device, userId, urls) {
 // Never throws (the agent's hello must always be answered).
 export async function handleDeviceBoot(device, at = new Date()) {
   try {
+    // One good-morning per start-up even if the user has two routines with it (each one still counts the day as greeted).
+    let greeted = false;
     for (const routine of await bootRoutines(device.id)) {
       // «Solo entre semana»: on the other days the PC starts up and nothing happens.
       let date = null;
@@ -57,6 +59,10 @@ export async function handleDeviceBoot(device, at = new Date()) {
         if (action.type === 'open_sites') await openSites(device, routine.userId, action.urls || []);
         else if (action.type === 'say' && hasTool(device, 'say_text')) await createJob(device.id, 'say_text', { text: String(action.text || '').slice(0, 300) });
         else if (action.type === 'morning') {
+          // Only the first start-up of the day (the user's day): the second time the PC is switched on, nothing is said.
+          const first = await claimMorningDay(routine.id, date || at.toISOString().slice(0, 10));
+          if (!first || greeted) continue;
+          greeted = true;
           // The agent comes back for the words (agent/brief) with this job as its pass: the data is read from Google then, not here, so the hello is answered at once.
           if (hasTool(device, 'morning_brief')) await createJob(device.id, 'morning_brief', { routine: routine.id, pages: action.pages !== false, checkup: action.checkup !== false });
           else rest = written = true;
