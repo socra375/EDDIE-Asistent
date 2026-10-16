@@ -15,7 +15,7 @@ import { hasLink } from '../browser/store.js';
 import { safeHttpsUrl } from '../browser/urls.js';
 
 export const DEFAULT_SONG = 'Creed - Lonely';
-export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'say'];
+export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'say', 'morning'];
 // A task given to Eddie to carry out on his own (see runAgent): how long he gets before it is reported as unfinished.
 const AGENT_TIMEOUT_MS = 40_000;
 const MAX_ACTIONS = 5;
@@ -36,6 +36,9 @@ export function validateActions(actions) {
       const urls = (Array.isArray(a.urls) ? a.urls : String(a.urls || '').split(/[\s,;]+/)).map((u) => safeHttpsUrl(String(u).trim())).filter(Boolean);
       if (!urls.length) return { error: 'La acción "open_sites" necesita urls: direcciones https públicas, p. ej. ["https://www.youtube.com","https://web.whatsapp.com"].' };
       clean.push({ type: 'open_sites', urls: [...new Set(urls)].slice(0, 8) });
+    } else if (a.type === 'morning') {
+      // The good-morning said by the computer itself: agenda, mail and tasks out loud, the pages opening meanwhile and the checkup of the equipment.
+      clean.push({ type: 'morning', pages: a.pages !== false, checkup: a.checkup !== false });
     } else if (a.type === 'say') {
       const text = String(a.text || '').replace(/\s+/g, ' ').trim();
       if (!text) return { error: 'La acción "say" necesita text: lo que dirá en voz alta.' };
@@ -62,6 +65,7 @@ export function describeActions(actions) {
       if (a.type === 'summary') return 'el resumen del día';
       if (a.type === 'open_sites') return `abre ${a.urls.map((u) => new URL(u).hostname.replace(/^www\./, '')).join(', ')}`;
       if (a.type === 'say') return `dice en voz alta «${a.text}»`;
+      if (a.type === 'morning') return `te saluda en voz alta con tu agenda, correos y tareas${a.pages === false ? '' : ' (abre Gmail y el calendario mientras habla y los cierra al terminar)'}${a.checkup === false ? '' : ' y te cuenta cómo está el equipo'}`;
       if (a.type === 'agent') return `Eddie hace solo: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? '…' : ''}»`;
       if (a.type === 'play_music') return `pone "${a.query || DEFAULT_SONG}"`;
       return `avisa "${a.text}"`;
@@ -139,6 +143,8 @@ export async function runRoutineActions(actions, { user, timezone, skip = [] }) 
     else if (action.type === 'agent') lines.push(await runAgent(user, timezone, action));
     else if (action.type === 'open_sites') lines.push(await runOpenSites(user, action));
     else if (action.type === 'say') lines.push('🔈 Decir en voz alta solo funciona al encender el PC.');
+    // The computer reads it aloud when it can (agent 1.11+); otherwise (an older agent, or this is not a start-up) the summary arrives written.
+    else if (action.type === 'morning') lines.push(await runSummary(user, timezone));
     else if (action.type === 'play_music') lines.push(await runPlayMusic(user, action));
     else lines.push(action.text);
   }

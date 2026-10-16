@@ -69,7 +69,7 @@ async function isDownloading(userId, deviceId) {
 async function runBoot(routine, helpers) {
   if (routine.state.pending !== true || !(await claimBootPending(routine.id))) return false;
   try {
-    const text = `💻 ${routine.name}\n\n${await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone, skip: BOOT_ACTIONS })}`;
+    const text = `💻 ${routine.name}\n\n${await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone, skip: routine.state.written ? BOOT_ACTIONS.filter((a) => a !== 'morning') : BOOT_ACTIONS })}`;
     return await deliver(routine, text, routinePush(routine, text), helpers);
   } catch (err) {
     console.error('[routines] boot failed:', err.message);

@@ -136,3 +136,24 @@ t('the manifest asks for tabGroups, and the extension and the server agree on th
   // nothing in the grouping reads a page: the manifest still gives no extra site access for it
   assert.deepEqual(manifest.host_permissions, ['https://eddie-asistent.vercel.app/*']);
 });
+
+t('isEddieTab: only a tab still in his group and not pinned (what lets a page he opened for a moment be put away)', async () => {
+  const f = fakeChrome();
+  const G = await load(f);
+  const mine = f.addTab();
+  await G.joinGroup(mine);
+  assert.equal(await G.isEddieTab(mine), true);
+  const loose = f.addTab();
+  assert.equal(await G.isEddieTab(loose), false, 'not in any group');
+  const pinned = f.addTab();
+  await G.joinGroup(pinned);
+  f.tabs.get(pinned).pinned = true;
+  assert.equal(await G.isEddieTab(pinned), false, 'pinned: the user wants it');
+  f.tabs.get(mine).groupId = -1;
+  assert.equal(await G.isEddieTab(mine), false, 'dragged out of the group: the user keeps it');
+  const users = f.addTab();
+  f.groups.set(7, { id: 7, windowId: 1, title: 'Trabajo', color: 'red', collapsed: false });
+  f.tabs.get(users).groupId = 7;
+  assert.equal(await G.isEddieTab(users), false, 'in the user\'s own group');
+  assert.equal(await G.isEddieTab(99999), false, 'a tab that no longer exists');
+});

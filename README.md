@@ -743,6 +743,25 @@ además de lo que ya pedía esa sección. No necesita variables nuevas.
 - **Límites que quedan**: las rutinas corren a una hora (todos los días o solo en ciertos días de la semana, ver abajo) o por evento; no hay «cada 2 horas», «el día 1 de cada mes» ni «una sola vez» salvo con un recordatorio. El aviso exige Telegram o notificaciones
   activadas. Si la función se corta a mitad de una tarea, ese día no se repite.
 
+### Buenos días al encender el PC (acción `morning`, agente 1.11 + extensión 1.5.0)
+
+Dile a Eddie: **«cuando encienda la PC, salúdame y dime qué hay hoy»**. Crea una rutina `device_boot` con la acción `morning` y, al encender:
+
+1. **Saluda en voz alta** (la voz del sistema) con los **datos reales del día**: la fecha, tu agenda de hoy, los correos importantes sin leer (quién y de qué), recordatorios y tareas. Sale de lo mismo que el panel «Hoy» y el resumen de Telegram
+   (`collectToday`), sin pasar por ninguna IA, y está escrito para **oírse**: sin enlaces, símbolos ni emoji, con un tope de ~1 minuto (`api/_lib/routines/spoken.js`; lo que no cabe se cuenta como «y 3 más»).
+2. **Mientras habla**, abre **Gmail y el calendario** (solo los que tienen algo que contar) en una pestaña del grupo «Eddie» y **los cierra solos unos segundos después de la última palabra**. Si quieres quedarte con una, **arrástrala fuera del grupo** o fíjala: solo se cierra la que sigue en el grupo.
+   **Sin la extensión no abre nada** (Eddie no abre lo que no puede guardar) y lo dice. Si el navegador está cerrado, el agente lo arranca y la extensión toma las páginas al abrirse.
+3. **Al final cuenta cómo está el equipo** (memoria, procesador, disco, batería, cuántos días llevas sin reiniciar) y, si la memoria está justa, qué apps la usan. **Solo mira y recomienda: no cierra ninguna app, no borra nada.**
+
+- **Cómo viaja**: el arranque deja un trabajo `morning_brief` en la cola del agente (con la rutina y sus opciones, sin datos). El agente lo atiende en un hilo y pide las palabras a `agent/brief` **con ese trabajo como pase**:
+  vale una sola vez, solo para ese equipo, mientras el trabajo corre y hasta 15 minutos (`claimBriefJob`). Así nadie puede pedir tus correos con solo tener el token, y el saludo no hace esperar al `hello` del agente mientras se lee Google.
+- **Opciones**: `pages: false` (no abrir páginas) y `checkup: false` (no revisar el equipo).
+- **Agente viejo**: si el agente es anterior a la 1.11, no puede hablar el resumen y te llega **escrito** (Telegram o notificación), como el resumen del día. Actualízalo con el instalador de Conectores → Tu equipo.
+- **El cierre de páginas** (`browser_commands.close_at`, `db/migrations/0036_browser_close_at.sql`): cada página lleva cuántos segundos le quedan; la extensión lo agenda (un temporizador y una alarma de respaldo) y, al llegar, cierra la pestaña
+  si **sigue en el grupo «Eddie» y no está fijada**. Los números de pestaña no valen entre sesiones: al abrir el navegador la lista se vacía, y un cierre atrasado más de 5 minutos se olvida en vez de ejecutarse.
+- **Pruebas**: `tests/morning.test.mjs` (guion, rutina, pase y cola) y `tests/agent/test_morning.py` (el agente: chequeo, procesos protegidos, voz y el saludo completo; lo corre el mismo test de Node). El cierre de pestañas se probó con la extensión real en Chromium.
+- **Límites a propósito**: no hay horario de silencio (si enciendes el PC de madrugada, hablará); la voz es la del sistema, no la de Eddie.
+
 ### Cuando enciendas el PC (rutinas «device_boot»)
 
 - Dile a Eddie: **«cuando encienda la PC, abre YouTube, Google y WhatsApp Web»**. Crea una rutina por evento `device_boot` con la acción `open_sites`

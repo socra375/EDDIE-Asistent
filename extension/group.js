@@ -47,6 +47,18 @@ export async function setGroupStatus(tabId, status) {
   }
 }
 
+// Whether the tab is still one of Eddie's: in his group, not pinned. A page Eddie opened for a moment is only closed when
+// it still is (the user keeps one by dragging it out of the group, or by pinning it).
+export async function isEddieTab(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab || tab.pinned || tab.groupId === NO_GROUP) return false;
+    return isEddie(await chrome.tabGroups.get(tab.groupId));
+  } catch {
+    return false;
+  }
+}
+
 // The tab in front in a window, in Eddie's group (when his side panel opens on it).
 export async function joinFrontTab(windowId) {
   try {

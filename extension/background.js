@@ -22,12 +22,13 @@
 // this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
 import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
-import { joinGroup, setGroupStatus } from './group.js';
+import { isEddieTab, joinGroup, setGroupStatus } from './group.js';
 import { performAction } from './actions.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
 const POLL_ALARM = 'eddie-poll';
 const AGENDA_ALARM = 'eddie-agenda';
+const CLOSE_ALARM = 'eddie-close';
 const MEETING_ALARM = 'eddie-meet:';
 const POLL_EVERY_MINUTES = 0.5;
 const AGENDA_EVERY_MINUTES = 10;
@@ -54,7 +55,7 @@ const recent = new Map(); // address → time, to ignore the same page asked twi
 
 // Opens the tab. Callers go through `openPage` (one at a time); a task already
 // inside the queue (a meeting) uses this directly.
-async function openNow(raw, { id } = {}) {
+async function openNow(raw, { id, closeIn } = {}) {
   const url = openableUrl(raw);
   if (!url) return false;
   if (id) {
@@ -71,7 +72,41 @@ async function openNow(raw, { id } = {}) {
   const tab = await chrome.tabs.create({ url, active: true });
   if (tab?.windowId != null) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
   if (tab?.id != null) await joinGroup(tab.id); // under «Eddie» in the tab strip
+  if (tab?.id != null && Number.isFinite(closeIn) && closeIn > 0) await scheduleClose(tab.id, closeIn);
   return true;
+}
+
+// ---- Pages that are only for a moment (the good-morning that opens the mail and the agenda while it speaks) ----
+// Eddie puts them away himself: when the time comes, the tab closes if it is still in his group. The user keeps one by
+// dragging it out of the group (or pinning it). Tab ids only mean something within one browser session, so the list is
+// emptied when the browser starts, and an entry long overdue is forgotten rather than acted on.
+const CLOSE_STALE_MS = 5 * 60000;
+const closeTimers = new Map();
+
+async function sweepClose() {
+  const { autoClose = {} } = await read('autoClose');
+  const now = Date.now();
+  let changed = false;
+  for (const [key, due] of Object.entries(autoClose)) {
+    if (due > now) continue;
+    delete autoClose[key];
+    changed = true;
+    if (now - due > CLOSE_STALE_MS) continue;
+    const tabId = Number(key);
+    if (await isEddieTab(tabId)) await chrome.tabs.remove(tabId).catch(() => {});
+  }
+  if (changed) await write({ autoClose });
+  if (!Object.keys(autoClose).length) await chrome.alarms.clear(CLOSE_ALARM);
+}
+
+async function scheduleClose(tabId, seconds) {
+  const { autoClose = {} } = await read('autoClose');
+  autoClose[tabId] = Date.now() + seconds * 1000;
+  await write({ autoClose });
+  // The alarm is the sure way (it survives the worker going to sleep); the timer is the exact one.
+  if (!(await chrome.alarms.get(CLOSE_ALARM))) await chrome.alarms.create(CLOSE_ALARM, { delayInMinutes: 0.5, periodInMinutes: 0.5 });
+  clearTimeout(closeTimers.get(tabId));
+  closeTimers.set(tabId, setTimeout(() => serial(sweepClose).catch(() => {}), seconds * 1000 + 300));
 }
 
 const openPage = (raw, options) => serial(() => openNow(raw, options));
@@ -127,7 +162,7 @@ async function poll() {
   try {
     const data = await api('next');
     const changed = await keepPrefs(data.prefs);
-    for (const command of data.commands || []) await openPage(command.url, { id: command.id });
+    for (const command of data.commands || []) await openPage(command.url, { id: command.id, closeIn: command.closeIn });
     if (data.task) await maybeStartTask(data.task);
     await setStatus('');
     if (changed) await refreshAgenda();
@@ -303,11 +338,15 @@ async function start() {
 }
 
 chrome.runtime.onInstalled.addListener(() => start());
-chrome.runtime.onStartup.addListener(() => start());
+chrome.runtime.onStartup.addListener(async () => {
+  await write({ autoClose: {} }); // the tab ids of the last session mean nothing now
+  await start();
+});
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === POLL_ALARM) return poll();
   if (alarm.name === AGENDA_ALARM) return refreshAgenda();
+  if (alarm.name === CLOSE_ALARM) return serial(sweepClose);
   if (alarm.name.startsWith(MEETING_ALARM)) {
     const key = alarm.name.slice(MEETING_ALARM.length);
     const { meetings = [] } = await read('meetings');

@@ -7,6 +7,7 @@ const PAIR_MINUTES = 10;
 // A page nobody came for in this long is stale: the user has moved on.
 export const QUEUE_SECONDS = 120;
 const TAKE_LIMIT = 5;
+export const MIN_CLOSE_IN = 15;
 
 export const hashToken = (token) => createHash('sha256').update(String(token)).digest('hex');
 
@@ -97,9 +98,11 @@ export async function deleteLink(userId) {
   await sql`delete from browser_commands where user_id = ${userId}`;
 }
 
-export async function enqueue(userId, { url, label }) {
+// `closeAfter` (seconds): the page is only for a moment, the extension closes it that long after it was queued.
+export async function enqueue(userId, { url, label, closeAfter = null }) {
   const sql = getDb();
-  const rows = await sql`insert into browser_commands (user_id, url, label) values (${userId}, ${url}, ${label || null}) returning id`;
+  const closeAt = Number.isFinite(closeAfter) && closeAfter > 0 ? new Date(Date.now() + closeAfter * 1000).toISOString() : null;
+  const rows = await sql`insert into browser_commands (user_id, url, label, close_at) values (${userId}, ${url}, ${label || null}, ${closeAt}) returning id`;
   if (Math.random() < 0.05) await sql`delete from browser_commands where created_at < now() - interval '1 day'`;
   return rows[0].id;
 }
@@ -115,11 +118,17 @@ export async function takeCommands(userId) {
       order by created_at limit ${TAKE_LIMIT}
       for update skip locked
     )
-    returning id, url, label, created_at
+    returning id, url, label, created_at, close_at
   `;
+  // `closeIn`: how many seconds from now the page should be closed (at least a few: it has to be seen), or nothing.
   return rows
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .map((r) => ({ id: r.id, url: r.url, label: r.label || '' }));
+    .map((r) => ({
+      id: r.id,
+      url: r.url,
+      label: r.label || '',
+      ...(r.close_at ? { closeIn: Math.max(MIN_CLOSE_IN, Math.ceil((new Date(r.close_at) - Date.now()) / 1000)) } : {}),
+    }));
 }
 
 export async function wasTaken(commandId) {

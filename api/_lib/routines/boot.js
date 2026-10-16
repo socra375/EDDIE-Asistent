@@ -14,7 +14,8 @@ import { localParts } from '../connectors/dates.js';
 import { runsOn } from '../../../src/services/weekdays.js';
 import { bootRoutines, markBootPending } from './store.js';
 
-export const BOOT_ACTIONS = ['open_sites', 'say'];
+// `morning` is only done by the computer when its agent can (1.11+); an older one leaves it to the written summary.
+export const BOOT_ACTIONS = ['open_sites', 'say', 'morning'];
 
 const hasTool = (device, name) => device.tools.some((t) => t.name === name);
 
@@ -51,12 +52,17 @@ export async function handleDeviceBoot(device, at = new Date()) {
       }
       if (date && !runsOn(routine.days, date)) continue;
       let rest = false;
+      let written = false;
       for (const action of routine.actions) {
         if (action.type === 'open_sites') await openSites(device, routine.userId, action.urls || []);
         else if (action.type === 'say' && hasTool(device, 'say_text')) await createJob(device.id, 'say_text', { text: String(action.text || '').slice(0, 300) });
-        else if (!BOOT_ACTIONS.includes(action.type)) rest = true;
+        else if (action.type === 'morning') {
+          // The agent comes back for the words (agent/brief) with this job as its pass: the data is read from Google then, not here, so the hello is answered at once.
+          if (hasTool(device, 'morning_brief')) await createJob(device.id, 'morning_brief', { routine: routine.id, pages: action.pages !== false, checkup: action.checkup !== false });
+          else rest = written = true;
+        } else if (!BOOT_ACTIONS.includes(action.type)) rest = true;
       }
-      if (rest) await markBootPending(routine.id);
+      if (rest) await markBootPending(routine.id, { written });
     }
   } catch (err) {
     console.error('[boot] failed:', err?.message || err);
