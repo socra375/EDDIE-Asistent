@@ -13,10 +13,12 @@ import { resolveVideo, watchUrl } from '../connectors/youtube/index.js';
 import { requestOpen } from '../browser/open.js';
 import { hasLink } from '../browser/store.js';
 import { safeHttpsUrl } from '../browser/urls.js';
+import { cleanTabAction, describeTabAction, stepsOf, TAB_ACTION_TYPES } from './tabs.js';
+import { runTabs } from './tabsRun.js';
 
 export const DEFAULT_SONG = 'Creed - Lonely';
 export const TUNE_MODES = ['off', 'ensayo', 'activo'];
-export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'say', 'morning'];
+export const ACTION_TYPES = ['summary', 'play_music', 'notify', 'agent', 'open_sites', 'close_tabs', 'edit_tabs', 'say', 'morning'];
 // A task given to Eddie to carry out on his own (see runAgent): how long he gets before it is reported as unfinished.
 const AGENT_TIMEOUT_MS = 40_000;
 const MAX_ACTIONS = 5;
@@ -37,6 +39,10 @@ export function validateActions(actions) {
       const urls = (Array.isArray(a.urls) ? a.urls : String(a.urls || '').split(/[\s,;]+/)).map((u) => safeHttpsUrl(String(u).trim())).filter(Boolean);
       if (!urls.length) return { error: 'La acción "open_sites" necesita urls: direcciones https públicas, p. ej. ["https://www.youtube.com","https://web.whatsapp.com"].' };
       clean.push({ type: 'open_sites', urls: [...new Set(urls)].slice(0, 8) });
+    } else if (a.type === 'close_tabs' || a.type === 'edit_tabs') {
+      const out = cleanTabAction(a);
+      if (out.error) return { error: out.error };
+      clean.push(out.action);
     } else if (a.type === 'morning') {
       // The good-morning said by the computer itself: agenda, mail and tasks out loud, the pages opening meanwhile and the checkup of the equipment.
       // tune: what it does about the equipment's performance — 'off', 'ensayo' (says what it would do, touches nothing) or 'activo'
@@ -67,6 +73,7 @@ export function describeActions(actions) {
     .map((a) => {
       if (a.type === 'summary') return 'el resumen del día';
       if (a.type === 'open_sites') return `abre ${a.urls.map((u) => new URL(u).hostname.replace(/^www\./, '')).join(', ')}`;
+      if (a.type === 'close_tabs' || a.type === 'edit_tabs') return describeTabAction(a);
       if (a.type === 'say') return `dice en voz alta «${a.text}»`;
       if (a.type === 'morning') return `te saluda en voz alta con tu agenda, correos y tareas${a.pages === false ? '' : ' (abre Gmail y el calendario mientras habla y los cierra al terminar)'}${a.checkup === false ? '' : ' y te cuenta cómo está el equipo'}${a.tune === 'ensayo' ? '; además ensaya optimizar el equipo (dice qué haría, no toca nada)' : a.tune === 'activo' ? '; además optimiza el equipo en segundo plano (solo baja prioridad y suelta memoria; nunca cierra apps)' : ''}`;
       if (a.type === 'agent') return `Eddie hace solo: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? '…' : ''}»`;
@@ -100,17 +107,6 @@ async function runPlayMusic(user, action) {
   }
 }
 
-// Pages for the user's browser (the extension takes them when the browser is running).
-async function runOpenSites(user, action) {
-  if (!(await hasLink(user.id))) return `🌐 Quería abrir ${action.urls.length} página(s), pero no tienes tu navegador vinculado (Conectores → Tu navegador).`;
-  let opened = 0;
-  for (const url of action.urls) {
-    const out = await requestOpen({ getUser: async () => user }, { url, label: '' });
-    if (!out.error) opened += 1;
-  }
-  return `🌐 Pedí abrir ${opened} página${opened === 1 ? '' : 's'} en tu navegador.`;
-}
-
 // A background agent: Eddie takes the task like a message from the user, with all his
 // tools, memory and notes, but nobody is there to answer. So he cannot ask anything or
 // confirm anything (a delicate action is reported as pending, never done), and he does not
@@ -138,13 +134,21 @@ async function runAgent(user, timezone, action) {
 // Runs every action in order and joins what each one has to say into one
 // message. Never throws: an action that fails says so in its own line
 // instead of losing the rest of the routine.
-export async function runRoutineActions(actions, { user, timezone, skip = [] }) {
+export async function runRoutineActions(actions, { user, timezone, skip = [], tabKey = null }) {
   const lines = [];
+  let tabsDone = false;
   for (const action of actions) {
     if (skip.includes(action.type)) continue; // already done by the computer itself (routines/boot.js)
     if (action.type === 'summary') lines.push(await runSummary(user, timezone));
     else if (action.type === 'agent') lines.push(await runAgent(user, timezone, action));
-    else if (action.type === 'open_sites') lines.push(await runOpenSites(user, action));
+    else if (TAB_ACTION_TYPES.includes(action.type)) {
+      // All the routine's tab orders go to the browser together, in order, once (and with the key that lets the extension
+      // know it already did them at the exact time, see routines/plans.js).
+      if (tabsDone) continue;
+      tabsDone = true;
+      const mine = actions.filter((a) => TAB_ACTION_TYPES.includes(a.type) && !skip.includes(a.type));
+      lines.push(await runTabs(user, stepsOf(mine), tabKey));
+    }
     else if (action.type === 'say') lines.push('🔈 Decir en voz alta solo funciona al encender el PC.');
     // The computer reads it aloud when it can (agent 1.11+); otherwise (an older agent, or this is not a start-up) the summary arrives written.
     else if (action.type === 'morning') lines.push(await runSummary(user, timezone));

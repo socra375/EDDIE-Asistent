@@ -11,11 +11,14 @@ import { runOnDevice } from '../computer/run.js';
 import { mapLimit } from '../pool.js';
 import { BOOT_ACTIONS } from './boot.js';
 import { runRoutineActions } from './actions.js';
-import { claimBootPending, claimRoutineDay, dueEventRoutines, dueScheduleRoutines, releaseRoutineDay, setRoutineState } from './store.js';
+import { claimBootPending, claimRoutineDay, disableRoutine, dueEventRoutines, dueScheduleRoutines, releaseRoutineDay, setRoutineState } from './store.js';
+import { TAB_ACTION_TYPES } from './tabs.js';
 
 // A routine this long after its hour isn't run (same reasoning as the
 // morning briefing: nobody wants "a las 8" showing up at 3pm).
 const SCHEDULE_WINDOW_MINUTES = 180;
+// Tab orders (close this, open that) only make sense at their hour: cron-late by more than this, they are let go.
+const TAB_WINDOW_MINUTES = 15;
 
 const toMinutes = (hhmm) => {
   const [h, m] = String(hhmm).split(':').map(Number);
@@ -41,7 +44,14 @@ async function runSchedule(routine, now, helpers) {
   if (late < 0 || late > SCHEDULE_WINDOW_MINUTES) return false;
   if (!(await claimRoutineDay(routine.id, local.date))) return false;
   try {
-    const text = `🔁 ${routine.name}\n\n${await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone })}`;
+    // The browser extension keeps the tab orders on its own clock, to the minute (routines/plans.js); when it already did them
+    // today, or this run is too late for them to still make sense, only the rest of the routine is done here.
+    const skip = routine.state?.tabsDoneOn === local.date || late > TAB_WINDOW_MINUTES ? TAB_ACTION_TYPES : [];
+    const body = await runRoutineActions(routine.actions, { user: routine.user, timezone: routine.timezone, skip, tabKey: `${routine.id}@${local.date}` });
+    // A «once» routine is done after its first run, and a routine that only had tab orders the extension already did says nothing.
+    if (routine.state?.once) await disableRoutine(routine.id);
+    if (!body.trim()) return true;
+    const text = `🔁 ${routine.name}\n\n${body}`;
     const delivered = await deliver(routine, text, routinePush(routine, text), helpers);
     if (!delivered) throw new Error('ni Telegram ni las notificaciones lo aceptaron');
     return true;

@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-VERSION = "1.13.0"
+VERSION = "1.14.0"
 DEFAULT_APP = "https://eddie-asistent.vercel.app"
 IS_WINDOWS = os.name == "nt"
 
@@ -1118,6 +1118,19 @@ def run_morning(cfg, job_id, opts=None, ask=None, say=None, start_browser=None, 
 _MORNING_LOCK = threading.Lock()
 
 
+def t_start_browser(args, _cfg):
+    """Abre el navegador donde está la extensión de Eddie (si ya está abierto no hace nada). Lo piden las rutinas con órdenes
+    para las pestañas cuando el navegador estaba cerrado: la extensión recoge la orden al despertar."""
+    kind = str(args.get("browser") or "chrome").lower()
+    if kind not in BROWSER_KINDS:
+        raise ValueError("Ese navegador no lo conozco (chrome, edge, brave, opera o vivaldi).")
+    if browser_running(kind=kind):
+        return {"navegador": kind, "ya_abierto": True, "summary": f"{kind} ya estaba abierto"}
+    if not launch_browser(kind):
+        raise ValueError(f"No encuentro {kind} instalado en este equipo.")
+    return {"navegador": kind, "ya_abierto": False, "summary": f"Abrí {kind}"}
+
+
 def t_morning_brief(args, cfg):
     """Lo pone en marcha la rutina «al encender» (con un pase de un solo uso); no se usa a mano."""
     job_id = str(args.get("_job") or "")
@@ -1980,6 +1993,7 @@ TOOLS = {
     "pc_tune_plan": (t_pc_tune_plan, "Qué se puede optimizar", "Mira qué apps del usuario se comen el procesador en segundo plano o tienen memoria parada, y dice qué se podría ajustar. NO cambia nada, ni cierra nada.", "read", {}),
     "pc_tune_run": (t_pc_tune_run, "Optimizar el equipo", "Hace lo seguro: baja la prioridad de las apps que se comen el procesador en segundo plano y suelta la memoria de las paradas. NUNCA cierra apps ni borra archivos; nunca toca el sistema, el antivirus, los navegadores ni la app que se está usando. Solo Windows.", "confirm", {}),
     "pc_tune_undo": (t_pc_tune_undo, "Deshacer la optimización", "Devuelve la prioridad normal a las apps cuya prioridad se bajó.", "confirm", {}),
+    "start_browser": (t_start_browser, "Abrir el navegador de Eddie", "Abre el navegador donde está la extensión de Eddie (chrome, edge, brave…) si estaba cerrado. Lo piden las rutinas que manejan pestañas.", "confirm", {"browser": {"type": "string", "enum": list(BROWSER_KINDS), "description": "chrome, edge, brave, opera o vivaldi."}}),
     "check_downloads": (t_check_downloads, "Revisar descargas", "Dice si hay una descarga en curso en la carpeta Descargas y qué llegó hace poco. Lo usan las rutinas automáticas por evento.", "read", {}),
     "video_info": (t_video_info, "Ver videos y ffmpeg", "Dice si ffmpeg está instalado; con una ruta, la duración y el tamaño de un video; sin ruta, tus videos recientes.", "read", {"path": S("Video o audio: nombre (ej. clip.mp4) o ruta dentro de tu carpeta personal (opcional).")}),
     "edit_video": (t_edit_video, "Editar un video", "Con ffmpeg crea un video NUEVO en Videos/Eddie (el original no se toca): recortar, unir, vertical 9:16, poner texto, añadir música, aligerarlo o hacer un reel completo en un paso.", "confirm", {

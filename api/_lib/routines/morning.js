@@ -7,26 +7,20 @@ import { sanitizeConnectorIds } from '../handler.js';
 import { loadUserContext } from '../telegram/serverActions.js';
 import { listPendingReminders } from '../reminders/store.js';
 import { enqueue, linkByUser } from '../browser/store.js';
-import { EXTENSION_VERSION } from '../browser/open.js';
 import { safeHttpsUrl } from '../browser/urls.js';
 import { bootRoutines } from './store.js';
 import { CALENDAR_URL, GMAIL_URL, spokenBrief } from './spoken.js';
+import { browserKind } from './tabs.js';
 
 // The pages stay a little after the last word, so the last sentence is said with the page still there.
 const CLOSE_MARGIN_SECONDS = 12;
 
 const gone = (status, error) => ({ status, json: { error } });
 
-// The browser that has the extension, from the name it linked with («Chrome en Windows», «Edge en Windows»…): the agent
-// starts THAT one, not the system's default (an extension only works in its own browser).
-export function browserKind(name) {
-  const n = String(name || '').toLowerCase();
-  if (/edge/.test(n)) return 'edge';
-  if (/brave/.test(n)) return 'brave';
-  if (/opera/.test(n)) return 'opera';
-  if (/vivaldi/.test(n)) return 'vivaldi';
-  return 'chrome';
-}
+export { browserKind };
+
+// The first extension that closes the pages it opened for a moment.
+const CLOSE_MIN_VERSION = '1.5.0';
 
 const older = (version, min) => {
   const a = String(version || '0').split('.').map((n) => Number.parseInt(n, 10) || 0);
@@ -77,7 +71,7 @@ export async function serveBrief(device, jobId, now = new Date(), deps = {}) {
         }
         browser = browserKind(link.name);
         // An old extension still opens the pages but cannot close them; say so instead of leaving them open without a word.
-        if (pages.length && older(link.version, EXTENSION_VERSION)) note = 'Ojo: la extensión de tu navegador es una versión vieja y no cerrará las páginas. Actualízala en Conectores, Tu navegador.';
+        if (pages.length && older(link.version, CLOSE_MIN_VERSION)) note = 'Ojo: la extensión de tu navegador es una versión vieja y no cerrará las páginas. Actualízala en Conectores, Tu navegador.';
       } else {
         note = 'No abrí tu correo ni tu agenda: sin la extensión de Eddie en el navegador no podría cerrarlos después.';
       }

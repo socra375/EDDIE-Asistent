@@ -1,7 +1,7 @@
 // /api/connectors/browser/*. Two audiences:
 //   the app (signed-in user):    pair-code, unlink, prefs, test
 //   the extension (bearer token): agent/pair (with the code), agent/hello,
-//                                 agent/next, agent/agenda
+//                                 agent/next, agent/agenda, agent/plan-done
 // The extension's token is created at pairing, shown to it once and kept only
 // as a hash; it can only fetch this user's pages and meetings.
 import { requireUser } from '../session.js';
@@ -13,6 +13,7 @@ import { decideNextAction } from './agentStep.js';
 import { getTask, pendingTaskFor, recordStep, TASK_MAX_MINUTES } from './tasks.js';
 import { sanitizeImages } from '../images.js';
 import { sendPush } from '../push/send.js';
+import { completePlan, upcomingPlans, validTimezone } from '../routines/plans.js';
 
 const CODE_RE = /^[A-Z2-9]{8}$/;
 const TEST_WAIT_MS = 45_000;
@@ -51,10 +52,17 @@ async function agentRoute(action, { method, headers, body }) {
   }
   if (action === 'task-step') return taskStepRoute(link.userId, body);
   if (action === 'agenda') {
+    // The tab orders the user scheduled, for the extension to keep on its own clock (routines/plans.js), whatever the meetings setting.
+    const plans = await upcomingPlans(link.userId, { timezone: validTimezone(body?.tz) }).catch(() => []);
     // Nothing to ask Google for when the user turned the meetings off.
-    if (!link.prefs.autoMeetings) return { status: 200, json: { meetings: [], prefs: link.prefs, now: new Date().toISOString() } };
+    if (!link.prefs.autoMeetings) return { status: 200, json: { meetings: [], plans, prefs: link.prefs, now: new Date().toISOString() } };
     const { meetings, reason } = await upcomingMeetings(link.userId);
-    return { status: 200, json: { meetings, reason, prefs: link.prefs, now: new Date().toISOString() } };
+    return { status: 200, json: { meetings, reason, plans, prefs: link.prefs, now: new Date().toISOString() } };
+  }
+  // The extension did a scheduled plan on time: the cron must not do it again (and a «once» routine is over).
+  if (action === 'plan-done') {
+    const out = await completePlan(link.userId, body?.key);
+    return out.error ? { status: 400, json: { error: out.error } } : { status: 200, json: { ok: true } };
   }
   return { status: 404, json: { error: 'Esa acción de la extensión no existe.' } };
 }

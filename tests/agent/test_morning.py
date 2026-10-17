@@ -314,10 +314,34 @@ class BrowserAndVoiceInTheMorning(unittest.TestCase):
         self.assertEqual(voice, [])
 
 
+class StartBrowser(unittest.TestCase):
+    def test_it_opens_the_browser_that_has_the_extension_and_leaves_an_open_one_alone(self):
+        with mock.patch.object(agent, "browser_running", return_value=True), mock.patch.object(agent, "launch_browser") as launch:
+            out = agent.t_start_browser({"browser": "chrome"}, {})
+            launch.assert_not_called()
+        self.assertTrue(out["ya_abierto"])
+        with mock.patch.object(agent, "browser_running", return_value=False), mock.patch.object(agent, "launch_browser", return_value=True) as launch:
+            out = agent.t_start_browser({"browser": "edge"}, {})
+            launch.assert_called_once_with("edge")
+        self.assertFalse(out["ya_abierto"])
+
+    def test_it_says_when_it_cannot_and_refuses_unknown_browsers(self):
+        with mock.patch.object(agent, "browser_running", return_value=False), mock.patch.object(agent, "launch_browser", return_value=False):
+            with self.assertRaisesRegex(ValueError, "No encuentro chrome"):
+                agent.t_start_browser({}, {})
+        with self.assertRaisesRegex(ValueError, "no lo conozco"):
+            agent.t_start_browser({"browser": "netscape; rm -rf"}, {})
+
+    def test_the_tool_is_declared_as_a_confirmed_one(self):
+        tool = next(t for t in agent.catalog({}) if t["name"] == "start_browser")
+        self.assertEqual(tool["risk"], "confirm")
+        self.assertLessEqual(len(agent.catalog({})), 24)
+
+
 class Catalog(unittest.TestCase):
     def test_version_and_tool(self):
         major, minor, _ = (int(n) for n in agent.VERSION.split("."))
-        self.assertGreaterEqual((major, minor), (1, 13))
+        self.assertGreaterEqual((major, minor), (1, 14))
         tool = next(t for t in agent.catalog({}) if t["name"] == "morning_brief")
         self.assertEqual(tool["risk"], "confirm", "it is never a plain read: only a routine starts it")
         self.assertLessEqual(len(agent.catalog({})), 24)

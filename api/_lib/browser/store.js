@@ -99,10 +99,25 @@ export async function deleteLink(userId) {
 }
 
 // `closeAfter` (seconds): the page is only for a moment, the extension closes it that long after it was queued.
-export async function enqueue(userId, { url, label, closeAfter = null }) {
+// `kind: 'tabs'` is an order about the tabs already open (close, reload, pin…): its steps travel in `payload`
+// ({ steps, key }), and `ttl` is how many seconds it stays valid while the browser is closed (default two minutes).
+export const TABS_URL = 'eddie:tabs';
+const safeParse = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+export async function enqueue(userId, { url, label, closeAfter = null, kind = 'open', payload = null, ttl = null }) {
   const sql = getDb();
   const closeAt = Number.isFinite(closeAfter) && closeAfter > 0 ? new Date(Date.now() + closeAfter * 1000).toISOString() : null;
-  const rows = await sql`insert into browser_commands (user_id, url, label, close_at) values (${userId}, ${url}, ${label || null}, ${closeAt}) returning id`;
+  const seconds = Number.isFinite(ttl) && ttl > 0 ? Math.round(ttl) : null;
+  const rows = await sql`
+    insert into browser_commands (user_id, url, label, close_at, kind, payload, ttl_seconds)
+    values (${userId}, ${kind === 'tabs' ? TABS_URL : url}, ${label || null}, ${closeAt}, ${kind}, ${payload ? JSON.stringify(payload) : null}, ${seconds})
+    returning id
+  `;
   if (Math.random() < 0.05) await sql`delete from browser_commands where created_at < now() - interval '1 day'`;
   return rows[0].id;
 }
@@ -114,21 +129,25 @@ export async function takeCommands(userId) {
     update browser_commands set taken_at = now()
     where id in (
       select id from browser_commands
-      where user_id = ${userId} and taken_at is null and created_at > now() - make_interval(secs => ${QUEUE_SECONDS})
+      where user_id = ${userId} and taken_at is null and created_at > now() - make_interval(secs => coalesce(ttl_seconds, ${QUEUE_SECONDS}))
       order by created_at limit ${TAKE_LIMIT}
       for update skip locked
     )
-    returning id, url, label, created_at, close_at
+    returning id, url, label, created_at, close_at, kind, payload
   `;
   // `closeIn`: how many seconds from now the page should be closed (at least a few: it has to be seen), or nothing.
   return rows
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .map((r) => ({
-      id: r.id,
-      url: r.url,
-      label: r.label || '',
-      ...(r.close_at ? { closeIn: Math.max(MIN_CLOSE_IN, Math.ceil((new Date(r.close_at) - Date.now()) / 1000)) } : {}),
-    }));
+    .map((r) => {
+      const payload = typeof r.payload === 'string' ? safeParse(r.payload) : r.payload;
+      return {
+        id: r.id,
+        url: r.url,
+        label: r.label || '',
+        ...(r.kind === 'tabs' ? { kind: 'tabs', steps: Array.isArray(payload?.steps) ? payload.steps : [], ...(payload?.key ? { key: payload.key } : {}) } : {}),
+        ...(r.close_at ? { closeIn: Math.max(MIN_CLOSE_IN, Math.ceil((new Date(r.close_at) - Date.now()) / 1000)) } : {}),
+      };
+    });
 }
 
 export async function wasTaken(commandId) {
