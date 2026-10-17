@@ -8,6 +8,7 @@
 // long CORE_PERSONALITY grows later.
 
 import { formatMemoryForPrompt } from './memory.js';
+import { DEFAULT_AUTONOMY, autonomyNote } from './autonomy.js';
 
 export const MODES = {
   asistente: {
@@ -121,7 +122,7 @@ const CALL_STYLE =
 const SPOKEN_STYLE =
   'Esta respuesta se va a leer en voz alta. Habla como una persona en una conversación: frases cortas y naturales (normalmente de 1 a 3), empieza directo sin fórmulas de asistente como «Claro, con gusto», usa conectores cotidianos («vale», «mira», «bueno») con mesura, sin listas, tablas, emojis ni símbolos raros, y escribe las cantidades como se dicen. Si piden código o un texto largo, entrégalo completo; lo que se oiga debe ser corto: resume lo esencial y ofrece seguir.';
 
-export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [], spoken = false, call = false }) {
+export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory = null, query = '', tasks = [], disabledConnectors = [], spoken = false, call = false, autonomy = DEFAULT_AUTONOMY }) {
   const modeConfig = MODES[mode] || MODES[DEFAULT_MODE];
   const languageName = LANGUAGE_NAMES[language] || language;
 
@@ -136,6 +137,7 @@ export function buildSystemPrompt({ mode = DEFAULT_MODE, language = 'es', memory
     `Modo de respuesta actual: ${modeConfig.label}. ${modeConfig.instruction}`,
   ];
 
+  parts.push(autonomyNote(autonomy));
   if (spoken) parts.push(SPOKEN_STYLE);
   if (call) parts.push(CALL_STYLE);
   if (memoryLines) {

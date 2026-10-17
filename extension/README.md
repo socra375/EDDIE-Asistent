@@ -67,3 +67,7 @@ En una **tarea de navegador** que tú confirmaste (o en una página de confianza
 
 Cambia `host_permissions` y `externally_connectable` en `manifest.json` (por ejemplo `http://localhost/*` para `npm run dev`) y
 recarga la extensión. Sin eso, Chrome ignora los mensajes de esa página.
+
+## Historial de YouTube (desde la 1.7.0)
+
+Opcional y solo si lo pides: en el popup, «Dar acceso al historial de YouTube» pide el permiso `history` (declarado como *opcional*; sin él, nada se lee). Con él, cada 6 horas envía a Eddie, de las páginas de YouTube que abriste en los últimos 60 días, el id del video, el título y las horas (`history.js`), para que Eddie te ofrezca música a tu hora. Nada más del historial se lee. «Quitar acceso» retira el permiso y borra la copia en Eddie.

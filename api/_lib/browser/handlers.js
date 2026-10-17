@@ -13,6 +13,7 @@ import { decideNextAction } from './agentStep.js';
 import { getTask, pendingTaskFor, recordStep, TASK_MAX_MINUTES } from './tasks.js';
 import { sanitizeImages } from '../images.js';
 import { sendPush } from '../push/send.js';
+import { clearHabits, cleanItems, saveHistory } from '../habits/store.js';
 import { completePlan, upcomingPlans, validTimezone } from '../routines/plans.js';
 
 const CODE_RE = /^[A-Z2-9]{8}$/;
@@ -49,6 +50,12 @@ async function agentRoute(action, { method, headers, body }) {
   }
   if (action === 'next') {
     return { status: 200, json: { commands: await takeCommands(link.userId), task: await pendingTaskFor(link.userId), prefs: link.prefs, now: new Date().toISOString() } };
+  }
+  // The YouTube history the user allowed the extension to read: replaces the copy (or, with clear, forgets it).
+  if (action === 'history') {
+    if (body?.clear === true) await clearHabits(link.userId);
+    else await saveHistory(link.userId, cleanItems(body?.items));
+    return { status: 200, json: { ok: true } };
   }
   if (action === 'task-step') return taskStepRoute(link.userId, body);
   if (action === 'agenda') {

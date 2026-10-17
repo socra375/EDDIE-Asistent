@@ -20,6 +20,8 @@ import { handleBrowserRoute } from './browser/handlers.js';
 import { handleDriveRoute } from './drive/handlers.js';
 import { handleDevicesRoute } from './devices/handlers.js';
 import { handlePushRoute } from './push/handlers.js';
+import { handleJobsRoute } from './agentjobs/handlers.js';
+import { handleHabitsRoute } from './habits/handlers.js';
 import { getSessionUser, SESSION_COOKIE_NAME } from './session.js';
 
 // Works signed in or not: without a session (or without a database)
@@ -61,5 +63,7 @@ export async function handleConnectorsRequest({ method, path = [], cookies = {},
   if (path[0] === 'drive') return handleDriveRoute({ method, path, cookies, body });
   if (path[0] === 'devices') return handleDevicesRoute({ method, path, cookies, query, body, headers });
   if (path[0] === 'push') return handlePushRoute({ method, path, cookies, query, body });
+  if (path[0] === 'habits') return handleHabitsRoute({ method, path, cookies, body });
+  if (path[0] === 'jobs') return handleJobsRoute({ method, path, cookies, body });
   return { status: 404, json: { error: 'Esta acción de conectores todavía no existe.' } };
 }

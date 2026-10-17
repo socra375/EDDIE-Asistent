@@ -12,12 +12,14 @@ import { recallBlock } from '../episodes/recall.js';
 import { knowledgeBlock } from '../knowledge/recall.js';
 import { businessBlock } from '../business/context.js';
 import { driveBlock } from '../drive/context.js';
+import { autonomyOf } from '../../../src/services/autonomy.js';
 import { parseLearnCommand } from '../../../src/services/commands.js';
 
 const ALLOWED_PROVIDERS = new Set(['gemini', 'claude', 'groq', 'cerebras', 'openrouter']);
 
 // `disable`: connector ids switched off for this call only (a background task must not edit routines).
-export async function askEddie({ link, text, images = [], note, disable = [] }) {
+// `channel`: where the request comes from (tools may behave differently: a background job cannot start another one).
+export async function askEddie({ link, text, images = [], note, disable = [], channel = 'telegram' }) {
   const { userId } = link;
   const ctx = await loadUserContext(userId);
   const s = ctx.settings;
@@ -42,6 +44,7 @@ export async function askEddie({ link, text, images = [], note, disable = [] }) 
     query: text,
     tasks: ctx.tasks,
     disabledConnectors: off,
+    autonomy: autonomyOf(s),
   })}${recalled ? `\n\n${recalled}` : ''}${learned ? `\n\n${learned}` : ''}${business ? `\n\n${business}` : ''}${folders ? `\n\n${folders}` : ''}${toLearn ? `\n\nOrden explícita del usuario: investigar y aprender «${toLearn.slice(0, 300)}». Llama ahora mismo a la herramienta learn_topic con ese tema; no la respondas de memoria. Cuando termine, cuéntale en 2 o 3 frases lo esencial que aprendiste.` : ''}\n\n${note}`;
   const messages = [...history, { role: 'user', content: text, ...(images.length ? { images } : {}) }];
 
@@ -53,7 +56,7 @@ export async function askEddie({ link, text, images = [], note, disable = [] }) 
     model,
     system,
     messages,
-    context: { channel: 'telegram', timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
+    context: { channel, timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, autonomy: autonomyOf(s), getUser: async () => link.user },
     disabledConnectors,
     onChunk: (piece) => {
       answer += piece;
@@ -68,6 +71,7 @@ export async function askEddie({ link, text, images = [], note, disable = [] }) 
     receipt: changes.length ? `\n\n${changes.map((c) => `✓ ${c}`).join('\n')}` : '',
     confirmations,
     actions: result.actions || [],
+    steps: result.steps || [],
     language,
     voiceId: typeof s.voice?.elevenVoice === 'string' ? s.voice.elevenVoice.slice(0, 40) : undefined,
   };
@@ -82,7 +86,7 @@ export async function runConfirmed({ link, pending }) {
     name: pending.tool,
     args: pending.args,
     disabled: ctx.memoryOn ? off : [...new Set([...off, 'memory'])],
-    context: { channel: 'telegram', timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, getUser: async () => link.user },
+    context: { channel: 'telegram', timezone: link.timezone, tasks: ctx.toolTasks, memory: ctx.memoryForTools, autonomy: autonomyOf(ctx.settings), getUser: async () => link.user },
   });
   if (out.error) return { error: out.error };
   const changes = await applyActionsForUser(link.userId, out.actions, { memoryEnabled: ctx.memoryOn });

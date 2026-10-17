@@ -250,6 +250,16 @@ async function runTool(tools, name, args, context, hooks) {
         return finish(toolError(name, err));
       }
     }
+    // With autonomy «act» (Configuración), a tool that marks itself `autonomy: 'act'` (reversible, only the user's own
+    // things) runs now and is reported as done by Eddie on his own; the rest still waits for the card.
+    if (tool.autonomy === 'act' && context.autonomy === 'act') {
+      try {
+        const result = await tool.run(prepared.args || args || {}, context);
+        return finish(result?.error ? result : { ...result, autoApproved: true, note: 'Ya está hecho (el usuario te dio autonomía para esto). Cuéntaselo en una frase: «Ya lo hice: …».' });
+      } catch (err) {
+        return finish(toolError(name, err));
+      }
+    }
     hooks.confirmations.push({ id: randomUUID(), stepId: step.id, tool: name, label: tool.label, args: prepared.args, preview: prepared.preview });
     return finish({
       status: 'awaiting_confirmation',

@@ -374,10 +374,11 @@ export const existingTools = [
     label: 'Editar un documento',
     activity: 'Preparando el cambio…',
     sensitive: true,
+    autonomy: 'act', // reversible and only the user's own: with autonomy «act» it runs and is reported
     declaration: {
       name: 'edit_document',
       description:
-        'Cambia un documento de Google Docs que ya existe. action=append agrega "text" al final; action=replace cambia el texto "find" por "text" en todo el documento (se distingue mayúsculas; "find" debe estar tal cual, léelo antes con read_document). El usuario ve una tarjeta con el cambio y lo confirma; tú solo lo pides. Al terminar se abre en su navegador si lo tiene vinculado.',
+        'Cambia un documento de Google Docs que ya existe. action=append agrega "text" al final; action=replace cambia el texto "find" por "text" en todo el documento (se distingue mayúsculas; "find" debe estar tal cual, léelo antes con read_document). Según la autonomía del usuario se hace al momento o sale una tarjeta con el cambio para que lo confirme (el resultado lo dice). Al terminar se abre en su navegador si lo tiene vinculado.',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -417,6 +418,7 @@ export const existingTools = [
     label: 'Editar una hoja de cálculo',
     activity: 'Preparando el cambio…',
     sensitive: true,
+    autonomy: 'act', // reversible and only the user's own: with autonomy «act» it runs and is reported
     declaration: {
       name: 'edit_spreadsheet',
       description:
