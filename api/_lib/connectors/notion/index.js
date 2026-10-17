@@ -334,7 +334,7 @@ const TYPE_PARAM = { type: 'STRING', enum: ['page', 'database'], description: 'L
 export default {
   id: 'notion',
   name: 'Notion',
-  description: 'Eddie busca y lee tus páginas de Notion, mira las filas de tus bases de datos y crea páginas o añade texto, siempre con tu confirmación.',
+  description: 'Eddie busca y lee tus páginas de Notion, mira las filas de tus bases de datos y crea páginas o añade texto (con tu confirmación, o directo si le das autonomía).',
   icon: 'doc',
   category: 'productividad',
   // Offered to the model only when the conversation touches the topic.
@@ -396,10 +396,11 @@ export default {
       label: 'Crear una página en Notion',
       activity: 'Preparando la página de Notion…',
       sensitive: true,
+      autonomy: 'act', // reversible and only the user's own: with autonomy «act» it runs and is reported
       declaration: {
         name: 'notion_create_page',
         description:
-          'Crea una página nueva en Notion (o una fila nueva si el destino es una base de datos) con un título y contenido en Markdown sencillo (# títulos, - listas, - [ ] tareas, > citas). Siempre pide confirmación con una tarjeta; tú solo la propones. Si el usuario no dice dónde, no inventes el destino.',
+          'Crea una página nueva en Notion (o una fila nueva si el destino es una base de datos) con un título y contenido en Markdown sencillo (# títulos, - listas, - [ ] tareas, > citas). Según la autonomía del usuario se hace al momento o sale una tarjeta para que confirme (el resultado lo dice). Si el usuario no dice dónde, no inventes el destino.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -417,9 +418,10 @@ export default {
       label: 'Añadir texto a una página de Notion',
       activity: 'Preparando el texto para Notion…',
       sensitive: true,
+      autonomy: 'act', // reversible and only the user's own: with autonomy «act» it runs and is reported
       declaration: {
         name: 'notion_append',
-        description: 'Añade texto (Markdown sencillo) al final de una página existente de Notion. Siempre pide confirmación con una tarjeta; tú solo lo propones.',
+        description: 'Añade texto (Markdown sencillo) al final de una página existente de Notion. Según la autonomía del usuario se hace al momento o sale una tarjeta para que confirme (el resultado lo dice).',
         parameters: {
           type: 'OBJECT',
           properties: {

@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   language: 'es',
   theme: 'dark',
   memoryEnabled: true,
+  autonomy: 'act', // act: does the reversible by himself and says so; ask: every change waits for an OK (services/autonomy.js)
   voice: {
     autoRead: false,
     volume: 1, // 0.2–1
@@ -50,7 +51,7 @@ export const DEFAULT_SETTINGS = {
     perf: 'auto',
     core: 'cyan', // colour of the orb: cyan | blue | green | amber
     boot: true, // the start-up animation
-    companion: true, // while a long request runs, Eddie says a joke, a fact or a tip (services/companion.js)
+    companionLines: false, // while a long request runs, Eddie says a joke, a fact or a tip (services/companion.js); off since background jobs do the waiting
     topicList: false, // show the list of topics under the Segundo cerebro (the brain works the same either way)
   },
   // Modo Vigilancia (camera + AI vision, see context/VisionContext.jsx).

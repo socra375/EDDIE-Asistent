@@ -7,6 +7,7 @@ import { startResearch } from './research/background.js';
 import { driveBlock } from './drive/context.js';
 import { parseLearnCommand } from '../../src/services/commands.js';
 import { limitImages, sanitizeImages } from './images.js';
+import { AUTONOMY_LEVELS } from '../../src/services/autonomy.js';
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 8000;
@@ -90,6 +91,7 @@ export function sanitizeContext(context) {
   if (typeof context.timezone === 'string' && context.timezone.length < 100) {
     result.timezone = context.timezone;
   }
+  if (AUTONOMY_LEVELS.includes(context.autonomy)) result.autonomy = context.autonomy;
   const { location } = context;
   if (
     location &&

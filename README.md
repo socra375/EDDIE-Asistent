@@ -802,9 +802,23 @@ Mientras una petición tarda (buscar en internet, investigar, varias herramienta
 
 - **Dónde se ve y se oye**: como una línea debajo del orbe y en la burbuja «Eddie está trabajando…» del chat (también en el panel del navegador). **En voz alta** solo si tienes la lectura de respuestas activada (o en una llamada), nunca con el micrófono abierto, y **nunca retrasa la respuesta**: en cuanto ésta empieza, la frase que se esté diciendo se corta. No queda en la conversación ni en la memoria.
 - **Sin IA**: las frases están escritas en `src/services/companion.js` (60 en total: bromas, datos comprobables y consejos), así que funciona cuando el proveedor de IA es justo lo que va lento, no gasta cuota y se prueba (`tests/companion.test.mjs`). Solo en español.
-- **Se apaga** en Configuración → Pantalla → «Que Eddie me acompañe en las tareas largas» (`display.companion`).
+- **Apagado por defecto** desde el agente en segundo plano (abajo): ya no hace falta llenar la espera. Se enciende en Configuración → Pantalla → «Que Eddie me acompañe mientras espero una respuesta larga» (`display.companionLines`).
 - **Límite**: cubre lo que pasa mientras Eddie prepara una respuesta. Una tarea de navegador que sigue corriendo minutos después de que Eddie contestó (`browser_task`) no habla por su cuenta; te avisa al terminar.
 - Probado con un navegador real (una respuesta lenta simulada: aparecen dos frases en ~23 s, desaparecen al llegar la respuesta, y apagado no sale ninguna). **No probado**: la voz en voz alta de verdad.
+
+### Agente en segundo plano y autonomía
+
+**Un segundo Eddie trabaja mientras tú sigues hablando con el primero.**
+
+- **Cómo se pide**: dilo normal («prepárame un resumen de mis correos en Notion», «investiga X y déjalo en un documento») o «en segundo plano». Si el pedido es largo o de varios pasos, Eddie usa la herramienta oculta `background_task`, te contesta en una frase qué encargó y **sigue la charla**. Un chip «Trabajando en segundo plano: …» queda sobre el cuadro de escritura.
+- **Qué es por dentro**: una fila en `agent_jobs` (migración `0038`) y una ejecución de `askEddie` con la misma memoria, tu Segundo y Tercer cerebro y todas las herramientas (Gmail, Calendario, Drive, Notion, GitHub, tus páginas de confianza con `browser_task`…), salvo rutinas y repartir más tareas (`api/_lib/agentjobs/`). Máximo **3 a la vez y 20 por hora**; cada ejecución dura como mucho ~60 s (el tope de Vercel).
+- **Cómo te lo cuenta**: al terminar, Eddie lo dice en la conversación (en voz alta si tienes la voz activada), con lo que hizo, lo que encontró y **las tarjetas que necesitan tu OK** (enviar, borrar, agendar…). Si cierras Eddie, la tarea sigue en el servidor y te lo cuenta al volver. Rutas: `GET /api/connectors/jobs`, `POST jobs/run`, `POST jobs/seen`.
+- **Autonomía** (Configuración → «Autonomía de Eddie»; `settings.autonomy`, `src/services/autonomy.js`):
+  - **Lo hace y me cuenta** (por defecto): lo reversible o que solo toca lo tuyo se ejecuta sin tarjeta y Eddie dice «Ya lo hice: …» (hoy: escribir en tu Notion y editar tus documentos y hojas; abrir tus páginas de confianza y actuar en ellas ya era así). Lo que Eddie marca con `autonomy: 'act'` en su herramienta.
+  - **Siempre me pregunta**: todo cambio espera tu OK, como antes.
+  - **Siempre pregunta**, sea cual sea el nivel: enviar correos o mensajes, borrar, pagar, agendar con clientes, ejecutar cosas en tu equipo, comentar en GitHub. Nunca teclea contraseñas, pagos ni códigos 2FA.
+- **Pruebas**: `tests/agentjobs.test.mjs` (creación y límites, ejecución una sola vez, fallos, lo que se aplica en el servidor y lo que se devuelve a la app, la autonomía con y sin permiso y que lo irreversible nunca se salta la tarjeta). **No probado con un modelo real**: que Eddie elija bien entre contestar al momento y encargar en segundo plano, y tareas largas de verdad.
+- **Siguiente (otro PR)**: que Eddie proponga por su cuenta («vi X, ¿lo hago?») sin que se lo pidas, empezando en modo propuesta.
 
 ### Conversación nueva cada 24 horas
 

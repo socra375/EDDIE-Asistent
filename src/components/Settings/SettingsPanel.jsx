@@ -339,6 +339,22 @@ export default function SettingsPanel({ onOpenConversation }) {
         )}
       </div>
 
+      <div className="glass-panel settings-card" data-section="autonomy">
+        <h2>Autonomía de Eddie</h2>
+        <p className="settings-card__sub">Cuánto hace por su cuenta. Los pedidos largos los hace un agente en segundo plano mientras sigues hablando con Eddie.</p>
+        <label>
+          <span className="field-label">Cuando le pido algo</span>
+          <select className="select" value={settings.autonomy === 'ask' ? 'ask' : 'act'} onChange={(e) => updateSettings({ autonomy: e.target.value })}>
+            <option value="act">Lo hace y me cuenta (recomendado)</option>
+            <option value="ask">Siempre me pregunta antes de cambiar algo</option>
+          </select>
+        </label>
+        <p className="settings-placeholder">
+          «Lo hace y me cuenta» aplica a lo que se puede deshacer o solo toca lo tuyo: escribir en tu Notion o en tus documentos y hojas, y trabajar en las páginas de confianza.
+          Enviar correos o mensajes, borrar, pagar, agendar con clientes y ejecutar cosas en tu equipo te los pregunta siempre. Nunca teclea contraseñas, pagos ni códigos 2FA.
+        </p>
+      </div>
+
       <div className="glass-panel settings-card" data-section="hud">
         <h2>Idioma y apariencia</h2>
         <p className="settings-card__sub">Idioma, tema y color del núcleo.</p>
@@ -397,8 +413,8 @@ export default function SettingsPanel({ onOpenConversation }) {
           <span>Animación de inicio al abrir Eddie</span>
         </label>
         <label className="settings-toggle">
-          <input type="checkbox" checked={settings.display?.companion !== false} onChange={(e) => updateDisplaySettings({ companion: e.target.checked })} />
-          <span>Que Eddie me acompañe en las tareas largas (una broma, un dato o un consejo mientras trabaja; en voz alta si tienes la voz activada)</span>
+          <input type="checkbox" checked={settings.display?.companionLines === true} onChange={(e) => updateDisplaySettings({ companionLines: e.target.checked })} />
+          <span>Que Eddie me acompañe mientras espero una respuesta larga (una broma, un dato o un consejo mientras trabaja; en voz alta si tienes la voz activada)</span>
         </label>
         <label className="settings-toggle">
           <input type="checkbox" checked={settings.display?.topicList === true} onChange={(e) => updateDisplaySettings({ topicList: e.target.checked })} />

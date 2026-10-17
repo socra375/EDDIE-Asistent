@@ -28,7 +28,7 @@ const QUICK_STARTS = [
 
 // `embedded`: inside Inicio's Conversación panel, which has its own Limpiar button.
 export default function ChatPanel({ showCore = true, embedded = false }) {
-  const { messages, status, companion, sendMessage, resetConversation, resolveConfirmation } = useChat();
+  const { messages, status, companion, backgroundJobs, sendMessage, resetConversation, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -447,6 +447,18 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
             </div>
           )}
         </div>
+
+        {backgroundJobs?.some((j) => j.status === 'queued' || j.status === 'running') && (
+          <ul className="chat-jobs" aria-label="Tareas en segundo plano">
+            {backgroundJobs
+              .filter((j) => j.status === 'queued' || j.status === 'running')
+              .map((j) => (
+                <li key={j.id} className="chat-jobs__chip">
+                  <span className="chat-jobs__dot" aria-hidden="true" /> Trabajando en segundo plano: {j.label}
+                </li>
+              ))}
+          </ul>
+        )}
 
         {transcribing ? (
           <p className="chat-panel__hint">Transcribiendo tu voz…</p>
