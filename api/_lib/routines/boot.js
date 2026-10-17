@@ -13,9 +13,11 @@ import { safeHttpsUrl } from '../browser/urls.js';
 import { localParts } from '../connectors/dates.js';
 import { runsOn } from '../../../src/services/weekdays.js';
 import { bootRoutines, claimMorningDay, markBootPending } from './store.js';
+import { stepsOf } from './tabs.js';
+import { runTabs } from './tabsRun.js';
 
 // `morning` is only done by the computer when its agent can (1.11+); an older one leaves it to the written summary.
-export const BOOT_ACTIONS = ['open_sites', 'say', 'morning'];
+export const BOOT_ACTIONS = ['open_sites', 'close_tabs', 'edit_tabs', 'say', 'morning'];
 
 const hasTool = (device, name) => device.tools.some((t) => t.name === name);
 
@@ -55,8 +57,10 @@ export async function handleDeviceBoot(device, at = new Date()) {
       if (date && !runsOn(routine.days, date)) continue;
       let rest = false;
       let written = false;
+      const tabOrders = [];
       for (const action of routine.actions) {
         if (action.type === 'open_sites') await openSites(device, routine.userId, action.urls || []);
+        else if (action.type === 'close_tabs' || action.type === 'edit_tabs') tabOrders.push(action);
         else if (action.type === 'say' && hasTool(device, 'say_text')) await createJob(device.id, 'say_text', { text: String(action.text || '').slice(0, 300) });
         else if (action.type === 'morning') {
           // Only the first start-up of the day (the user's day): the second time the PC is switched on, nothing is said.
@@ -68,6 +72,8 @@ export async function handleDeviceBoot(device, at = new Date()) {
           else rest = written = true;
         } else if (!BOOT_ACTIONS.includes(action.type)) rest = true;
       }
+      // Closing or editing tabs at start-up: the order waits for the browser, and the agent starts it.
+      if (tabOrders.length) await runTabs(routine.user, stepsOf(tabOrders), null, { forceStart: true });
       if (rest) await markBootPending(routine.id, { written });
     }
   } catch (err) {

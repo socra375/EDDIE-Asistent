@@ -4,6 +4,8 @@
 // documents, sheets and presentations Eddie makes, YouTube, or any page they
 // ask for. The places Eddie works from open at once; any other website goes
 // through the confirmation card. See api/_lib/browser/ and extension/.
+import { cleanTabAction, describeTabAction, EDIT_OPS, stepsOf } from '../../routines/tabs.js';
+import { runTabs } from '../../routines/tabsRun.js';
 import { hasLink, linkByUser } from '../../browser/store.js';
 import { EXTENSION_VERSION, requestOpen } from '../../browser/open.js';
 import { isMessagingUrl, isTrustedUrl, safeHttpsUrl } from '../../browser/urls.js';
@@ -191,6 +193,47 @@ async function runList(context) {
   return { sites, summary: sites.length ? `Confías en: ${sites.join(', ')}.` : 'Todavía no has dado confianza a ninguna página (Google, YouTube y las reuniones ya se abren solas).' };
 }
 
+// Tabs already open, handled now (manage_tabs): close, reload, send somewhere else, pin, mute. The same orders a routine can
+// give at an hour (routines/tabs.js); it shows a card first because closing a tab can lose what was in it.
+const TAB_OPS = ['close', 'close_eddie', ...EDIT_OPS];
+
+function tabActionOf(args) {
+  const op = String(args.op || '').trim();
+  if (!TAB_OPS.includes(op)) return { error: `op debe ser uno de: ${TAB_OPS.join(', ')}.` };
+  if (op === 'close_eddie') return cleanTabAction({ type: 'close_tabs', scope: 'eddie' });
+  if (op === 'close') return cleanTabAction({ type: 'close_tabs', sites: args.sites });
+  return cleanTabAction({ type: 'edit_tabs', op, sites: args.sites, url: args.url });
+}
+
+function prepareManageTabs(args) {
+  const out = tabActionOf(args);
+  if (out.error) return { error: out.error };
+  const a = out.action;
+  const what = describeTabAction(a);
+  return {
+    args: { op: a.type === 'close_tabs' ? (a.scope === 'eddie' ? 'close_eddie' : 'close') : a.op, ...(a.sites ? { sites: a.sites.join(', ') } : {}), ...(a.url ? { url: a.url } : {}) },
+    preview: {
+      title: a.type === 'close_tabs' ? 'Cerrar pestañas' : 'Editar pestañas',
+      confirmLabel: a.type === 'close_tabs' ? 'Cerrar' : 'Hacerlo',
+      fields: [
+        { key: 'what', label: 'Qué', value: what.charAt(0).toUpperCase() + what.slice(1) },
+        ...(a.type === 'close_tabs' ? [{ key: 'note', label: 'Ojo', value: 'Lo que tengas sin guardar en esas pestañas se pierde. No toca las fijadas ni la de Eddie.' }] : []),
+      ],
+    },
+  };
+}
+
+async function manageTabs(args, context) {
+  const user = await context.getUser?.();
+  if (!user) return { error: 'Para manejar tus pestañas, inicia sesión con tu cuenta de Google.' };
+  const out = tabActionOf(args);
+  if (out.error) return { error: out.error };
+  const line = await runTabs(user, stepsOf([out.action]));
+  return /no tienes tu navegador vinculado/.test(line)
+    ? { error: 'No tienes tu navegador vinculado con la extensión de Eddie (Conectores → Tu navegador).' }
+    : { requested: true, summary: `Hecho: ${describeTabAction(out.action)}.`, note: 'La extensión lo hace en unos segundos (necesita la versión 1.6 o más nueva). No se puede confirmar cuántas pestañas eran: no lo afirmes.' };
+}
+
 export default {
   id: 'browser',
   name: 'Tu navegador',
@@ -199,7 +242,7 @@ export default {
   icon: 'globe',
   category: 'asistente',
   // Offered to the model only when the conversation touches the topic.
-  route: /abre|abrir|abr[ií]r|navegador|pesta[ñn]a|enlace|\blink\b|p[aá]gina|sitio|reuni[oó]n|videollamada|\bmeet\b|zoom|teams|ll[eé]vame|ens[eé][ñn]ame|canva|dise[ñn]o|\bllen[aeo]|rellen|formulario|plataforma|portal|inscrib|solicitud|\bclic|click|teclado|mouse|rat[oó]n|https?:\/\/|\bwww\.|\.(com|net|org|edu|gob|io|app|do)\b|actividad(es)?|cuestionario|\bcurso|lecci[oó]n|\bresuelve|\bcompleta/i,
+  route: /abre|abrir|abr[ií]r|cierra|cerrar|cierre|recarga|fija |silencia|navegador|pesta[ñn]a|enlace|\blink\b|p[aá]gina|sitio|reuni[oó]n|videollamada|\bmeet\b|zoom|teams|ll[eé]vame|ens[eé][ñn]ame|canva|dise[ñn]o|\bllen[aeo]|rellen|formulario|plataforma|portal|inscrib|solicitud|\bclic|click|teclado|mouse|rat[oó]n|https?:\/\/|\bwww\.|\.(com|net|org|edu|gob|io|app|do)\b|actividad(es)?|cuestionario|\bcurso|lecci[oó]n|\bresuelve|\bcompleta/i,
   auth: {
     type: 'browser-link',
     isConnected: (user) => hasLink(user.id),
@@ -212,7 +255,9 @@ export default {
     if (!link) return { latestVersion: EXTENSION_VERSION, trusted };
     return { latestVersion: EXTENSION_VERSION, trusted, browser: { name: link.name, version: link.version, lastSeen: link.lastSeen, prefs: link.prefs } };
   },
-  guide: `TU NAVEGADOR — hacer tareas por él (browser_task):
+  guide: `TU NAVEGADOR — pestañas ya abiertas: manage_tabs cierra, recarga, lleva a otra página, fija o silencia las pestañas de unos sitios, ahora mismo y con tarjeta (cerrar puede perder lo no guardado). A una hora, o al encender el PC, usa una rutina (create_routine con close_tabs / edit_tabs). No leen ni escriben dentro de la página: para trabajar dentro de ella es browser_task.
+
+TU NAVEGADOR — hacer tareas por él (browser_task):
 1. Con el mouse y el teclado de su navegador puedes hacer clic (también doble clic y clic derecho), arrastrar, escribir, usar teclas (Enter, Tab, flechas, Ctrl+A…), desplazarte y esperar. Cuando te pida llenar un formulario o hacer algo en una plataforma, llama a browser_task DE UNA VEZ: no expliques límites, no te disculpes ni propongas hacerlo él antes de intentarlo.
 2. Pon en goal TODO lo que hay que teclear (nombre, correo, teléfono, dirección, fechas, textos): el piloto solo ve la pantalla y ese objetivo. Esos datos son suyos y te los dio al pedirlo; úsalos. Si falta un dato obligatorio, pregúntaselo en una frase ANTES de lanzar la tarea.
 3. Lo único que no haces es teclear contraseñas, datos de tarjeta o pago, ni códigos de seguridad: dile que esa parte la haga él en la pestaña y que tú sigues. En redes sociales y mensajería solo redactas.
@@ -265,6 +310,28 @@ TU NAVEGADOR — páginas de confianza:
         const result = opened(await requestOpen(context, { url: args.url, label: args.label }), args.label || hostOf(args.url));
         return result;
       },
+    },
+    {
+      label: 'Manejar pestañas abiertas',
+      activity: 'Manejando tus pestañas…',
+      risk: 'write',
+      sensitive: false,
+      summarize: (result) => (result?.error ? undefined : result?.summary),
+      declaration: {
+        name: 'manage_tabs',
+        description: `Hace ahora algo con las pestañas que el usuario ya tiene abiertas en su navegador (a una hora o al encender el PC usa una rutina, no esto): op = close (cerrar todas las de los sitios dados), close_eddie (cerrar las del grupo «Eddie»), reload (recargar), go_to (llevarlas a otra página; necesita url), pin / unpin (fijar / soltar), mute / unmute (silenciar / dar sonido). sites = sitios separados por coma (youtube.com, mail.google.com). No lee ni escribe dentro de las páginas; nunca toca las fijadas ni la de Eddie. Pide confirmación.`,
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            op: { type: 'STRING', enum: TAB_OPS, description: 'Qué hacer con esas pestañas.' },
+            sites: { type: 'STRING', description: 'Sitios, separados por coma: youtube.com, canva.com. No hace falta con close_eddie.' },
+            url: { type: 'STRING', description: 'Solo con op=go_to: la dirección https a la que llevarlas.' },
+          },
+          required: ['op'],
+        },
+      },
+      prepare: (args) => prepareManageTabs(args),
+      run: (args, context) => manageTabs(args, context),
     },
     {
       label: 'Controlar una pestaña del navegador',

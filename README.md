@@ -765,6 +765,23 @@ Dile a Eddie: **«cuando encienda la PC, salúdame y dime qué hay hoy»**. Crea
 - **Pruebas**: `tests/morning.test.mjs` (guion, rutina, pase y cola) y `tests/agent/test_morning.py` (el agente: chequeo, procesos protegidos, voz y el saludo completo; lo corre el mismo test de Node). El cierre de pestañas se probó con la extensión real en Chromium.
 - **Límites a propósito**: no hay horario de silencio (si enciendes el PC de madrugada, hablará); la voz es la del sistema, no la de Eddie.
 
+### Pestañas a la hora que digas: abrir, cerrar y editar (extensión 1.6 + agente 1.14)
+
+Dile a Eddie *«todos los días a las 3 cierra YouTube»*, *«mañana a las 8:30 abre mi correo»*, *«al encender el PC abre Canva»*, *«hoy a las 5 recarga esa página»* o, si es ya, *«cierra las pestañas de YouTube»*. Son acciones de una rutina:
+
+| Acción | Qué hace |
+|---|---|
+| `open_sites` | abre páginas https |
+| `close_tabs` | cierra **todas las pestañas de unos sitios** (`youtube.com` incluye `music.youtube.com`, no `notyoutube.com`) o las del grupo «Eddie» (`scope: "eddie"`) |
+| `edit_tabs` | `reload` (recargar), `go_to` (llevarlas a otra página https), `pin` / `unpin` (fijar / soltar), `mute` / `unmute` (silenciar / dar sonido) |
+
+- **Cuándo**: a una hora (todos los días o `days`: «de lunes a viernes»), **solo una vez** (`once`: «hoy a las 5», «mañana a las 9»; luego se borra sola) o **al encender el PC** (`device_boot`). Ahora mismo, sin rutina: la herramienta `manage_tabs` (con tarjeta, porque cerrar una pestaña puede perder lo no guardado).
+- **A la hora exacta, aunque estés haciendo otra cosa**: el servidor no depende del cron (que puede llegar minutos tarde). Cada 10 minutos la extensión pide los planes del próximo día y medio (`agent/agenda` → `plans`, calculados en **tu zona horaria**, la del navegador), pone una **alarma** para cada uno y los hace al minuto (probado en Chromium real: cerró 70 ms después de la hora). Luego avisa (`agent/plan-done`) para que el cron no lo repita; si la extensión no pudo (navegador cerrado), el cron manda la misma orden con **15 minutos de paciencia** y una **clave** (`rutina@fecha`) para que, venga por donde venga, se haga una sola vez.
+- **Navegador cerrado**: si la extensión no ha dado señales en 2 minutos, Eddie le pide a tu PC (herramienta `start_browser` del agente 1.14) que **abra el navegador donde está la extensión** (no el predeterminado) y la extensión toma la orden al despertar.
+- **Qué nunca toca**: una pestaña **fijada** al cerrar, **la pestaña de Eddie**, ni la de una **tarea de navegador** que esté corriendo (grupo «⏳ Eddie»). Máximo 30 pestañas por paso. No lee ni escribe **dentro** de las páginas (para trabajar dentro de una, `browser_task`; programarlo es lo siguiente que se podría añadir).
+- **Privacidad**: la extensión pasa a pedir el permiso `tabs` para ver **qué sitio** es cada pestaña **en tu equipo** y así saber cuáles coinciden con los sitios de la orden; las direcciones no se guardan ni se mandan a ningún lado. Al ser una extensión descomprimida, Chrome no pregunta: basta **Recargar** en `chrome://extensions`.
+- **Pruebas**: `tests/tabs.test.mjs` (sitios, validación, horas exactas en varias zonas con horario de verano, planes, cron sin pisarse con la extensión, `manage_tabs`) y la extensión real en Chromium (cierra el sitio y sus subdominios sin tocar la fijada, la parecida ni la de Eddie; recarga, silencia, fija, lleva a otra página; rechaza `http`; cierra a su minuto; ignora una orden repetida). Base de datos: `db/migrations/0037_browser_tab_commands.sql`.
+
 ### Optimizar el PC con seguridad (agente 1.12, «ensayo» primero)
 
 Pídele a Eddie *«optimiza mi PC cuando lo encienda»* (o añade `tune: "ensayo"` al saludo). **Lo que hace y lo que jamás hace:**

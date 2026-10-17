@@ -110,6 +110,22 @@ export function localParts(isoInstant, timezone) {
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }
 
+// The instant (ms since 1970) at which the wall clock of `timezone` reads `date` («2026-10-16») and `time` («15:00»).
+// Two passes absorb the zone's offset, daylight-saving included.
+export function zonedEpoch(date, time, timezone) {
+  const [y, mo, d] = String(date).split('-').map(Number);
+  const [h, mi] = String(time).split(':').map(Number);
+  const wanted = Date.UTC(y, mo - 1, d, h, mi);
+  let guess = wanted;
+  for (let i = 0; i < 2; i += 1) {
+    const local = localParts(new Date(guess).toISOString(), timezone);
+    const [ly, lmo, ld] = local.date.split('-').map(Number);
+    const [lh, lmi] = local.time.split(':').map(Number);
+    guess += wanted - Date.UTC(ly, lmo - 1, ld, lh, lmi);
+  }
+  return guess;
+}
+
 // "mar 30 sep" style label for a date, in Spanish.
 export function dayLabel(isoDate) {
   return new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${isoDate}T12:00:00Z`));

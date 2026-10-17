@@ -22,13 +22,17 @@
 // this extension's own popup.
 import { openableUrl, serverOrigin } from './urls.js';
 import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
-import { isEddieTab, joinGroup, setGroupStatus } from './group.js';
+import { eddieTabIds, isEddieTab, joinGroup, setGroupStatus } from './group.js';
+import { runSteps } from './tabs.js';
 import { performAction } from './actions.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
 const POLL_ALARM = 'eddie-poll';
 const AGENDA_ALARM = 'eddie-agenda';
 const CLOSE_ALARM = 'eddie-close';
+const PLAN_ALARM = 'eddie-plan:';
+// A tab order that was due while the browser was closed can still be done for this long (after that it makes no sense).
+const PLAN_LATE_MS = 15 * 60000;
 const MEETING_ALARM = 'eddie-meet:';
 const POLL_EVERY_MINUTES = 0.5;
 const AGENDA_EVERY_MINUTES = 10;
@@ -162,7 +166,10 @@ async function poll() {
   try {
     const data = await api('next');
     const changed = await keepPrefs(data.prefs);
-    for (const command of data.commands || []) await openPage(command.url, { id: command.id, closeIn: command.closeIn });
+    for (const command of data.commands || []) {
+      if (command.kind === 'tabs') await runTabOrder({ key: command.key, steps: command.steps });
+      else await openPage(command.url, { id: command.id, closeIn: command.closeIn });
+    }
     if (data.task) await maybeStartTask(data.task);
     await setStatus('');
     if (changed) await refreshAgenda();
@@ -281,12 +288,53 @@ async function maybeStartTask(task) {
   });
 }
 
+// ---- Orders about the tabs already open (close, edit, open), now or at an exact hour ----
+// The server sends the orders of the next day and a half (`plans`); each gets an alarm and runs when it rings, even if the
+// computer was busy with something else. It then says so (plan-done) so that the server does not send it again. An order
+// carries a key (routine@date) and runs once per key, whichever door it comes through.
+async function runTabOrder({ key, steps }) {
+  return serial(async () => {
+    if (key) {
+      const { tabsDone = {} } = await read('tabsDone');
+      const now = Date.now();
+      if (tabsDone[key]) return null;
+      for (const k of Object.keys(tabsDone)) if (now - tabsDone[k] > REMEMBER_MS) delete tabsDone[k];
+      tabsDone[key] = now;
+      await write({ tabsDone });
+    }
+    const { server = DEFAULT_SERVER } = await read('server');
+    const result = await runSteps(steps, { openPage: (url) => openNow(url), eddieTabIds, own: server, openableUrl });
+    await write({ lastTabs: { at: Date.now(), ...result } });
+    if (key) await api('plan-done', { key }).catch(() => {});
+    return result;
+  });
+}
+
+async function clearPlanAlarms() {
+  for (const alarm of await chrome.alarms.getAll()) if (alarm.name.startsWith(PLAN_ALARM)) await chrome.alarms.clear(alarm.name);
+}
+
+async function schedulePlans() {
+  const { plans = [], tabsDone = {} } = await read(['plans', 'tabsDone']);
+  await clearPlanAlarms();
+  const now = Date.now();
+  for (const plan of plans) {
+    if (!plan?.key || tabsDone[plan.key] || !Array.isArray(plan.steps)) continue;
+    if (plan.at <= now) {
+      if (now - plan.at <= PLAN_LATE_MS) await runTabOrder(plan);
+    } else {
+      await chrome.alarms.create(PLAN_ALARM + plan.key, { when: plan.at });
+    }
+  }
+}
+
 async function refreshAgenda() {
   try {
-    const data = await api('agenda');
+    const data = await api('agenda', { tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
     await keepPrefs(data.prefs);
-    await write({ meetings: data.meetings || [], agendaAt: Date.now() });
+    await write({ meetings: data.meetings || [], plans: Array.isArray(data.plans) ? data.plans : [], agendaAt: Date.now() });
     await scheduleMeetings();
+    await schedulePlans();
   } catch (err) {
     if (err.message !== 'not-linked' && err.message !== 'unlinked') await setStatus(err.message);
   }
@@ -323,6 +371,7 @@ async function ensureAlarms() {
     await chrome.alarms.clear(POLL_ALARM);
     await chrome.alarms.clear(AGENDA_ALARM);
     await clearMeetingAlarms();
+    await clearPlanAlarms();
     return false;
   }
   if (!(await chrome.alarms.get(POLL_ALARM))) await chrome.alarms.create(POLL_ALARM, { delayInMinutes: POLL_EVERY_MINUTES, periodInMinutes: POLL_EVERY_MINUTES });
@@ -347,6 +396,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === POLL_ALARM) return poll();
   if (alarm.name === AGENDA_ALARM) return refreshAgenda();
   if (alarm.name === CLOSE_ALARM) return serial(sweepClose);
+  if (alarm.name.startsWith(PLAN_ALARM)) {
+    const key = alarm.name.slice(PLAN_ALARM.length);
+    const { plans = [] } = await read('plans');
+    const plan = plans.find((p) => p.key === key);
+    if (plan) await runTabOrder(plan);
+    return undefined;
+  }
   if (alarm.name.startsWith(MEETING_ALARM)) {
     const key = alarm.name.slice(MEETING_ALARM.length);
     const { meetings = [] } = await read('meetings');
@@ -358,7 +414,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ---- Linking ----
 
 async function unlink() {
-  await chrome.storage.local.remove(['token', 'meetings', 'prefs', 'lastOk', 'lastError']);
+  await chrome.storage.local.remove(['token', 'meetings', 'plans', 'prefs', 'lastOk', 'lastError']);
   await ensureAlarms();
   await chrome.action.setBadgeText({ text: '' });
 }
@@ -421,6 +477,7 @@ async function handle(message, fromPage) {
     // Eddie's page just created a browser task: look for it now instead of at the next half minute (only checks; nothing in the message is used).
     case 'wake':
       poll();
+      refreshAgenda(); // a routine may have just been created: its tab orders get their alarms now
       return { ok: true };
     case 'poll-now':
       if (fromPage) return { ok: false };

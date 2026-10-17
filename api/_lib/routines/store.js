@@ -59,7 +59,7 @@ export async function deleteRoutineByName(userId, name) {
 export async function dueScheduleRoutines() {
   const sql = getDb();
   const rows = await sql`
-    select r.id, r.user_id, r.name, r.time, r.days, r.actions, r.last_run_on, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name
+    select r.id, r.user_id, r.name, r.time, r.days, r.actions, r.last_run_on, l.chat_id, coalesce(l.timezone, 'UTC') as timezone, u.email, u.name as user_name, r.state
     from routines r
     left join telegram_links l on l.user_id = r.user_id
     join users u on u.id = r.user_id
@@ -74,6 +74,7 @@ export async function dueScheduleRoutines() {
     days: decodeDays(r.days),
     actions: Array.isArray(r.actions) ? r.actions : [],
     lastRunOn: r.last_run_on ? String(r.last_run_on).slice(0, 10) : null,
+    state: r.state && typeof r.state === 'object' ? r.state : {},
     chatId: r.chat_id == null ? null : Number(r.chat_id),
     timezone: r.timezone,
     user: { id: r.user_id, email: r.email, name: r.user_name },
@@ -199,4 +200,29 @@ export async function claimMorningDay(id, date) {
     returning id
   `;
   return rows.length > 0;
+}
+
+// The user's enabled routines that run at an hour (the ones whose tab orders the extension keeps on its own clock).
+export async function scheduleRoutinesOf(userId) {
+  const sql = getDb();
+  const rows = await sql`
+    select id, name, trigger_type, time, days, event_type, device_id, actions, enabled, state
+    from routines where user_id = ${userId} and trigger_type = 'schedule' and enabled
+  `;
+  return rows.map(shapeRoutine);
+}
+
+// The extension already did this routine's tab orders for `date`: the cron must not do them again. → the state afterwards.
+export async function markTabsDone(userId, id, date) {
+  const sql = getDb();
+  const rows = await sql`
+    update routines set state = state || jsonb_build_object('tabsDoneOn', ${date}::text)
+    where id = ${id} and user_id = ${userId} returning state
+  `;
+  return rows[0] ? (rows[0].state && typeof rows[0].state === 'object' ? rows[0].state : {}) : null;
+}
+
+export async function disableRoutine(id) {
+  const sql = getDb();
+  await sql`update routines set enabled = false where id = ${id}`;
 }

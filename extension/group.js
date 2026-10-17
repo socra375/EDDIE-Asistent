@@ -59,6 +59,18 @@ export async function isEddieTab(tabId) {
   }
 }
 
+// The tabs of Eddie's «✅» group (not the «⏳» one, where a browser task is running): the ones a routine may close.
+export async function eddieTabIds() {
+  try {
+    const groups = (await chrome.tabGroups.query({})).filter((g) => g.title === TITLES.ready);
+    const ids = [];
+    for (const group of groups) for (const tab of await chrome.tabs.query({ groupId: group.id })) if (!tab.pinned && tab.id != null) ids.push(tab.id);
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
 // The tab in front in a window, in Eddie's group (when his side panel opens on it).
 export async function joinFrontTab(windowId) {
   try {
