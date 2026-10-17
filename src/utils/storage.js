@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'dark',
   memoryEnabled: true,
   autonomy: 'act', // act: does the reversible by himself and says so; ask: every change waits for an OK (services/autonomy.js)
+  musicOffers: true, // Eddie asks «¿Quieres que reproduzca X?» from the YouTube history the extension may read (api/_lib/habits)
   voice: {
     autoRead: false,
     volume: 1, // 0.2–1

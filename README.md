@@ -820,6 +820,20 @@ Mientras una petición tarda (buscar en internet, investigar, varias herramienta
 - **Pruebas**: `tests/agentjobs.test.mjs` (creación y límites, ejecución una sola vez, fallos, lo que se aplica en el servidor y lo que se devuelve a la app, la autonomía con y sin permiso y que lo irreversible nunca se salta la tarjeta). **No probado con un modelo real**: que Eddie elija bien entre contestar al momento y encargar en segundo plano, y tareas largas de verdad.
 - **Siguiente (otro PR)**: que Eddie proponga por su cuenta («vi X, ¿lo hago?») sin que se lo pidas, empezando en modo propuesta.
 
+### Música a tu hora: Eddie aprende de tu historial de YouTube (extensión 1.7)
+
+Mientras haces otra cosa, Eddie te pregunta **«¿Quieres que reproduzca X?»** con una canción que sueles escuchar a esa hora. Solo suena si dices que sí.
+
+- **Cómo se le da acceso**: icono de la extensión de Eddie en Chrome → **«Dar acceso al historial de YouTube»** (Chrome te pide el permiso `history`, que es *opcional*: sin darlo, la extensión no lee nada, y «Quitar acceso» lo retira y borra la copia). Hay que instalar la **extensión 1.7.0** (el ZIP del hub). No puedo darlo yo: el permiso solo lo concede el propio usuario con un clic.
+- **Qué lee**: del historial *local* de Chrome, **solo las páginas de YouTube** (`youtube.com/watch`, `music.youtube.com/watch`, `youtu.be`): id del video, título y las horas en que lo abriste (últimos 60 días, hasta 300 videos). Nada más del historial se lee, se guarda ni se envía. Se reenvía cada 6 horas (`extension/history.js`, tabla `youtube_history`).
+- **Qué hace con eso** (`api/_lib/habits/profile.js`): puntúa cada video según cuántas veces lo abriste *a esta hora del día* (±90 min, en tu zona horaria), con más peso a lo reciente y a los días del mismo tipo (entre semana / fin de semana). Solo ofrece algo que hayas puesto **2 veces o más**.
+- **Cuándo NO ofrece**: de 23:00 a 07:00; si ofreció algo hace menos de 3 horas; tras 3 ofertas en el día; si ya hay un video sonando (15 min); si Eddie está respondiendo; si dijiste «no» a esa canción en la última semana. Cada «sí» cuenta como una escucha más, así aprende.
+- **Cómo responder**: botones «Sí, ponla» / «No, gracias», o por voz («sí», «no»).
+- **Preguntarle**: «¿qué es lo que más escucho?», «¿a qué hora pongo música?» → herramienta `youtube_habits`.
+- **Control**: Configuración → «Música a tu hora» (interruptor `musicOffers`, lo que Eddie sabe y **«Olvidar mi historial de YouTube»**, que borra la copia y las ofertas).
+- **Límites**: el historial de YouTube dentro de YouTube (el de tu cuenta de Google) no está disponible para apps — por eso se usa el de Chrome, que **solo cuenta lo que ves en ese navegador**. «Qué haces» se limita a lo que pasa en YouTube.
+- **Pruebas**: `tests/habits.test.mjs` (14: qué páginas se leen, el perfil por hora y zona, todas las reglas de «no ofrecer», rutas, borrado). **Probado en Chromium real** que `chrome.history` entrega lo que se espera (solo YouTube, agrupado, con horas). **No probado**: el clic de permiso en tu Chrome ni cómo suena la oferta en voz alta.
+
 ### Conversación nueva cada 24 horas
 
 - Cuando la conversación que tienes delante cumple **24 horas desde su primer mensaje**, Eddie abre una **vacía** (al abrir la app, al volver a la pestaña o con un chequeo de cada minuto, y nunca en medio de una respuesta). La anterior sigue en el **historial**; si abres una vieja desde ahí a propósito, se queda abierta (`src/services/conversationRotation.js`).

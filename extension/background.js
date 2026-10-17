@@ -24,6 +24,7 @@ import { openableUrl, serverOrigin } from './urls.js';
 import { openPanel, pageContext, readPagesState, registerPanel, setReadPages, takeAsk } from './panel.js';
 import { eddieTabIds, isEddieTab, joinGroup, setGroupStatus } from './group.js';
 import { runSteps } from './tabs.js';
+import { collectYoutube } from './history.js';
 import { performAction } from './actions.js';
 
 const DEFAULT_SERVER = 'https://eddie-asistent.vercel.app';
@@ -34,6 +35,8 @@ const PLAN_ALARM = 'eddie-plan:';
 // A tab order that was due while the browser was closed can still be done for this long (after that it makes no sense).
 const PLAN_LATE_MS = 15 * 60000;
 const MEETING_ALARM = 'eddie-meet:';
+const HISTORY_ALARM = 'eddie-history';
+const HISTORY_EVERY_MINUTES = 360;
 const POLL_EVERY_MINUTES = 0.5;
 const AGENDA_EVERY_MINUTES = 10;
 // A meeting that began while the browser was closed can still be joined for this long.
@@ -146,6 +149,33 @@ async function api(path, body = {}) {
   }
   if (!res.ok) throw new Error(`http ${res.status}`);
   return res.json();
+}
+
+// ---- YouTube history (only with the optional «history» permission the user gave from the popup) ----
+
+const historyAllowed = () => chrome.permissions.contains({ permissions: ['history'] });
+
+// Sends what the user watched and listened to on YouTube (never anything else in the history). Eddie replaces its copy.
+async function syncHistory() {
+  if (!(await historyAllowed())) return { ok: false, error: 'permission' };
+  const items = await collectYoutube(chrome.history);
+  await api('history', { items });
+  await write({ historySyncedAt: Date.now(), historyCount: items.length });
+  await ensureAlarms();
+  return { ok: true, count: items.length };
+}
+
+// Takes the permission back and asks Eddie to forget the copy.
+async function stopHistory() {
+  try {
+    await chrome.permissions.remove({ permissions: ['history'] });
+  } catch {
+    // already gone
+  }
+  await chrome.alarms.clear(HISTORY_ALARM);
+  await api('history', { clear: true }).catch(() => {});
+  await write({ historySyncedAt: 0, historyCount: 0 });
+  return { ok: true };
 }
 
 async function setStatus(error) {
@@ -372,7 +402,13 @@ async function ensureAlarms() {
     await chrome.alarms.clear(AGENDA_ALARM);
     await clearMeetingAlarms();
     await clearPlanAlarms();
+    await chrome.alarms.clear(HISTORY_ALARM);
     return false;
+  }
+  if (await historyAllowed()) {
+    if (!(await chrome.alarms.get(HISTORY_ALARM))) await chrome.alarms.create(HISTORY_ALARM, { delayInMinutes: HISTORY_EVERY_MINUTES, periodInMinutes: HISTORY_EVERY_MINUTES });
+  } else {
+    await chrome.alarms.clear(HISTORY_ALARM);
   }
   if (!(await chrome.alarms.get(POLL_ALARM))) await chrome.alarms.create(POLL_ALARM, { delayInMinutes: POLL_EVERY_MINUTES, periodInMinutes: POLL_EVERY_MINUTES });
   if (!(await chrome.alarms.get(AGENDA_ALARM))) await chrome.alarms.create(AGENDA_ALARM, { delayInMinutes: AGENDA_EVERY_MINUTES, periodInMinutes: AGENDA_EVERY_MINUTES });
@@ -396,6 +432,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === POLL_ALARM) return poll();
   if (alarm.name === AGENDA_ALARM) return refreshAgenda();
   if (alarm.name === CLOSE_ALARM) return serial(sweepClose);
+  if (alarm.name === HISTORY_ALARM) return syncHistory().catch(() => {});
   if (alarm.name.startsWith(PLAN_ALARM)) {
     const key = alarm.name.slice(PLAN_ALARM.length);
     const { plans = [] } = await read('plans');
@@ -414,7 +451,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ---- Linking ----
 
 async function unlink() {
-  await chrome.storage.local.remove(['token', 'meetings', 'plans', 'prefs', 'lastOk', 'lastError']);
+  await chrome.storage.local.remove(['token', 'meetings', 'plans', 'prefs', 'lastOk', 'lastError', 'historySyncedAt', 'historyCount']);
   await ensureAlarms();
   await chrome.action.setBadgeText({ text: '' });
 }
@@ -443,7 +480,7 @@ async function pair({ server, code, name }) {
 }
 
 async function state() {
-  const s = await read(['server', 'token', 'linkName', 'prefs', 'lastOk', 'lastError', 'meetings', 'activeTask']);
+  const s = await read(['server', 'token', 'linkName', 'prefs', 'lastOk', 'lastError', 'meetings', 'activeTask', 'historySyncedAt', 'historyCount']);
   const now = Date.now();
   return {
     ok: true,
@@ -456,6 +493,7 @@ async function state() {
     lastError: s.lastError || '',
     meetings: (s.meetings || []).filter((m) => Date.parse(m.endsAt) > now).slice(0, 3).map((m) => ({ title: m.title, startsAt: m.startsAt, provider: m.provider })),
     activeTask: s.activeTask || null,
+    history: { on: await historyAllowed(), count: s.historyCount || 0, syncedAt: s.historySyncedAt || null },
   };
 }
 
@@ -495,6 +533,11 @@ async function handle(message, fromPage) {
     // Eddie's own page may ask too (its window, when the panel can't be embedded), but only once the user turned reading on.
     case 'page-context':
       return pageContext();
+    // The popup asked for the permission (from the user's click) and now wants the first reading.
+    case 'history-sync':
+      return fromPage ? { ok: false } : syncHistory().catch((err) => ({ ok: false, error: String(err?.message || err) }));
+    case 'history-stop':
+      return fromPage ? { ok: false } : stopHistory();
     case 'stop-task': {
       if (fromPage) return { ok: false };
       const { activeTask } = await read('activeTask');

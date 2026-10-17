@@ -45,6 +45,12 @@ async function render() {
       return li;
     }),
   );
+  const h = state.history || {};
+  $('history-text').textContent = h.on
+    ? `Eddie ve lo que abres en YouTube (${h.count} videos, últimos 60 días; ${ago(h.syncedAt)}) para ofrecerte música a tu hora. Nada más del historial.`
+    : 'Si quieres que Eddie sepa qué escuchas en YouTube y a qué hora (para ofrecerte «¿pongo X?»), dale acceso al historial. Solo lee las páginas de YouTube; puedes quitarlo cuando quieras.';
+  $('history-toggle').textContent = h.on ? 'Quitar acceso al historial' : 'Dar acceso al historial de YouTube';
+  $('history-toggle').dataset.on = h.on ? '1' : '';
   $('task').hidden = !state.activeTask;
   if (state.activeTask) {
     $('task-goal').textContent = `Eddie está haciendo: ${state.activeTask.goal}`;
@@ -70,6 +76,24 @@ $('refresh').addEventListener('click', async () => {
 
 $('unlink').addEventListener('click', async () => {
   await ask({ type: 'unlink' });
+  await render();
+});
+
+// The permission is asked here, from the click (the browser only allows it from the user's own action).
+$('history-toggle').addEventListener('click', async () => {
+  show('');
+  $('history-toggle').disabled = true;
+  if ($('history-toggle').dataset.on) {
+    await ask({ type: 'history-stop' });
+  } else {
+    const granted = await chrome.permissions.request({ permissions: ['history'] });
+    if (!granted) show('Sin ese permiso no puedo ver tu historial de YouTube.');
+    else {
+      const result = await ask({ type: 'history-sync' });
+      if (!result?.ok) show(result?.error || 'No pude leer el historial.');
+    }
+  }
+  $('history-toggle').disabled = false;
   await render();
 });
 

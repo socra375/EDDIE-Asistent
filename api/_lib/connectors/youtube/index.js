@@ -10,6 +10,8 @@
 // addresses are ever built or accepted, so the model can't be talked into
 // opening anything else.
 import { fetchJson, fetchText } from '../http.js';
+import { loadHistory } from '../../habits/store.js';
+import { summarize } from '../../habits/profile.js';
 
 const HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be']);
 const MAX_QUERY = 200;
@@ -175,6 +177,18 @@ function controlVideo(args, context) {
   return { done: true, action, summary: CONTROLS[action] };
 }
 
+// What the user listens to and when, from the YouTube history they allowed the extension to read.
+async function habits(args, context) {
+  const user = await context.getUser?.();
+  if (!user) return { error: 'Para saber qué escuchas el usuario debe iniciar sesión en Eddie.' };
+  const { items, syncedAt } = await loadHistory(user.id);
+  if (!items.length) {
+    return { known: false, summary: 'Aún no veo tu historial de YouTube.', note: 'Dile que puede darle acceso al historial de YouTube desde la extensión de Eddie en Chrome (el ícono de la extensión → «Dar acceso al historial de YouTube»); solo lee las páginas de YouTube.' };
+  }
+  const summary = summarize(items, { timezone: context.timezone || 'UTC' });
+  return { known: true, syncedAt, ...summary, summary: `Historial de YouTube: ${items.length} videos.` };
+}
+
 export default {
   id: 'youtube',
   name: 'YouTube',
@@ -185,6 +199,7 @@ export default {
   route: /youtube|you tube|\byt\b|v[ií]deos?|canci[oó]n|canciones|m[uú]sica|tutorial|tr[aá]iler|trailer|videoclip|reproduc|escuchar/i,
   auth: null,
   requiredEnv: [],
+  guide: 'YouTube: si pregunta qué música o videos escucha más, a qué hora o qué ponerle «como siempre», mira youtube_habits antes de contestar y cita lo que dice (no inventes gustos). Para ponerle algo, open_youtube con play.',
   note: 'Al pedirle que ponga algo, lo reproduce en un reproductor dentro de Eddie. Funciona mejor con YOUTUBE_API_KEY en Vercel (API de YouTube, gratis); sin ella lee la página de resultados y puede fallar. Abrir YouTube o una búsqueda usa una pestaña nueva.',
   tools: [
     {
@@ -207,6 +222,20 @@ export default {
         },
       },
       run: (args, context) => openYoutube(args, context),
+    },
+    {
+      label: 'Lo que más escuchas',
+      activity: 'Mirando tus hábitos en YouTube…',
+      risk: 'read',
+      sensitive: false,
+      summarize: (result) => result.summary,
+      declaration: {
+        name: 'youtube_habits',
+        description:
+          'Dice qué música y videos escucha más el usuario en YouTube y a qué horas (de su historial, si dio acceso). Úsala cuando pregunte qué escucha, qué suele poner o a qué hora, o para recomendarle algo a su gusto. Para reproducir algo usa open_youtube con play.',
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+      run: (args, context) => habits(args, context),
     },
     {
       label: 'Pausar, reanudar o cerrar el video',

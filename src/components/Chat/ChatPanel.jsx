@@ -28,7 +28,7 @@ const QUICK_STARTS = [
 
 // `embedded`: inside Inicio's Conversación panel, which has its own Limpiar button.
 export default function ChatPanel({ showCore = true, embedded = false }) {
-  const { messages, status, companion, backgroundJobs, sendMessage, resetConversation, resolveConfirmation } = useChat();
+  const { messages, status, companion, backgroundJobs, answerMusicOffer, sendMessage, resetConversation, resolveConfirmation } = useChat();
   const { rememberFact } = useSettings();
   const { sttSupported, listening, transcribing, transcript, interimTranscript, start, stop, sttError, reset } = useVoice();
   const [input, setInput] = useState('');
@@ -400,6 +400,22 @@ export default function ChatPanel({ showCore = true, embedded = false }) {
                       )}
                     </figure>
                   ))}
+                </div>
+              )}
+              {m.offer && (
+                <div className="bubble__offer" role="group" aria-label="Canción que Eddie te ofrece">
+                  {m.offer.state === 'pending' ? (
+                    <>
+                      <button type="button" className="btn btn-primary" onClick={() => answerMusicOffer(m.id, true)}>
+                        <Icon name="play" size={13} /> Sí, ponla
+                      </button>
+                      <button type="button" className="btn" onClick={() => answerMusicOffer(m.id, false)}>
+                        No, gracias
+                      </button>
+                    </>
+                  ) : (
+                    <span className="bubble__offer-state">{m.offer.state === 'accepted' ? 'La pusiste' : 'La dejaste pasar'}</span>
+                  )}
                 </div>
               )}
               {m.confirmations?.map((card) => (

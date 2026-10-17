@@ -16,6 +16,7 @@ import { BOOT_REPLAY_EVENT } from '../../services/boot';
 import DevicesCard from './DevicesCard';
 import NotificationsCard from './NotificationsCard';
 import UsageCard from './UsageCard';
+import { clearHabits, fetchHabits } from '../../services/musicOffers';
 import './Settings.css';
 
 // "-latest" son alias de Google que siempre apuntan al modelo Flash/Pro/
@@ -116,6 +117,26 @@ function Slider({ label, value, min, max, step, format, onChange, disabled }) {
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </label>
+  );
+}
+
+// What Eddie knows from the YouTube history (read-only, from the server) and the way to make him forget it.
+function HabitsStatus() {
+  const [habits, setHabits] = useState(null);
+  useEffect(() => {
+    fetchHabits().then(setHabits);
+  }, []);
+  if (!habits) return null;
+  if (!habits.count) return <p className="settings-placeholder">Todavía no veo tu historial de YouTube.</p>;
+  return (
+    <div>
+      <p className="settings-placeholder">
+        Conoce {habits.count} videos{habits.favourites?.length ? `; los que más escuchas: ${habits.favourites.slice(0, 3).map((f) => f.title).join(' · ')}` : ''}.
+      </p>
+      <button type="button" className="btn" onClick={async () => { await clearHabits(); setHabits({ count: 0 }); }}>
+        Olvidar mi historial de YouTube
+      </button>
+    </div>
   );
 }
 
@@ -352,6 +373,20 @@ export default function SettingsPanel({ onOpenConversation }) {
         <p className="settings-placeholder">
           «Lo hace y me cuenta» aplica a lo que se puede deshacer o solo toca lo tuyo: escribir en tu Notion o en tus documentos y hojas, y trabajar en las páginas de confianza.
           Enviar correos o mensajes, borrar, pagar, agendar con clientes y ejecutar cosas en tu equipo te los pregunta siempre. Nunca teclea contraseñas, pagos ni códigos 2FA.
+        </p>
+      </div>
+
+      <div className="glass-panel settings-card" data-section="habits">
+        <h2>Música a tu hora</h2>
+        <p className="settings-card__sub">Eddie aprende qué escuchas en YouTube y a qué hora, y mientras haces otra cosa te pregunta «¿Quieres que reproduzca X?». Solo suena si dices que sí.</p>
+        <label className="settings-toggle">
+          <input type="checkbox" checked={settings.musicOffers !== false} onChange={(e) => updateSettings({ musicOffers: e.target.checked })} />
+          <span>Que Eddie me ofrezca música según lo que suelo escuchar</span>
+        </label>
+        <HabitsStatus />
+        <p className="settings-placeholder">
+          Para darle acceso: icono de la extensión de Eddie en Chrome → «Dar acceso al historial de YouTube» (hace falta la extensión 1.7). Solo lee las páginas de YouTube que abriste (título y hora),
+          nada más de tu historial; máximo 3 ofertas al día, nunca de noche, y si dices que no, esa canción no vuelve en una semana.
         </p>
       </div>
 

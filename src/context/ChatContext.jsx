@@ -34,6 +34,9 @@ import { HUD_EVENT } from '../services/hudBridge';
 import { VIGILANCE_EVENT, visionBridge } from '../services/visionBridge';
 import { useEpisodeSaver } from '../hooks/useEpisodeSaver';
 import { useAgentJobs } from '../hooks/useAgentJobs';
+import { useMusicOffers } from '../hooks/useMusicOffers';
+import { answerOffer } from '../services/musicOffers';
+import { PLAY_VIDEO_EVENT } from '../services/browserActions';
 import { jobReport } from '../services/agentJobsCore';
 import { autonomyOf } from '../services/autonomy';
 import { IMAGE_PROMPT } from '../services/images';
@@ -68,6 +71,13 @@ function latestPendingConfirmation(messages) {
   const card = last?.confirmations?.find((c) => c.state === 'pending');
   return card ? { messageId: last.id, card } : null;
 }
+// The song Eddie offered on his last reply, if it still waits for a yes or a no.
+function latestPendingOffer(messages) {
+  const last = [...messages].reverse().find((m) => m.role === 'assistant');
+  return last?.offer?.state === 'pending' ? last : null;
+}
+// A video played this recently counts as «already listening»: no offer on top of it.
+const LISTENING_MS = 15 * 60 * 1000;
 // With memory switched off in Configuración, Eddie neither sees nor writes it.
 function disabledFor(settings) {
   const off = settings.disabledConnectors || [];
@@ -285,6 +295,43 @@ export function ChatProvider({ children }) {
   }, []);
   const { jobs: backgroundJobs, start: startJob } = useAgentJobs({ enabled: Boolean(user), onFinished: reportJob });
 
+  // A song Eddie offers from what the user listens to at this hour (api/_lib/habits): he asks, the user answers on the
+  // buttons or by voice, and only a yes plays it.
+  const statusRef = useRef(status);
+  const lastPlayAt = useRef(0);
+  useEffect(() => {
+    const onPlay = () => {
+      lastPlayAt.current = Date.now();
+    };
+    window.addEventListener(PLAY_VIDEO_EVENT, onPlay);
+    return () => window.removeEventListener(PLAY_VIDEO_EVENT, onPlay);
+  }, []);
+  const answerMusicOffer = useCallback(
+    (messageId, accept) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (message?.offer?.state !== 'pending') return;
+      const { id, videoId, title } = message.offer;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, offer: { ...m.offer, state: accept ? 'accepted' : 'declined' } } : m)));
+      answerOffer(id, accept ? 'accepted' : 'declined');
+      if (accept) {
+        applyBrowserActions([{ type: 'play_video', videoId, title }]);
+        addNote(`Poniendo «${title}».`);
+      } else {
+        addNote('Vale, no la pongo.');
+      }
+    },
+    [addNote],
+  );
+  useMusicOffers({
+    enabled: Boolean(user) && settings.musicOffers !== false && (settings.language || 'es') === 'es',
+    busy: () => statusRef.current !== 'idle' || Date.now() - lastPlayAt.current < LISTENING_MS || Boolean(latestPendingOffer(messagesRef.current)),
+    onOffer: (offer) => {
+      const message = { id: nextId(), role: 'assistant', content: offer.text, timestamp: Date.now(), provider: 'eddie', offer: { id: offer.id, videoId: offer.videoId, title: offer.title, state: 'pending' } };
+      setMessages((prev) => [...prev, message]);
+      setLastReply(message);
+    },
+  });
+
   const sendMessage = useCallback(
     // `display` and `tag` let a chat skill send a full template to the AI
     // while the bubble shows only what the user typed; `skill` and `title`
@@ -426,6 +473,15 @@ export function ChatProvider({ children }) {
 
       // "Sí" / "no" right after Eddie asked to confirm something answers the
       // card instead of starting a new request (voice-friendly).
+      // A song Eddie offered: «sí» plays it, «no» drops it.
+      const offered = !tag && latestPendingOffer(messages);
+      if (offered) {
+        const reply = normalizeReply(trimmed);
+        if (YES_RE.test(reply) || NO_RE.test(reply)) {
+          answerMusicOffer(offered.id, YES_RE.test(reply));
+          return null;
+        }
+      }
       const pending = !tag && latestPendingConfirmation(messages);
       if (pending) {
         const reply = normalizeReply(trimmed);
@@ -630,7 +686,7 @@ export function ChatProvider({ children }) {
         return null;
       }
     },
-    [messages, settings, memory, location, user, resolveConfirmation, updateWakeSettings, addEddieMessage, startJob],
+    [messages, settings, memory, location, user, resolveConfirmation, updateWakeSettings, addEddieMessage, startJob, answerMusicOffer],
   );
 
   // Starts a fresh, empty conversation. The one being left behind is
@@ -645,7 +701,6 @@ export function ChatProvider({ children }) {
   // A new conversation every 24 hours: while Eddie stays open, once the one in front is a day old and Eddie is not in
   // the middle of an answer, a blank one takes its place (the old one stays in the history).
   // A day-old conversation the user opened from the history on purpose stays open (`keepRef`).
-  const statusRef = useRef(status);
   const idRef = useRef(conversationId);
   const keepRef = useRef(null);
   useEffect(() => {
@@ -718,6 +773,7 @@ export function ChatProvider({ children }) {
       liveSteps,
       companion,
       backgroundJobs,
+      answerMusicOffer,
       resolveConfirmation,
       setStatus,
       conversations,
@@ -726,7 +782,7 @@ export function ChatProvider({ children }) {
       deleteConversation,
       clearAllConversations,
     }),
-    [messages, status, errorMessage, sendMessage, addNote, resetConversation, lastReply, activity, liveSteps, companion, backgroundJobs, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
+    [messages, status, errorMessage, sendMessage, addNote, resetConversation, lastReply, activity, liveSteps, companion, backgroundJobs, answerMusicOffer, resolveConfirmation, conversations, conversationId, loadConversation, deleteConversation, clearAllConversations],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
